@@ -1,0 +1,218 @@
+import pygame
+import math
+import os
+
+# --- 수학 유틸리티 함수 (간단한 행렬 및 벡터 연산) ---
+def multiply_matrix_vector(matrix, vector):
+    """4x4 행렬과 4x1 벡터의 곱셈"""
+    result = [0, 0, 0, 0]
+    for i in range(4):
+        for j in range(4):
+            result[i] += matrix[i][j] * vector[j]
+    return result
+
+def multiply_matrices(matrix1, matrix2):
+    """4x4 행렬 두 개를 곱셈"""
+    result_matrix = [[0.0 for _ in range(4)] for _ in range(4)]
+    for i in range(4):
+        for j in range(4):
+            for k in range(4):
+                result_matrix[i][j] += matrix1[i][k] * matrix2[k][j]
+    return result_matrix
+
+def identity_matrix():
+    """단위 행렬 생성"""
+    return [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+
+def rotate_x_matrix(angle):
+    """X축 회전 행렬"""
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, c, -s, 0.0],
+        [0.0, s, c, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+
+def rotate_y_matrix(angle):
+    """Y축 회전 행렬"""
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [c, 0.0, s, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [-s, 0.0, c, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+
+def rotate_z_matrix(angle):
+    """Z축 회전 행렬"""
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [c, -s, 0.0, 0.0],
+        [s, c, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+
+def translate_matrix(dx, dy, dz):
+    """이동 행렬"""
+    return [
+        [1.0, 0.0, 0.0, dx],
+        [0.0, 1.0, 0.0, dy],
+        [0.0, 0.0, 1.0, dz],
+        [0.0, 0.0, 0.0, 1.0]
+    ]
+
+def perspective_projection_matrix(fov, aspect, near, far):
+    """원근 투영 행렬"""
+    f = 1.0 / math.tan(math.radians(fov / 2))
+    return [
+        [f / aspect, 0.0, 0.0, 0.0],
+        [0.0, f, 0.0, 0.0],
+        [0.0, 0.0, (far + near) / (near - far), (2 * far * near) / (near - far)],
+        [0.0, 0.0, -1.0, 0.0]
+    ]
+
+# --- OBJ 파일 로더 ---
+def load_obj(filename):
+    """OBJ 파일에서 정점과 면 데이터를 로드 (주석 처리 개선)"""
+    vertices = []
+    faces = []
+    try:
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.split('#')[0].strip()
+                if not line:
+                    continue
+
+                parts = line.split()
+                if not parts:
+                    continue
+
+                if parts[0] == 'v':
+                    vertices.append([float(parts[1]), float(parts[2]), float(parts[3]), 1.0])
+                elif parts[0] == 'f':
+                    face_indices = []
+                    for p in parts[1:]:
+                        face_indices.append(int(p.split('/')[0]) - 1)
+                    faces.append(face_indices)
+        return vertices, faces
+    except FileNotFoundError:
+        print(f"오류: '{filename}' 파일을 찾을 수 없습니다. 파일 경로와 이름을 확인해주세요.")
+        print(f"현재 작업 디렉토리: {os.getcwd()}")
+        return [], []
+    except Exception as e:
+        print(f"OBJ 파일 파싱 중 오류 발생: {e}")
+        return [], []
+
+# --- Pygame 초기화 ---
+pygame.init()
+
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Pygame Simple 3D Renderer")
+
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BLUE = (0, 0, 255)
+
+# --- 3D 모델 로드 ---
+vertices, faces = load_obj('Summer_Project/example.obj')
+
+if not vertices:
+    pygame.quit()
+    exit()
+
+# --- 3D 렌더링 설정 ---
+camera_pos = [0, 0, -250]
+fov = 90
+aspect_ratio = WIDTH / HEIGHT
+near_plane = 0.1
+far_plane = 100.0
+
+projection_matrix = perspective_projection_matrix(fov, aspect_ratio, near_plane, far_plane)
+
+rotation_angle_x = 0
+rotation_angle_y = 0
+rotation_speed = 0.1 # 연속 회전을 위해 속도를 약간 조정할 수 있습니다. (기존 0.02)
+
+# --- 메인 게임 루프 ---
+running = True
+clock = pygame.time.Clock()
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE: # ESC 키로 종료
+                running = False
+    
+    # --- 키 입력 상태 확인 (키가 눌려있는 동안 계속 동작) ---
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]:
+        rotation_angle_y -= rotation_speed
+    if keys[pygame.K_RIGHT]:
+        rotation_angle_y += rotation_speed
+    if keys[pygame.K_UP]:
+        rotation_angle_x -= rotation_speed
+    if keys[pygame.K_DOWN]:
+        rotation_angle_x += rotation_speed
+
+    screen.fill(BLACK)
+
+    # 모델 변환 행렬 (회전 + 이동)
+    model_matrix = identity_matrix()
+    model_matrix = multiply_matrices(rotate_x_matrix(rotation_angle_x), model_matrix)
+    model_matrix = multiply_matrices(rotate_y_matrix(rotation_angle_y), model_matrix)
+    model_matrix = multiply_matrices(translate_matrix(0, 0, 3), model_matrix)
+
+    # 뷰 변환 행렬 (카메라를 원점으로 이동)
+    view_matrix = translate_matrix(-camera_pos[0], -camera_pos[1], -camera_pos[2])
+
+    # 최종 변환 행렬: 투영 * 뷰 * 모델
+    pv_matrix = multiply_matrices(projection_matrix, view_matrix)
+    final_transform_matrix = multiply_matrices(pv_matrix, model_matrix)
+
+
+    transformed_vertices = []
+    for v in vertices:
+        transformed_v = multiply_matrix_vector(final_transform_matrix, v)
+
+        if transformed_v[3] != 0:
+            x = transformed_v[0] / transformed_v[3]
+            y = transformed_v[1] / transformed_v[3]
+            # z = transformed_v[2] / transformed_v[3] # Z값은 깊이 버퍼 등에 사용되지만 여기서는 사용하지 않음
+
+            screen_x = int((x + 1) * WIDTH / 2)
+            screen_y = int((-y + 1) * HEIGHT / 2)
+
+            transformed_vertices.append((screen_x, screen_y))
+        else:
+            transformed_vertices.append(None)
+
+    # 면 그리기 (와이어프레임)
+    for face in faces:
+        points_to_draw = []
+        for index in face:
+            if 0 <= index < len(transformed_vertices) and transformed_vertices[index] is not None:
+                points_to_draw.append(transformed_vertices[index])
+            else:
+                points_to_draw = []
+                break
+        
+        if len(points_to_draw) >= 2:
+            pygame.draw.lines(screen, BLUE, True, points_to_draw, 1)
+
+    pygame.display.flip()
+    clock.tick(60) # 초당 60프레임으로 제한하여 부드러운 움직임을 유지
+
+pygame.quit()
