@@ -112,3 +112,17 @@ class ScatteredBullet:
             screen_y = self.pos[1] - world_y
             rect = self.image.get_rect(center=(screen_x, screen_y))
             screen.blit(self.image, rect)
+
+class Obstacle:
+    def __init__(self, image, world_x, world_y, colliders):
+        self.image = image
+        self.world_x = world_x
+        self.world_y = world_y
+        self.rect = self.image.get_rect(topleft=(world_x, world_y))
+        self.colliders = colliders
+
+    def draw(self, screen, world_offset_x, world_offset_y):
+        screen_x = self.world_x - world_offset_x
+        screen_y = self.world_y - world_offset_y
+        screen.blit(self.image, (screen_x, screen_y))
+
