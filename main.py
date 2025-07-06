@@ -4,9 +4,10 @@ import random
 from config import *
 from asset_manager import load_images
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet
+from entities import Bullet, ScatteredBullet, ScatteredBlood
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
+from ai import Enemy
 
 pygame.init()
 pygame.font.init()
@@ -36,7 +37,8 @@ obstacle_manager = ObstacleManager(
     map_width=BG_WIDTH,
     map_height=BG_HEIGHT,
     min_scale=1.3,
-    max_scale=2.0
+    max_scale=2.0,
+    num_obstacles_range=(5, 8)
 )
 
 world_x = (BG_WIDTH // 2) - (SCREEN_WIDTH // 2)
@@ -100,6 +102,35 @@ running = True
 
 player_radius = 30
 
+player_hp = 300
+player_hp_max = 300
+
+damage_flash_alpha = 0
+damage_flash_fade_speed = 5
+
+blood_effects = []
+
+kill_count = 0
+
+def increment_kill_count():
+    global kill_count
+    kill_count += 1
+
+# ✅ 함수 선언을 Enemy 생성보다 위로 올림
+def check_circle_collision(center1, radius1, center2, radius2):
+    dx = center1[0] - center2[0]
+    dy = center1[1] - center2[1]
+    dist_sq = dx * dx + dy * dy
+    r_sum = radius1 + radius2
+    return dist_sq <= r_sum * r_sum
+
+def check_ellipse_circle_collision(circle_center, circle_radius, ellipse_center, rx, ry):
+    dx = circle_center[0] - ellipse_center[0]
+    dy = circle_center[1] - ellipse_center[1]
+    test = (dx ** 2) / ((rx + circle_radius) ** 2) + \
+           (dy ** 2) / ((ry + circle_radius) ** 2)
+    return test <= 1.0
+
 def fade_out(screen, duration, step_delay):
     overlay = pygame.Surface(screen.get_size())
     overlay.fill((0, 0, 0))
@@ -110,7 +141,7 @@ def fade_out(screen, duration, step_delay):
         overlay.set_alpha(alpha)
         screen.blit(overlay, (0, 0))
         pygame.display.flip()
-        clock.tick(1/step_delay)
+        clock.tick(1 / step_delay)
 
 def fade_in(screen, duration, step_delay):
     overlay = pygame.Surface(screen.get_size())
@@ -122,11 +153,46 @@ def fade_in(screen, duration, step_delay):
         overlay.set_alpha(alpha)
         screen.blit(overlay, (0, 0))
         pygame.display.flip()
-        clock.tick(1/step_delay)
+        clock.tick(1 / step_delay)
+
+def get_player_center_world(world_x, world_y):
+    return (
+        world_x + player_rect.centerx,
+        world_y + player_rect.centery
+    )
+
+enemies = []
+enemy_positions = [
+    (BG_WIDTH // 2 - 100, 100),
+    (BG_WIDTH // 2, 100),
+    (BG_WIDTH // 2 + 100, 100),
+    (BG_WIDTH // 2 - 100, 175),
+    (BG_WIDTH // 2, 175),
+    (BG_WIDTH // 2 + 100, 175),
+    (BG_WIDTH // 2 - 100, 250),
+    (BG_WIDTH // 2, 250),
+    (BG_WIDTH // 2 + 100, 250),
+]
+
+for pos in enemy_positions:
+    enemy = Enemy(
+    world_x=pos[0],
+    world_y=pos[1],
+    image=images["enemy"],
+    gun_image=images["gun1"],
+    bullet_image=images["enemy_bullet"],
+    sounds=sounds,
+    get_player_center_world_fn=get_player_center_world,
+    obstacle_manager=obstacle_manager,
+    check_circle_collision_fn=check_circle_collision,
+    check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
+    player_bullet_image=images["bullet"],
+    kill_callback=increment_kill_count
+    )
+    enemies.append(enemy)
 
 while running:
     current_time = pygame.time.get_ticks()
-
     events = pygame.event.get()
 
     for event in events:
@@ -196,8 +262,42 @@ while running:
         fade_in(screen, duration=0.3, step_delay=0.01)
         fade_in_after_resume = False
 
-    prev_world_x = world_x
-    prev_world_y = world_y
+    delta_time = clock.get_time()
+    player_center = (world_x + player_rect.centerx, world_y + player_rect.centery)
+    for enemy in enemies:
+        enemy.update(
+            dt=delta_time,
+            world_x=world_x,
+            world_y=world_y,
+            player_rect=player_rect,
+            enemies=enemies
+        )
+
+     # 적의 탄환이 플레이어에 명중 시
+    for enemy in enemies:
+        for bullet in enemy.bullets[:]:
+            bullet.update(obstacle_manager)
+            if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
+                bullet.to_remove = True
+                continue
+            if check_circle_collision(
+                bullet.collider.center,
+                bullet.collider.size if isinstance(bullet.collider.size, (int, float)) else 5.0,
+                player_center,
+                player_radius
+            ):
+                player_hp -= 20
+                damage_flash_alpha = 255
+                shake_timer = 15      # 흔들리는 프레임 수 (조절 가능)
+                shake_magnitude = 5   # 흔들림 세기 (조절 가능)
+                bullet.to_remove = True
+                continue
+
+    # 탄피 업데이트 (탄피가 배경 위, 나머지 위로 오도록)
+    for scatter in scattered_bullets[:]:
+        scatter.update()
+        if scatter.alpha <= 0:
+            scattered_bullets.remove(scatter)
 
     if current_weapon == 1:
         distance_from_center = GUN1_DISTANCE_FROM_CENTER
@@ -258,39 +358,167 @@ while running:
     world_vx = max(-max_speed, min(max_speed, world_vx))
     world_vy = max(-max_speed, min(max_speed, world_vy))
 
-    # ------------------------------
-    # 축별 이동 충돌 검사
-    # ------------------------------
-
-    # X축
+    # X축 충돌 검사
     test_world_x = world_x + world_vx
     test_world_y = world_y
 
     player_center_world_x = test_world_x + player_rect.centerx
     player_center_world_y = test_world_y + player_rect.centery
 
-    if not obstacle_manager.check_collision_circle(
-        (player_center_world_x, player_center_world_y),
-        player_radius
-    ):
-        world_x = test_world_x
+    player_hit = False
+
+    for obs in obstacle_manager.placed_obstacles:
+        for c in obs.colliders:
+            collider_world_center = (
+                obs.world_x + c.center[0],
+                obs.world_y + c.center[1]
+            )
+            if c.shape == "circle":
+                collider_radius = c.size
+                if check_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    collider_radius
+                ):
+                    player_hit = True
+                    break
+            elif c.shape == "ellipse":
+                rx, ry = c.size
+                if check_ellipse_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    rx,
+                    ry
+                ):
+                    player_hit = True
+                    break
+            elif c.shape == "rectangle":
+                w, h = c.size
+                collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
+                if check_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    collider_radius
+                ):
+                    player_hit = True
+                    break
+        if player_hit:
+            break
+
+    if not player_hit:
+        # 적과 충돌 검사
+        collided_with_enemy = False
+        player_center_world = (
+            test_world_x + player_rect.centerx,
+            world_y + player_rect.centery
+        )
+        for enemy in enemies:
+            if check_circle_collision(
+                player_center_world,
+                player_radius,
+                (enemy.world_x, enemy.world_y),
+                enemy.radius
+            ):
+                collided_with_enemy = True
+                break
+        if not collided_with_enemy:
+            world_x = test_world_x
+        else:
+            world_vx = 0
     else:
         world_vx = 0
 
-    # Y축
+    # Y축 충돌 검사
     test_world_x = world_x
     test_world_y = world_y + world_vy
 
     player_center_world_x = test_world_x + player_rect.centerx
     player_center_world_y = test_world_y + player_rect.centery
 
-    if not obstacle_manager.check_collision_circle(
-        (player_center_world_x, player_center_world_y),
-        player_radius
-    ):
-        world_y = test_world_y
+    player_hit = False
+
+    for obs in obstacle_manager.placed_obstacles:
+        for c in obs.colliders:
+            collider_world_center = (
+                obs.world_x + c.center[0],
+                obs.world_y + c.center[1]
+            )
+            if c.shape == "circle":
+                collider_radius = c.size
+                if check_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    collider_radius
+                ):
+                    player_hit = True
+                    break
+            elif c.shape == "ellipse":
+                rx, ry = c.size
+                if check_ellipse_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    rx,
+                    ry
+                ):
+                    player_hit = True
+                    break
+            elif c.shape == "rectangle":
+                w, h = c.size
+                collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
+                if check_circle_collision(
+                    (player_center_world_x, player_center_world_y),
+                    player_radius,
+                    collider_world_center,
+                    collider_radius
+                ):
+                    player_hit = True
+                    break
+        if player_hit:
+            break
+
+    if not player_hit:
+        collided_with_enemy = False
+        player_center_world = (
+            world_x + player_rect.centerx,
+            test_world_y + player_rect.centery
+        )
+        for enemy in enemies:
+            if check_circle_collision(
+                player_center_world,
+                player_radius,
+                (enemy.world_x, enemy.world_y),
+                enemy.radius
+            ):
+                collided_with_enemy = True
+                break
+        if not collided_with_enemy:
+            world_y = test_world_y
+        else:
+            world_vy = 0
     else:
         world_vy = 0
+    
+    # ✅ 추가: bullet 장애물 충돌 검사
+    for bullet in bullets[:]:
+        bullet.update(obstacle_manager)
+        collided = False
+        for obs in obstacle_manager.placed_obstacles:
+            for c in obs.colliders:
+                if c.bullet_passable:
+                    continue
+                if c.check_collision_circle(bullet.collider.center, bullet.collider.size):
+                    collided = True
+                    break
+            if collided:
+                break
+        if collided:
+            bullet.to_remove = True
+            continue
 
     half_screen_width = SCREEN_WIDTH // 2
     half_screen_height = SCREEN_HEIGHT // 2
@@ -318,12 +546,12 @@ while running:
         fire_delay = GUN1_FIRE_DELAY
         recoil_strength = GUN1_RECOIL
         fire_sound = sounds["gun1_fire"]
-    elif current_weapon == 2:
+    else:
         fire_delay = GUN2_FIRE_DELAY
         recoil_strength = GUN2_RECOIL
         fire_sound = sounds["gun2_fire"]
 
-    if mouse_left_button_down:
+    if mouse_left_button_down and not changing_weapon:
         if current_time - last_shot_time > fire_delay:
             fire_sound.play()
 
@@ -332,11 +560,6 @@ while running:
 
             allow_sprint = False
             recoil_in_progress = True
-
-            if current_weapon == 1:
-                shake_magnitude = 2
-            elif current_weapon == 2:
-                shake_magnitude = 4
 
             direction_x = math.cos(angle_radians)
             direction_y = math.sin(angle_radians)
@@ -358,8 +581,11 @@ while running:
                 target_world_x,
                 target_world_y,
                 10,
-                original_bullet_image
+                original_bullet_image,
+                speed=10,
+                max_distance=1500
             )
+
             bullets.append(new_bullet)
 
             shake_timer = 10
@@ -392,14 +618,10 @@ while running:
         shake_offset_x = 0
         shake_offset_y = 0
 
-    # --------------------
-    # Draw 순서
-    # --------------------
-
+    bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
+    enemy.bullets = [b for b in enemy.bullets if not getattr(b, "to_remove", False)]
     screen.fill((0, 0, 0))
     screen.blit(background_image, (-world_x + shake_offset_x, -world_y + shake_offset_y))
-
-    obstacle_manager.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -408,34 +630,125 @@ while running:
         else:
             scatter.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
+    for enemy in enemies:
+        for scatter in enemy.scattered_bullets[:]:
+            scatter.update()
+            if scatter.alpha <= 0:
+                enemy.scattered_bullets.remove(scatter)
+            else:
+                scatter.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    for blood in blood_effects[:]:
+        blood.update()
+        if blood.alpha <= 0:
+            blood_effects.remove(blood)
+
+    for blood in blood_effects:
+        blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    obstacle_manager.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    for enemy in enemies:
+        enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    # ✅ 추가: HP 바 출력
+    hp_bar_width = 300
+    hp_bar_height = 30
+    hp_bar_x = SCREEN_WIDTH // 2 - hp_bar_width // 2
+    hp_bar_y = SCREEN_HEIGHT - 60
+    hp_ratio = max(0, player_hp / player_hp_max)
+    current_width = int(hp_bar_width * hp_ratio)
+    pygame.draw.rect(screen, (80, 80, 80), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
+    pygame.draw.rect(screen, (0, 255, 0), (hp_bar_x, hp_bar_y, current_width, hp_bar_height))
+    hp_text = DEBUG_FONT.render(f"HP: {player_hp}", True, (255, 255, 255))
+    screen.blit(hp_text, (hp_bar_x + hp_bar_width + 10, hp_bar_y))
+
+    # ✅ 추가: damage flash effect
+    if damage_flash_alpha > 0:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+
+        border_thickness = 40
+
+        for i in range(border_thickness):
+            alpha = int(damage_flash_alpha * (1 - i / border_thickness))
+            color = (255, 0, 0, alpha)
+
+            # 위쪽
+            overlay.fill(color, rect=(i, i, SCREEN_WIDTH - i * 2, 1))
+            # 아래쪽
+            overlay.fill(color, rect=(i, SCREEN_HEIGHT - i - 1, SCREEN_WIDTH - i * 2, 1))
+            # 왼쪽
+            overlay.fill(color, rect=(i, i, 1, SCREEN_HEIGHT - i * 2))
+            # 오른쪽
+            overlay.fill(color, rect=(SCREEN_WIDTH - i - 1, i, 1, SCREEN_HEIGHT - i * 2))
+
+        screen.blit(overlay, (0, 0))
+        damage_flash_alpha = max(0, damage_flash_alpha - damage_flash_fade_speed)
+
+
     for bullet in bullets[:]:
-        bullet.update()
+        bullet.update(obstacle_manager)
+        if getattr(bullet, "to_remove", False):
+            bullet.to_remove = True
+            continue
+
+        bullet_center_world = bullet.collider.center
+
+        bullet_radius = 5.0  # 안전 기본값
+
+        if bullet.collider:
+            if bullet.collider.shape == "circle":
+                if isinstance(bullet.collider.size, tuple):
+                    bullet_radius = float(bullet.collider.size[0])
+                else:
+                    bullet_radius = float(bullet.collider.size)
+            elif bullet.collider.shape == "ellipse":
+                bullet_radius = float(max(bullet.collider.size))
+            elif bullet.collider.shape == "rectangle":
+                w, h = bullet.collider.size
+                bullet_radius = max(math.sqrt((w / 2) ** 2 + (h / 2) ** 2), 5.0)
+
+        hit = False
+        for enemy in enemies[:]:
+            enemy_center_world = (enemy.world_x, enemy.world_y)
+            if check_circle_collision(
+                bullet_center_world,
+                bullet_radius,
+                enemy_center_world,
+                enemy.radius
+            ):
+                damage = 30 if current_weapon == 1 else 20
+                enemy.hit(damage, blood_effects)
+                if not enemy.alive:
+                    enemies.remove(enemy)
+                    blood_effects.append(
+                        ScatteredBlood(enemy.world_x, enemy.world_y)
+                    )
+                bullet.to_remove = True
+                break
+
+        if hit:
+            bullet.to_remove = True
+            continue
+
         if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
-            bullets.remove(bullet)
-        else:
-            bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+            bullet.to_remove = True
+            continue
 
-    screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
+        bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
-
-    # 플레이어 collider outline
-    pygame.draw.circle(
-        screen,
-        (255, 0, 0),
-        (player_rect.centerx + shake_offset_x,
-         player_rect.centery + shake_offset_y),
-        player_radius,
-        2
-    )
+    screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
     speed = math.sqrt(world_vx ** 2 + world_vy ** 2)
-    speed_text = f"Speed: {speed:.2f}"
-    text_surface = DEBUG_FONT.render(speed_text, True, (255, 255, 255))
+    text_surface = DEBUG_FONT.render(f"Speed: {speed:.2f}", True, (255, 255, 255))
     screen.blit(text_surface, (10, 10))
 
-    weapon_text = f"Weapon: {current_weapon}"
-    weapon_surface = DEBUG_FONT.render(weapon_text, True, (255, 255, 255))
+    weapon_surface = DEBUG_FONT.render(f"Weapon: {current_weapon}", True, (255, 255, 255))
     screen.blit(weapon_surface, (10, 40))
+
+    kill_surface = DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255))
+    screen.blit(kill_surface, (10, 70))
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

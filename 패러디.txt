@@ -1,0 +1,5 @@
+게임 제목-둠 이터널 챕터1(이 땅 위의 지옥-Hell on Earth)
+게임 스타일-Battledudes.io
+
+플레이어 모델-Battledudes.io 캐릭터
+적1 모델-Battledudes.io 캐릭터

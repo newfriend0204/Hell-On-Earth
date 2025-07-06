@@ -22,13 +22,19 @@ def load_images():
     gun2_img = pygame.transform.smoothscale(gun2_img, new_size)
 
     bullet_img = pygame.image.load(path_image("image", "Bullet.png")).convert_alpha()
+
+    # ✅ Enemy bullet - load and colorize red
+    enemy_bullet_img = pygame.image.load(path_image("image", "Bullet.png")).convert_alpha()
+    enemy_bullet_img = enemy_bullet_img.copy()
+    enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
     bg_img = pygame.image.load(path_image("Image", "Map1.png")).convert()
     bg_img = pygame.transform.scale(bg_img, (BG_WIDTH, BG_HEIGHT))
     cursor_img = pygame.transform.scale(cursor_img, (32, 32))
 
     obstacle_sizes = {
-        "Pond1.png": (60, 40),
+        "Pond1.png": (1536, 1024),
         "Pond2.png": (70, 50),
         "Rock1.png": (95, 75),
         "Rock2.png": (70, 50),
@@ -50,11 +56,17 @@ def load_images():
                 obstacle_images[filename] = image
                 obstacle_masks[filename] = mask
 
+    # ✅ Enemy character
+    enemy_img = pygame.image.load(path_image("image", "EnemyCharacter.png")).convert_alpha()
+    enemy_img = pygame.transform.scale(enemy_img, (90, 90))
+
     return {
         "player": player_img,
         "gun1": gun1_img,
         "gun2": gun2_img,
         "bullet": bullet_img,
+        "enemy_bullet": enemy_bullet_img,
+        "enemy": enemy_img,
         "cursor": cursor_img,
         "background": bg_img,
         "obstacles": obstacle_images,

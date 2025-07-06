@@ -5,7 +5,7 @@ from collider import Collider
 
 class ObstacleManager:
     def __init__(self, obstacle_images, obstacle_masks, map_width, map_height,
-                 min_scale=1.3, max_scale=2.0, num_obstacles_range=(5, 8)):
+                 min_scale=1.3, max_scale=2.0, num_obstacles_range=(1, 1)):
         self.obstacle_images = obstacle_images
         self.obstacle_masks = obstacle_masks
         self.map_width = map_width
@@ -18,42 +18,62 @@ class ObstacleManager:
         self.generate_obstacles()
 
     def generate_obstacles(self):
-        num_obstacles = random.randint(*self.num_obstacles_range)
-        attempt_limit = 500
+        # Map1 고정 배치 사용
+        self.generate_obstacles_map1()
 
-        for _ in range(num_obstacles):
-            attempts = 0
-            while attempts < attempt_limit:
-                filename = random.choice(list(self.obstacle_images.keys()))
-                orig_image = self.obstacle_images[filename]
+    def generate_obstacles_map1(self):
+        self.placed_obstacles = []
 
-                scale_factor = random.uniform(self.min_scale, self.max_scale)
+        # -----------------------------
+        # ① 중앙에 큰 연못
+        # -----------------------------
 
-                orig_width = orig_image.get_width()
-                orig_height = orig_image.get_height()
+        pond_filename = "Pond1.png"   # 네 asset 이름에 맞춰 변경해도 좋음
+        orig_image = self.obstacle_images[pond_filename]
 
-                new_width = int(orig_width * scale_factor)
-                new_height = int(orig_height * scale_factor)
+        scale_factor = 0.7
+        new_width = int(orig_image.get_width() * scale_factor)
+        new_height = int(orig_image.get_height() * scale_factor)
 
-                scaled_image = pygame.transform.scale(orig_image, (new_width, new_height))
+        scaled_image = pygame.transform.scale(orig_image, (new_width, new_height))
 
-                rand_x = random.randint(0, self.map_width - new_width)
-                rand_y = random.randint(0, self.map_height - new_height)
+        pond_x = (self.map_width - new_width) // 2
+        pond_y = (self.map_height - new_height) // 2
 
-                colliders = self._create_colliders_for_image(
-                    filename, new_width, new_height
-                )
+        colliders = self._create_colliders_for_image(
+            pond_filename, new_width, new_height
+        )
 
-                obstacle = Obstacle(scaled_image, rand_x, rand_y, colliders)
+        pond_obstacle = Obstacle(scaled_image, pond_x, pond_y, colliders)
+        self.placed_obstacles.append(pond_obstacle)
 
-                if not self._check_overlap(obstacle):
-                    self.placed_obstacles.append(obstacle)
-                    break
-                else:
-                    attempts += 1
+        # -----------------------------
+        # ② 가장자리에 돌 6개
+        # -----------------------------
 
-            if attempts >= attempt_limit:
-                print("Could not place obstacle after many attempts!")
+        rock_filename = "Rock1.png"
+        orig_image = self.obstacle_images[rock_filename]
+
+        scale_factor = 1.5
+        new_width = int(orig_image.get_width() * scale_factor)
+        new_height = int(orig_image.get_height() * scale_factor)
+
+        scaled_image = pygame.transform.scale(orig_image, (new_width, new_height))
+
+        positions = [
+            (50, 50),
+            (self.map_width - new_width - 50, 50),
+            (50, self.map_height - new_height - 50),
+            (self.map_width - new_width - 50, self.map_height - new_height - 50),
+            (self.map_width // 2 - new_width // 2, self.map_height - new_height - 50),
+        ]
+
+        for pos in positions:
+            colliders = self._create_colliders_for_image(
+                rock_filename, new_width, new_height
+            )
+            rock_obstacle = Obstacle(scaled_image, pos[0], pos[1], colliders)
+            self.placed_obstacles.append(rock_obstacle)
 
     def _check_overlap(self, new_obstacle):
         for obs in self.placed_obstacles:
@@ -69,13 +89,14 @@ class ObstacleManager:
         colliders = []
 
         if "Pond1" in filename:
-            rx = w * 0.4
-            ry = h * 0.25
+            rx = w * 0.3
+            ry = h * 0.35
             colliders.append(
                 Collider(
                     shape="ellipse",
                     center=(w / 2, h / 2),
-                    size=(rx, ry)
+                    size=(rx, ry),
+                    bullet_passable=True
                 )
             )
         elif "Pond2" in filename:
@@ -85,25 +106,30 @@ class ObstacleManager:
                 Collider(
                     shape="ellipse",
                     center=(w / 2, h / 2),
-                    size=(rx, ry)
+                    size=(rx, ry),
+                    bullet_passable=True
                 )
             )
         elif "Rock1" in filename:
-            r = min(w, h) * 0.4
+            rx = w * 0.5
+            ry = h * 0.5
             colliders.append(
                 Collider(
-                    shape="circle",
+                    shape="ellipse",
                     center=(w / 2, h / 2),
-                    size=r
+                    size=(rx, ry),
+                    bullet_passable=False
                 )
             )
         elif "Rock2" in filename or "Rock3" in filename:
-            r = min(w, h) * 0.35
+            rx = w * 0.4
+            ry = h * 0.25
             colliders.append(
                 Collider(
-                    shape="circle",
+                    shape="ellipse",
                     center=(w / 2, h / 2),
-                    size=r
+                    size=(rx, ry),
+                    bullet_passable=False
                 )
             )
         else:
