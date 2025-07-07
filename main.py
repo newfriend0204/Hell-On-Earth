@@ -7,7 +7,10 @@ from sound_manager import load_sounds
 from entities import Bullet, ScatteredBullet, ScatteredBlood
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
-from ai import Enemy
+from ai import Enemy1, Enemy2
+from maps import CURRENT_MAP_1, CURRENT_MAP_2, CURRENT_MAP_3
+
+CURRENT_MAP = CURRENT_MAP_2
 
 pygame.init()
 pygame.font.init()
@@ -26,6 +29,7 @@ sounds = load_sounds()
 original_player_image = images["player"]
 original_gun_image_1 = images["gun1"]
 original_gun_image_2 = images["gun2"]
+original_gun_image_3 = images["gun3"]
 original_bullet_image = images["bullet"]
 cursor_image = images["cursor"]
 background_image = images["background"]
@@ -40,9 +44,40 @@ obstacle_manager = ObstacleManager(
     max_scale=2.0,
     num_obstacles_range=(5, 8)
 )
+obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
 
-world_x = (BG_WIDTH // 2) - (SCREEN_WIDTH // 2)
-world_y = max(0, BG_HEIGHT - (SCREEN_HEIGHT // 2))
+crop_surface = None
+effective_bg_width = BG_WIDTH
+effective_bg_height = BG_HEIGHT
+
+if CURRENT_MAP.get("crop_rect"):
+    crop_info = CURRENT_MAP["crop_rect"]
+    x_ratio = crop_info.get("x_ratio", 1.0)
+    y_ratio = crop_info.get("y_ratio", 1.0)
+
+    crop_width = int(BG_WIDTH * x_ratio)
+    crop_height = int(BG_HEIGHT * y_ratio)
+
+    if x_ratio <= 1.0 and y_ratio <= 1.0:
+        # 잘라내기
+        crop_surface = background_image.subsurface(
+            pygame.Rect(0, 0, crop_width, crop_height)
+        ).copy()
+    else:
+        # 늘리기 → 타일 복제
+        crop_surface = pygame.Surface((crop_width, crop_height))
+        for ty in range(math.ceil(y_ratio)):
+            for tx in range(math.ceil(x_ratio)):
+                crop_surface.blit(
+                    background_image,
+                    (tx * BG_WIDTH, ty * BG_HEIGHT)
+                )
+    effective_bg_width = crop_width
+    effective_bg_height = crop_height
+else:
+    crop_surface = background_image.copy()
+world_x = (crop_surface.get_width() // 2) - (SCREEN_WIDTH // 2)
+world_y = crop_surface.get_height()
 
 player_rect = original_player_image.get_rect(
     center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -162,33 +197,42 @@ def get_player_center_world(world_x, world_y):
     )
 
 enemies = []
-enemy_positions = [
-    (BG_WIDTH // 2 - 100, 100),
-    (BG_WIDTH // 2, 100),
-    (BG_WIDTH // 2 + 100, 100),
-    (BG_WIDTH // 2 - 100, 175),
-    (BG_WIDTH // 2, 175),
-    (BG_WIDTH // 2 + 100, 175),
-    (BG_WIDTH // 2 - 100, 250),
-    (BG_WIDTH // 2, 250),
-    (BG_WIDTH // 2 + 100, 250),
-]
+for info in CURRENT_MAP["enemy_infos"]:
+    ex = info["x"]
+    ey = info["y"]
+    enemy_type = info["enemy_type"]
 
-for pos in enemy_positions:
-    enemy = Enemy(
-    world_x=pos[0],
-    world_y=pos[1],
-    image=images["enemy"],
-    gun_image=images["gun1"],
-    bullet_image=images["enemy_bullet"],
-    sounds=sounds,
-    get_player_center_world_fn=get_player_center_world,
-    obstacle_manager=obstacle_manager,
-    check_circle_collision_fn=check_circle_collision,
-    check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-    player_bullet_image=images["bullet"],
-    kill_callback=increment_kill_count
-    )
+    if enemy_type == "enemy2":
+        enemy = Enemy2(
+            world_x=ex,
+            world_y=ey,
+            image=images["enemy2"],
+            gun_image=images["gun2"],
+            bullet_image=images["enemy_bullet"],
+            sounds=sounds,
+            get_player_center_world_fn=get_player_center_world,
+            obstacle_manager=obstacle_manager,
+            check_circle_collision_fn=check_circle_collision,
+            check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
+            player_bullet_image=images["bullet"],
+            kill_callback=increment_kill_count,
+        )
+    else:
+        enemy = Enemy1(
+            world_x=ex,
+            world_y=ey,
+            image=images["enemy1"],
+            gun_image=images["gun1"],
+            bullet_image=images["enemy_bullet"],
+            sounds=sounds,
+            get_player_center_world_fn=get_player_center_world,
+            obstacle_manager=obstacle_manager,
+            check_circle_collision_fn=check_circle_collision,
+            check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
+            player_bullet_image=images["bullet"],
+            kill_callback=increment_kill_count,
+        )
+
     enemies.append(enemy)
 
 while running:
@@ -207,13 +251,29 @@ while running:
                 move_left = True
             elif event.key == pygame.K_d:
                 move_right = True
+            elif event.key == pygame.K_SPACE:
+                # 현재 플레이어 월드 좌표 출력
+                player_world_x = world_x + player_rect.centerx
+                player_world_y = world_y + player_rect.centery
+                print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
             elif event.key == pygame.K_TAB:
                 fade_out(screen, duration=0.3, step_delay=0.01)
                 paused = not paused
                 if paused:
                     pygame.mouse.set_visible(True)
-                    obj_file = "Gun13DObject.obj" if current_weapon == 1 else "Gun23DObject.obj"
-                    zoom = GUN1_ZOOM_LEVEL if current_weapon == 1 else GUN2_ZOOM_LEVEL
+                    if current_weapon == 1:
+                        obj_file = "Gun13DObject.obj"
+                        zoom = GUN1_ZOOM_LEVEL
+                    elif current_weapon == 2:
+                        obj_file = "Gun23DObject.obj"
+                        zoom = GUN2_ZOOM_LEVEL
+                    elif current_weapon == 3:
+                        obj_file = "Gun33DObject.obj"
+                        zoom = GUN3_ZOOM_LEVEL
+                    else:
+                        obj_file = "Gun13DObject.obj"
+                        zoom = GUN1_ZOOM_LEVEL
+
                     renderer.load_new_obj(obj_file, zoom_level=zoom)
                     renderer.reset_view()
                     fade_in(screen, duration=0.3, step_delay=0.01)
@@ -234,6 +294,13 @@ while running:
                     change_animation_timer = 0.0
                     previous_distance = current_distance
                     target_distance = GUN2_DISTANCE_FROM_CENTER
+            elif event.key == pygame.K_3:
+                if current_weapon != 3 and not changing_weapon:
+                    changing_weapon = True
+                    change_weapon_target = 3
+                    change_animation_timer = 0.0
+                    previous_distance = current_distance
+                    target_distance = GUN3_DISTANCE_FROM_CENTER
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_w:
                 move_up = False
@@ -264,14 +331,15 @@ while running:
 
     delta_time = clock.get_time()
     player_center = (world_x + player_rect.centerx, world_y + player_rect.centery)
-    for enemy in enemies:
-        enemy.update(
-            dt=delta_time,
-            world_x=world_x,
-            world_y=world_y,
-            player_rect=player_rect,
-            enemies=enemies
-        )
+    #디버그
+    # for enemy in enemies:
+    #     enemy.update(
+    #         dt=delta_time,
+    #         world_x=world_x,
+    #         world_y=world_y,
+    #         player_rect=player_rect,
+    #         enemies=enemies
+    #     )
 
      # 적의 탄환이 플레이어에 명중 시
     for enemy in enemies:
@@ -301,8 +369,12 @@ while running:
 
     if current_weapon == 1:
         distance_from_center = GUN1_DISTANCE_FROM_CENTER
-    else:
+    elif current_weapon == 2:
         distance_from_center = GUN2_DISTANCE_FROM_CENTER
+    elif current_weapon == 3:
+        distance_from_center = GUN3_DISTANCE_FROM_CENTER
+    else:
+        distance_from_center = GUN1_DISTANCE_FROM_CENTER
 
     if changing_weapon:
         change_animation_timer += clock.get_time() / 1000.0
@@ -334,6 +406,10 @@ while running:
         max_speed *= (1 - GUN1_SPEED_PENALTY)
     elif current_weapon == 2:
         max_speed *= (1 - GUN2_SPEED_PENALTY)
+    elif current_weapon == 3:
+        max_speed *= (1 - GUN3_SPEED_PENALTY)
+    else:
+        max_speed *= (1 - GUN1_SPEED_PENALTY)
 
     if move_left:
         world_vx -= acceleration_rate
@@ -395,13 +471,10 @@ while running:
                     player_hit = True
                     break
             elif c.shape == "rectangle":
-                w, h = c.size
-                collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                if check_circle_collision(
+                if c.check_collision_circle(
                     (player_center_world_x, player_center_world_y),
                     player_radius,
-                    collider_world_center,
-                    collider_radius
+                    (obs.world_x, obs.world_y)
                 ):
                     player_hit = True
                     break
@@ -468,13 +541,10 @@ while running:
                     player_hit = True
                     break
             elif c.shape == "rectangle":
-                w, h = c.size
-                collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                if check_circle_collision(
+                if c.check_collision_circle(
                     (player_center_world_x, player_center_world_y),
                     player_radius,
-                    collider_world_center,
-                    collider_radius
+                    (obs.world_x, obs.world_y)
                 ):
                     player_hit = True
                     break
@@ -503,28 +573,14 @@ while running:
     else:
         world_vy = 0
     
-    # ✅ 추가: bullet 장애물 충돌 검사
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
-        collided = False
-        for obs in obstacle_manager.placed_obstacles:
-            for c in obs.colliders:
-                if c.bullet_passable:
-                    continue
-                if c.check_collision_circle(bullet.collider.center, bullet.collider.size):
-                    collided = True
-                    break
-            if collided:
-                break
-        if collided:
-            bullet.to_remove = True
-            continue
 
     half_screen_width = SCREEN_WIDTH // 2
     half_screen_height = SCREEN_HEIGHT // 2
 
-    world_x = max(-half_screen_width, min(background_rect.width - half_screen_width, world_x))
-    world_y = max(-half_screen_height, min(background_rect.height - half_screen_height, world_y))
+    world_x = max(-half_screen_width, min(effective_bg_width - half_screen_width, world_x))
+    world_y = max(-half_screen_height, min(effective_bg_height - half_screen_height, world_y))
 
     mouse_x, mouse_y = pygame.mouse.get_pos()
     dx = mouse_x - player_rect.centerx
@@ -535,7 +591,15 @@ while running:
     rotated_player_image = pygame.transform.rotate(original_player_image, -angle_degrees + 90)
     rotated_player_rect = rotated_player_image.get_rect(center=player_rect.center)
 
-    current_gun_image = original_gun_image_1 if current_weapon == 1 else original_gun_image_2
+    if current_weapon == 1:
+        current_gun_image = original_gun_image_1
+    elif current_weapon == 2:
+        current_gun_image = original_gun_image_2
+    elif current_weapon == 3:
+        current_gun_image = original_gun_image_3 
+    else:
+        current_gun_image = original_gun_image_1
+
 
     gun_pos_x = player_rect.centerx + math.cos(angle_radians) * (current_distance + recoil_offset)
     gun_pos_y = player_rect.centery + math.sin(angle_radians) * (current_distance + recoil_offset)
@@ -546,10 +610,19 @@ while running:
         fire_delay = GUN1_FIRE_DELAY
         recoil_strength = GUN1_RECOIL
         fire_sound = sounds["gun1_fire"]
-    else:
+    elif current_weapon == 2:
         fire_delay = GUN2_FIRE_DELAY
         recoil_strength = GUN2_RECOIL
         fire_sound = sounds["gun2_fire"]
+    elif current_weapon == 3:
+        fire_delay = GUN3_FIRE_DELAY
+        recoil_strength = GUN3_RECOIL
+        fire_sound = sounds["gun3_fire"]
+    else:
+        fire_delay = GUN1_FIRE_DELAY
+        recoil_strength = GUN1_RECOIL
+        fire_sound = sounds["gun1_fire"]
+
 
     if mouse_left_button_down and not changing_weapon:
         if current_time - last_shot_time > fire_delay:
@@ -561,45 +634,84 @@ while running:
             allow_sprint = False
             recoil_in_progress = True
 
-            direction_x = math.cos(angle_radians)
-            direction_y = math.sin(angle_radians)
-
             spawn_offset = 30
             vertical_offset = 6
             offset_angle = angle_radians + math.radians(90)
             offset_dx = math.cos(offset_angle) * vertical_offset
             offset_dy = math.sin(offset_angle) * vertical_offset
 
-            bullet_world_x = world_x + player_rect.centerx + direction_x * spawn_offset + offset_dx
-            bullet_world_y = world_y + player_rect.centery + direction_y * spawn_offset + offset_dy
-            target_world_x = world_x + mouse_x
-            target_world_y = world_y + mouse_y
+            if current_weapon == 3:
+                # 탄 6발 발사
+                for i in range(15):
+                    spread_angle = math.radians(random.uniform(-25, 25))
+                    direction_x = math.cos(angle_radians + spread_angle)
+                    direction_y = math.sin(angle_radians + spread_angle)
 
-            new_bullet = Bullet(
-                bullet_world_x,
-                bullet_world_y,
-                target_world_x,
-                target_world_y,
-                10,
-                original_bullet_image,
-                speed=10,
-                max_distance=1500
-            )
+                    bullet_world_x = world_x + player_rect.centerx + direction_x * spawn_offset + offset_dx
+                    bullet_world_y = world_y + player_rect.centery + direction_y * spawn_offset + offset_dy
 
-            bullets.append(new_bullet)
+                    target_world_x = bullet_world_x + direction_x * 100
+                    target_world_y = bullet_world_y + direction_y * 100
+
+                    new_bullet = Bullet(
+                        bullet_world_x,
+                        bullet_world_y,
+                        target_world_x,
+                        target_world_y,
+                        0,
+                        original_bullet_image,
+                        speed=7.5,
+                        max_distance=250
+                    )
+                    bullets.append(new_bullet)
+
+                # ✅ 탄피는 한 개만 배출
+                eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
+                eject_speed = 1
+                vx = math.cos(eject_angle) * eject_speed
+                vy = math.sin(eject_angle) * eject_speed
+
+                scatter_x = bullet_world_x
+                scatter_y = bullet_world_y
+
+                scatter = ScatteredBullet(scatter_x, scatter_y, vx, vy, original_bullet_image)
+                scatter.image_original = pygame.transform.scale(original_bullet_image, (int(4.5), int(10.5)))
+                scatter.image = scatter.image_original.copy()
+
+                scattered_bullets.append(scatter)
+            else:
+                direction_x = math.cos(angle_radians)
+                direction_y = math.sin(angle_radians)
+
+                bullet_world_x = world_x + player_rect.centerx + direction_x * spawn_offset + offset_dx
+                bullet_world_y = world_y + player_rect.centery + direction_y * spawn_offset + offset_dy
+                target_world_x = world_x + mouse_x
+                target_world_y = world_y + mouse_y
+
+                new_bullet = Bullet(
+                    bullet_world_x,
+                    bullet_world_y,
+                    target_world_x,
+                    target_world_y,
+                    10,
+                    original_bullet_image,
+                    speed=10,
+                    max_distance=2000
+                )
+
+                bullets.append(new_bullet)
+
+                eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
+                eject_speed = 1
+                vx = math.cos(eject_angle) * eject_speed
+                vy = math.sin(eject_angle) * eject_speed
+
+                scatter_x = bullet_world_x
+                scatter_y = bullet_world_y
+
+                scattered_bullets.append(ScatteredBullet(scatter_x, scatter_y, vx, vy, original_bullet_image))
 
             shake_timer = 10
-
-            eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
-            eject_speed = 1
-            vx = math.cos(eject_angle) * eject_speed
-            vy = math.sin(eject_angle) * eject_speed
-
-            scatter_x = bullet_world_x
-            scatter_y = bullet_world_y
-
-            scattered_bullets.append(ScatteredBullet(scatter_x, scatter_y, vx, vy, original_bullet_image))
-
             last_shot_time = current_time
 
     recoil_velocity += 1.5
@@ -621,7 +733,11 @@ while running:
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
     enemy.bullets = [b for b in enemy.bullets if not getattr(b, "to_remove", False)]
     screen.fill((0, 0, 0))
-    screen.blit(background_image, (-world_x + shake_offset_x, -world_y + shake_offset_y))
+
+    screen.blit(
+    crop_surface,
+    (-world_x + shake_offset_x, -world_y + shake_offset_y)
+    )
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -717,7 +833,14 @@ while running:
                 enemy_center_world,
                 enemy.radius
             ):
-                damage = 30 if current_weapon == 1 else 20
+                if current_weapon == 1:
+                    damage = 30
+                elif current_weapon == 2:
+                    damage = 20
+                elif current_weapon == 3:
+                    damage = 10
+                else:
+                    damage = 30
                 enemy.hit(damage, blood_effects)
                 if not enemy.alive:
                     enemies.remove(enemy)
@@ -744,7 +867,8 @@ while running:
     text_surface = DEBUG_FONT.render(f"Speed: {speed:.2f}", True, (255, 255, 255))
     screen.blit(text_surface, (10, 10))
 
-    weapon_surface = DEBUG_FONT.render(f"Weapon: {current_weapon}", True, (255, 255, 255))
+    weapon_name = f"gun{current_weapon}"
+    weapon_surface = DEBUG_FONT.render(f"Weapon: {weapon_name}", True, (255, 255, 255))
     screen.blit(weapon_surface, (10, 40))
 
     kill_surface = DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255))

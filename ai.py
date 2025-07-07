@@ -73,7 +73,7 @@ class ParticleBlood:
 # Enemy 클래스
 # --------------------------
 
-class Enemy:
+class Enemy1:
     def __init__(
         self,
         world_x,
@@ -214,7 +214,6 @@ class Enemy:
         self.world_x += self.velocity_x
         self.world_y += self.velocity_y
 
-        # 장애물 충돌 검사
         collided = False
         for obs in self.obstacle_manager.placed_obstacles:
             for c in obs.colliders:
@@ -398,7 +397,6 @@ class Enemy:
         target_world_x = bullet_world_x + math.cos(self.direction_angle) * 2000
         target_world_y = bullet_world_y + math.sin(self.direction_angle) * 2000
 
-        # ✅ 사거리(max_distance)를 넣어서 Bullet 생성
         new_bullet = Bullet(
             bullet_world_x,
             bullet_world_y,
@@ -406,8 +404,8 @@ class Enemy:
             target_world_y,
             15,
             self.bullet_image,
-            speed=7.5,          # ← 원하는 속도
-            max_distance=1000  # ← 적 총알 사거리
+            speed=5,
+            max_distance=2000
         )
 
         self.bullets.append(new_bullet)
@@ -431,12 +429,6 @@ class Enemy:
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
 
-        rotated_img = pygame.transform.rotate(
-            self.image_original, -math.degrees(self.direction_angle) + 90
-        )
-        rect = rotated_img.get_rect(center=(screen_x, screen_y))
-        screen.blit(rotated_img, rect)
-
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
         rotated_gun = pygame.transform.rotate(
@@ -444,6 +436,202 @@ class Enemy:
         )
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
         screen.blit(rotated_gun, gun_rect)
+
+        rotated_img = pygame.transform.rotate(
+            self.image_original, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+        for b in self.bullets:
+            b.draw(screen, world_x, world_y)
+
+class Enemy2(Enemy1):
+    def __init__(
+        self,
+        world_x,
+        world_y,
+        image,
+        gun_image,
+        bullet_image,
+        sounds,
+        get_player_center_world_fn,
+        obstacle_manager,
+        check_circle_collision_fn,
+        check_ellipse_circle_collision_fn,
+        player_bullet_image,
+        kill_callback=None,
+    ):
+        super().__init__(
+            world_x,
+            world_y,
+            image,
+            gun_image,
+            bullet_image,
+            sounds,
+            get_player_center_world_fn,
+            obstacle_manager,
+            check_circle_collision_fn,
+            check_ellipse_circle_collision_fn,
+            player_bullet_image,
+            kill_callback,
+        )
+        self.hp = 150
+        self.speed = 3.5
+        self.fire_sound = self.sounds["gun2_fire_enemy"]
+        self.current_distance = GUN2_DISTANCE_FROM_CENTER
+        self.shoot_delay = random.randint(700, 1700)
+
+        # 원거리 사격 관련
+        self.is_preparing_far_shot = False
+        self.prepare_start_time = 0
+        self.far_shot_step = 0
+        self.far_shot_timer = 0
+        self.far_shot_check_timer = random.randint(4000, 8000)
+        self.fixed_far_shot_angle = None
+
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        if not self.alive:
+            return
+
+        player_world_pos = self.get_player_center_world_fn(world_x, world_y)
+        dx = player_world_pos[0] - self.world_x
+        dy = player_world_pos[1] - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+
+        near_threshold = 150
+        far_threshold = 500
+
+        if self.is_preparing_far_shot:
+            elapsed = pygame.time.get_ticks() - self.prepare_start_time
+
+            if elapsed < 1500:
+                # ✅ 조준 중 → angle 계속 갱신
+                self.direction_angle = math.atan2(dy, dx)
+            else:
+                # ✅ 사격 시작 → angle 고정
+                if self.fixed_far_shot_angle is None:
+                    self.fixed_far_shot_angle = self.direction_angle
+
+                now = pygame.time.get_ticks()
+                if self.far_shot_step < 3:
+                    if now >= self.far_shot_timer:
+                        self.shoot(
+                            spread_angle=0,
+                            fixed_angle=self.fixed_far_shot_angle
+                        )
+                        self.far_shot_step += 1
+                        self.far_shot_timer = now + 200
+                else:
+                    self.is_preparing_far_shot = False
+                    self.far_shot_step = 0
+                    self.fixed_far_shot_angle = None
+                    self.far_shot_check_timer = random.randint(4000, 8000)
+            return
+
+        self.far_shot_check_timer -= dt
+        if self.far_shot_check_timer <= 0:
+            if random.random() < 0.5:
+                self.is_preparing_far_shot = True
+                self.prepare_start_time = pygame.time.get_ticks()
+                self.velocity_x = 0
+                self.velocity_y = 0
+                return
+            else:
+                self.far_shot_check_timer = random.randint(4000, 8000)
+
+        if near_threshold < dist_to_player <= far_threshold:
+            self.shoot_timer -= dt
+            if self.shoot_timer <= 0:
+                self.shoot()
+                self.shoot_timer = random.randint(700, 1700)
+
+        self.direction_angle = math.atan2(dy, dx)
+        super().update(dt, world_x, world_y, player_rect, enemies)
+
+    def shoot(self, spread_angle=15, fixed_angle=None):
+        self.fire_sound.play()
+
+        self.recoil_offset = 0
+        self.recoil_velocity = -GUN2_RECOIL
+        self.recoil_in_progress = True
+
+        angle = fixed_angle if fixed_angle is not None else self.direction_angle
+
+        spawn_offset = 30
+        vertical_offset = 6
+        offset_angle = angle + math.radians(90)
+        offset_dx = math.cos(offset_angle) * vertical_offset
+        offset_dy = math.sin(offset_angle) * vertical_offset
+
+        bullet_world_x = self.world_x + math.cos(angle) * spawn_offset + offset_dx
+        bullet_world_y = self.world_y + math.sin(angle) * spawn_offset + offset_dy
+
+        target_world_x = bullet_world_x + math.cos(angle) * 2000
+        target_world_y = bullet_world_y + math.sin(angle) * 2000
+
+        new_bullet = Bullet(
+            bullet_world_x,
+            bullet_world_y,
+            target_world_x,
+            target_world_y,
+            spread_angle,
+            self.bullet_image,
+            speed=5,
+            max_distance=2000
+        )
+
+        self.bullets.append(new_bullet)
+
+        eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+        eject_speed = 1
+        vx = math.cos(eject_angle) * eject_speed
+        vy = math.sin(eject_angle) * eject_speed
+
+        scatter_x = bullet_world_x
+        scatter_y = bullet_world_y
+
+        self.scattered_bullets.append(
+            ScatteredBullet(scatter_x, scatter_y, vx, vy, self.player_bullet_image)
+        )
+
+    def draw(self, screen, world_x, world_y):
+        if not self.alive:
+            return
+
+        screen_x = self.world_x - world_x
+        screen_y = self.world_y - world_y
+
+        # ✅ 빨간선은 무조건 적 ↔ 플레이어로 그린다
+        if self.is_preparing_far_shot:
+            elapsed = pygame.time.get_ticks() - self.prepare_start_time
+            if elapsed < 1500:
+                player_pos = self.get_player_center_world_fn(world_x, world_y)
+                player_screen_x = player_pos[0] - world_x
+                player_screen_y = player_pos[1] - world_y
+
+                pygame.draw.line(
+                    screen,
+                    (255, 0, 0),
+                    (screen_x, screen_y),
+                    (player_screen_x, player_screen_y),
+                    2
+                )
+
+        gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
+        gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
+
+        rotated_gun = pygame.transform.rotate(
+            self.gun_image_original, -math.degrees(self.direction_angle) + 90
+        )
+        gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
+        screen.blit(rotated_gun, gun_rect)
+
+        rotated_img = pygame.transform.rotate(
+            self.image_original, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
 
         for b in self.bullets:
             b.draw(screen, world_x, world_y)

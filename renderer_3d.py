@@ -57,6 +57,10 @@ class Renderer3D:
             self.min_zoom = GUN2_MIN_ZOOM
             self.max_zoom = GUN2_MAX_ZOOM
             self.zoom_ratio = GUN2_ZOOM_RATIO
+        elif obj_filename == "Gun33DObject.obj":    # ✅ gun3 추가
+            self.min_zoom = GUN3_MIN_ZOOM
+            self.max_zoom = GUN3_MAX_ZOOM
+            self.zoom_ratio = GUN3_ZOOM_RATIO
 
         if zoom_level is not None:
             self.zoom_level = zoom_level

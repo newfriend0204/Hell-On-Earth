@@ -46,23 +46,15 @@ class Bullet:
 
         for obs in obstacle_manager.placed_obstacles:
             for c in obs.colliders:
-                if c.shape == "circle":
-                    collided = c.check_collision_circle(self.collider.center, self.collider.size)
-                elif c.shape == "ellipse":
-                    dx = self.collider.center[0] - (obs.world_x + c.center[0])
-                    dy = self.collider.center[1] - (obs.world_y + c.center[1])
-                    rx, ry = c.size
-                    value = (dx ** 2) / (rx ** 2) + (dy ** 2) / (ry ** 2)
-                    collided = value <= 1.0
-                elif c.shape == "rectangle":
-                    collided = c.check_collision_circle(self.collider.center, self.collider.size)
-                else:
-                    collided = False
-
-                if collided and not c.bullet_passable:
-                    self.to_remove = True
-                    return
-
+                if c.check_collision_circle(
+                    self.collider.center,
+                    self.collider.size,
+                    (obs.world_x, obs.world_y)
+                ):
+                    if not c.bullet_passable:
+                        self.to_remove = True
+                        return
+            
     def draw(self, screen, world_x, world_y):
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
