@@ -2,6 +2,7 @@ import pygame
 import random
 from entities import Obstacle
 from collider import Collider
+import os
 
 class ObstacleManager:
     def __init__(self, obstacle_images, obstacle_masks, map_width, map_height,
@@ -36,8 +37,44 @@ class ObstacleManager:
 
             colliders = self._create_colliders_for_image(filename, new_width, new_height)
 
-            obstacle = Obstacle(scaled_image, x, y, colliders)
+            if "Tree1" in filename or "Tree2" in filename:
+                # cover collider (트리 전체 크기 기준)
+                cover_collider = Collider(
+                    shape="ellipse",
+                    center=(new_width / 2, new_height / 2),
+                    size=(new_width / 2, new_height / 2)
+                )
+
+                trunk_image = self.obstacle_images.get("TreeStump.png")
+
+                if trunk_image:
+                    trunk_scale = 0.35
+                    trunk_width = int(new_width * trunk_scale)
+                    trunk_height = int(new_height * trunk_scale)
+
+                    trunk_image = pygame.transform.smoothscale(trunk_image, (trunk_width, trunk_height))
+
+                obstacle = Obstacle(
+                    scaled_image,
+                    x,
+                    y,
+                    colliders,
+                    image_filename=filename,
+                    is_covering=True,
+                    cover_collider=cover_collider,
+                    trunk_image=trunk_image
+                )
+            else:
+                obstacle = Obstacle(
+                    scaled_image,
+                    x,
+                    y,
+                    colliders,
+                    image_filename=filename
+                )
+
             self.placed_obstacles.append(obstacle)
+
 
     def _create_colliders_for_image(self, filename, w, h):
         colliders = []
@@ -128,6 +165,16 @@ class ObstacleManager:
                 )
             )
         return colliders
+    
+    def draw_non_trees(self, screen, world_offset_x, world_offset_y):
+        for obs in self.placed_obstacles:
+            if not obs.is_covering:
+                obs.draw(screen, world_offset_x, world_offset_y)
+
+    def draw_trees(self, screen, world_offset_x, world_offset_y, player_center, enemies):
+        for obs in self.placed_obstacles:
+            if obs.is_covering:
+                obs.draw(screen, world_offset_x, world_offset_y, player_center, enemies)
 
     def draw(self, screen, world_offset_x, world_offset_y):
         for obs in self.placed_obstacles:

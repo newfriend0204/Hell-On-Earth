@@ -48,6 +48,7 @@ def load_images():
         "Tree2.png": (1024, 1024),
         "FallenLog1.png": (1024, 1536),
         "FallenLog2.png": (1536, 1024),
+        "TreeStump.png" : (1024, 1024),
     }
 
     obstacle_dir = path_image("Image", "Obstacle")

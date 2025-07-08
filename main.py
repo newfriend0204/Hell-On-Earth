@@ -762,10 +762,27 @@ while running:
     for blood in blood_effects:
         blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
-    obstacle_manager.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+    obstacle_manager.draw_non_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
+    # 적 enemy
     for enemy in enemies:
         enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    # ✅ bullets를 여기서 그린다
+    for bullet in bullets[:]:
+        bullet.update(obstacle_manager)
+        bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    # 나무
+    player_center_world = (
+        world_x + player_rect.centerx,
+        world_y + player_rect.centery
+    )
+    obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
+
+    # 플레이어
+    screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
+    screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
     # ✅ 추가: HP 바 출력
     hp_bar_width = 300
@@ -857,8 +874,6 @@ while running:
         if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
             bullet.to_remove = True
             continue
-
-        bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))

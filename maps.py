@@ -67,16 +67,16 @@ CURRENT_MAP_2 = {
         },
         {
             "filename": "Rock2.png",
-            "x": 100,
-            "y": 350,
+            "x": 200,
+            "y": 700,
             "scale": 0.3
         },
-        # {
-        #     "filename": "Pond2.png",
-        #     "x": 200,
-        #     "y": 100,
-        #     "scale": 0.2
-        # },
+        {
+            "filename": "Tree1.png",
+            "x": 200,
+            "y": 100,
+            "scale": 0.2
+        },
         # {
         #     "filename": "Rock1.png",
         #     "x": 400,

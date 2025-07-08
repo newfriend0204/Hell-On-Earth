@@ -170,14 +170,72 @@ class ScatteredBlood:
 
 
 class Obstacle:
-    def __init__(self, image, world_x, world_y, colliders):
+    def __init__(
+        self,
+        image,
+        world_x,
+        world_y,
+        colliders,
+        image_filename=None,
+        is_covering=False,
+        cover_collider=None,
+        trunk_image=None,
+        transparent_alpha=128
+    ):
         self.image = image
         self.world_x = world_x
         self.world_y = world_y
         self.rect = self.image.get_rect(topleft=(world_x, world_y))
         self.colliders = colliders
+        self.image_filename = image_filename
+        self.is_covering = is_covering
+        self.cover_collider = cover_collider
+        self.trunk_image = trunk_image
+        self.transparent_alpha = transparent_alpha
+        self.transparent = False
 
-    def draw(self, screen, world_offset_x, world_offset_y):
+    def draw(self, screen, world_offset_x, world_offset_y, player_center=None, enemies=None):
         screen_x = self.world_x - world_offset_x
         screen_y = self.world_y - world_offset_y
-        screen.blit(self.image, (screen_x, screen_y))
+
+        img_to_draw = self.image.copy()
+
+        if self.is_covering and self.cover_collider:
+            transparent_needed = False
+
+            if player_center:
+                if self.cover_collider.check_collision_circle(
+                    player_center,
+                    30,
+                    (self.world_x, self.world_y)
+                ):
+                    transparent_needed = True
+
+            if enemies:
+                for enemy in enemies:
+                    if self.cover_collider.check_collision_circle(
+                        (enemy.world_x, enemy.world_y),
+                        enemy.radius,
+                        (self.world_x, self.world_y)
+                    ):
+                        transparent_needed = True
+                        break
+
+            if transparent_needed:
+                self.transparent = True
+                img_to_draw.set_alpha(self.transparent_alpha)
+            else:
+                self.transparent = False
+
+        # 트렁크 먼저
+        if self.trunk_image:
+            trunk_width, trunk_height = self.trunk_image.get_size()
+            main_width, main_height = self.image.get_size()
+
+            trunk_x = screen_x + (main_width - trunk_width) // 2
+            trunk_y = screen_y + (main_height - trunk_height) // 2
+
+            screen.blit(self.trunk_image, (trunk_x, trunk_y))
+
+        # 나무가 위에 덮는다
+        screen.blit(img_to_draw, (screen_x, screen_y))
