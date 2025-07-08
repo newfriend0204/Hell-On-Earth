@@ -10,7 +10,7 @@ from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
 from maps import CURRENT_MAP_1, CURRENT_MAP_2, CURRENT_MAP_3
 
-CURRENT_MAP = CURRENT_MAP_2
+CURRENT_MAP = CURRENT_MAP_1
 
 pygame.init()
 pygame.font.init()
@@ -332,14 +332,14 @@ while running:
     delta_time = clock.get_time()
     player_center = (world_x + player_rect.centerx, world_y + player_rect.centery)
     #디버그
-    # for enemy in enemies:
-    #     enemy.update(
-    #         dt=delta_time,
-    #         world_x=world_x,
-    #         world_y=world_y,
-    #         player_rect=player_rect,
-    #         enemies=enemies
-    #     )
+    for enemy in enemies:
+        enemy.update(
+            dt=delta_time,
+            world_x=world_x,
+            world_y=world_y,
+            player_rect=player_rect,
+            enemies=enemies
+        )
 
      # 적의 탄환이 플레이어에 명중 시
     for enemy in enemies:
@@ -441,68 +441,45 @@ while running:
     player_center_world_x = test_world_x + player_rect.centerx
     player_center_world_y = test_world_y + player_rect.centery
 
-    player_hit = False
+    penetration_total_x = 0.0
 
     for obs in obstacle_manager.placed_obstacles:
         for c in obs.colliders:
-            collider_world_center = (
-                obs.world_x + c.center[0],
-                obs.world_y + c.center[1]
-            )
-            if c.shape == "circle":
-                collider_radius = c.size
-                if check_circle_collision(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    collider_world_center,
-                    collider_radius
-                ):
-                    player_hit = True
-                    break
-            elif c.shape == "ellipse":
-                rx, ry = c.size
-                if check_ellipse_circle_collision(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    collider_world_center,
-                    rx,
-                    ry
-                ):
-                    player_hit = True
-                    break
-            elif c.shape == "rectangle":
-                if c.check_collision_circle(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    (obs.world_x, obs.world_y)
-                ):
-                    player_hit = True
-                    break
-        if player_hit:
-            break
-
-    if not player_hit:
-        # 적과 충돌 검사
-        collided_with_enemy = False
-        player_center_world = (
-            test_world_x + player_rect.centerx,
-            world_y + player_rect.centery
-        )
-        for enemy in enemies:
-            if check_circle_collision(
-                player_center_world,
+            penetration = c.compute_penetration_circle(
+                (player_center_world_x, player_center_world_y),
                 player_radius,
-                (enemy.world_x, enemy.world_y),
-                enemy.radius
-            ):
-                collided_with_enemy = True
-                break
-        if not collided_with_enemy:
-            world_x = test_world_x
-        else:
-            world_vx = 0
+                (obs.world_x, obs.world_y)
+            )
+            if penetration:
+                penetration_total_x += penetration[0]
+
+    for enemy in enemies:
+        dx = player_center_world_x - enemy.world_x
+        dy = player_center_world_y - enemy.world_y
+        dist_sq = dx * dx + dy * dy
+        r_sum = player_radius + enemy.radius
+        if dist_sq < r_sum * r_sum:
+            dist = math.sqrt(dist_sq) if dist_sq > 0 else 0.0001
+            penetration = r_sum - dist
+            penetration_total_x += (dx / dist) * penetration
+
+    if penetration_total_x != 0.0:
+        world_x += penetration_total_x
+
+        n_len = math.hypot(penetration_total_x, 0.0)
+        if n_len > 0:
+            nx = penetration_total_x / n_len
+            ny = 0.0
+
+            tx = -ny
+            ty = nx
+
+            dot = world_vx * tx + world_vy * ty
+            world_vx = dot * tx
+            world_vy = dot * ty
     else:
-        world_vx = 0
+        world_x = test_world_x
+
 
     # Y축 충돌 검사
     test_world_x = world_x
@@ -511,67 +488,44 @@ while running:
     player_center_world_x = test_world_x + player_rect.centerx
     player_center_world_y = test_world_y + player_rect.centery
 
-    player_hit = False
+    penetration_total_y = 0.0
 
     for obs in obstacle_manager.placed_obstacles:
         for c in obs.colliders:
-            collider_world_center = (
-                obs.world_x + c.center[0],
-                obs.world_y + c.center[1]
-            )
-            if c.shape == "circle":
-                collider_radius = c.size
-                if check_circle_collision(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    collider_world_center,
-                    collider_radius
-                ):
-                    player_hit = True
-                    break
-            elif c.shape == "ellipse":
-                rx, ry = c.size
-                if check_ellipse_circle_collision(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    collider_world_center,
-                    rx,
-                    ry
-                ):
-                    player_hit = True
-                    break
-            elif c.shape == "rectangle":
-                if c.check_collision_circle(
-                    (player_center_world_x, player_center_world_y),
-                    player_radius,
-                    (obs.world_x, obs.world_y)
-                ):
-                    player_hit = True
-                    break
-        if player_hit:
-            break
-
-    if not player_hit:
-        collided_with_enemy = False
-        player_center_world = (
-            world_x + player_rect.centerx,
-            test_world_y + player_rect.centery
-        )
-        for enemy in enemies:
-            if check_circle_collision(
-                player_center_world,
+            penetration = c.compute_penetration_circle(
+                (player_center_world_x, player_center_world_y),
                 player_radius,
-                (enemy.world_x, enemy.world_y),
-                enemy.radius
-            ):
-                collided_with_enemy = True
-                break
-        if not collided_with_enemy:
-            world_y = test_world_y
-        else:
-            world_vy = 0
+                (obs.world_x, obs.world_y)
+            )
+            if penetration:
+                penetration_total_y += penetration[1]
+
+    for enemy in enemies:
+        dx = player_center_world_x - enemy.world_x
+        dy = player_center_world_y - enemy.world_y
+        dist_sq = dx * dx + dy * dy
+        r_sum = player_radius + enemy.radius
+        if dist_sq < r_sum * r_sum:
+            dist = math.sqrt(dist_sq) if dist_sq > 0 else 0.0001
+            penetration = r_sum - dist
+            penetration_total_y += (dy / dist) * penetration
+
+    if penetration_total_y != 0.0:
+        world_y += penetration_total_y
+
+        n_len = math.hypot(0.0, penetration_total_y)
+        if n_len > 0:
+            nx = 0.0
+            ny = penetration_total_y / n_len
+
+            tx = -ny
+            ty = nx
+
+            dot = world_vx * tx + world_vy * ty
+            world_vx = dot * tx
+            world_vy = dot * ty
     else:
-        world_vy = 0
+        world_y = test_world_y
     
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
@@ -779,6 +733,10 @@ while running:
         world_y + player_rect.centery
     )
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
+
+    for obs in obstacle_manager.placed_obstacles:
+        for c in obs.colliders:
+            c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     # 플레이어
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))

@@ -43,7 +43,11 @@ CURRENT_MAP_1 = {
         {"x": 598.72, "y": 991.75, "enemy_type": "enemy2"},
         {"x": 214.42, "y": 642.32, "enemy_type": "enemy1"},
         {"x": 214.42, "y": 429.20, "enemy_type": "enemy2"},
-    ]
+    ],
+    "crop_rect": {
+        "x_ratio": 1.0,
+        "y_ratio": 1.0
+    }
 }
 
 
@@ -124,7 +128,11 @@ CURRENT_MAP_2 = {
         {"x": 1440.70, "y": 717.73, "enemy_type": "enemy1"},
         {"x": 1332.32, "y": 1007.25, "enemy_type": "enemy2"},
         {"x": 962.07, "y": 718.43, "enemy_type": "enemy1"},
-    ]
+    ],
+    "crop_rect": {
+        "x_ratio": 1.0,
+        "y_ratio": 1.0
+    }
 }
 
 

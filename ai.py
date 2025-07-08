@@ -168,6 +168,11 @@ class Enemy1:
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive:
             return
+        
+        dist = math.hypot(
+        self.world_x - self.last_pos[0],
+        self.world_y - self.last_pos[1]
+        )
 
         player_world_pos = self.get_player_center_world_fn(world_x, world_y)
         dx = player_world_pos[0] - self.world_x
@@ -211,79 +216,44 @@ class Enemy1:
                 self.velocity_x = 0
                 self.velocity_y = 0
 
-        self.world_x += self.velocity_x
-        self.world_y += self.velocity_y
+        penetration_total = [0.0, 0.0]
 
-        collided = False
         for obs in self.obstacle_manager.placed_obstacles:
             for c in obs.colliders:
-                collider_world_center = (
-                    obs.world_x + c.center[0],
-                    obs.world_y + c.center[1]
-                )
-                if c.shape == "circle":
-                    collider_radius = float(c.size)
-                    if self.check_circle_collision(
-                        (self.world_x, self.world_y),
-                        self.radius,
-                        collider_world_center,
-                        collider_radius
-                    ):
-                        collided = True
-                        break
-                elif c.shape == "ellipse":
-                    rx, ry = c.size
-                    if self.check_ellipse_circle_collision(
-                        (self.world_x, self.world_y),
-                        self.radius,
-                        collider_world_center,
-                        rx,
-                        ry
-                    ):
-                        collided = True
-                        break
-                elif c.shape == "rectangle":
-                    w, h = c.size
-                    collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                    if self.check_circle_collision(
-                        (self.world_x, self.world_y),
-                        self.radius,
-                        collider_world_center,
-                        collider_radius
-                    ):
-                        collided = True
-                        break
-            if collided:
-                break
-
-        if not collided:
-            for other in enemies:
-                if other == self:
-                    continue
-                if self.check_circle_collision(
+                penetration = c.compute_penetration_circle(
                     (self.world_x, self.world_y),
                     self.radius,
-                    (other.world_x, other.world_y),
-                    other.radius
-                ):
-                    collided = True
-                    break
+                    (obs.world_x, obs.world_y)
+                )
+                if penetration:
+                    penetration_total[0] += penetration[0]
+                    penetration_total[1] += penetration[1]
 
-        if collided:
-            self._revert_movement()
-            self.goal_pos = None
-            self.stuck_count += 1
+        # Enemy끼리 충돌 처리
+        for other in enemies:
+            if other == self:
+                continue
+            dx = self.world_x - other.world_x
+            dy = self.world_y - other.world_y
+            dist_sq = dx * dx + dy * dy
+            r_sum = self.radius + other.radius
+            if dist_sq < r_sum * r_sum:
+                dist = math.sqrt(dist_sq) if dist_sq > 0 else 0.0001
+                penetration = r_sum - dist
+                penetration_total[0] += (dx / dist) * penetration
+                penetration_total[1] += (dy / dist) * penetration
+
+        if math.hypot(*penetration_total) > 0.001:
+            self.world_x += penetration_total[0]
+            self.world_y += penetration_total[1]
         else:
-            self.stuck_count = 0
+            self.world_x += self.velocity_x
+            self.world_y += self.velocity_y
 
         self.world_x = max(0, min(self.world_x, BG_WIDTH))
         self.world_y = max(0, min(self.world_y, BG_HEIGHT))
 
-        dist = math.hypot(
-            self.world_x - self.last_pos[0],
-            self.world_y - self.last_pos[1]
-        )
-        if dist < 1.0:
+        if dist < 1.0 or (abs(self.velocity_x) < 0.01 and abs(self.velocity_y) < 0.01):
             self.stuck_timer += dt
             if self.stuck_timer > 1000:
                 self._escape_stuck()
@@ -493,6 +463,11 @@ class Enemy2(Enemy1):
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive:
             return
+        
+        dist = math.hypot(
+        self.world_x - self.last_pos[0],
+        self.world_y - self.last_pos[1]
+        )
 
         player_world_pos = self.get_player_center_world_fn(world_x, world_y)
         dx = player_world_pos[0] - self.world_x
