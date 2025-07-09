@@ -8,9 +8,9 @@ from entities import Bullet, ScatteredBullet, ScatteredBlood
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
-from maps import CURRENT_MAP_1, CURRENT_MAP_2, CURRENT_MAP_3
+from maps import MAPS
 
-CURRENT_MAP = CURRENT_MAP_1
+CURRENT_MAP = MAPS[7]
 
 pygame.init()
 pygame.font.init()
@@ -75,7 +75,13 @@ if CURRENT_MAP.get("crop_rect"):
     effective_bg_width = crop_width
     effective_bg_height = crop_height
 else:
-    crop_surface = background_image.copy()
+    crop_surface = pygame.transform.smoothscale(
+    background_image,
+    (
+    int(background_image.get_width() * PLAYER_VIEW_SCALE),
+    int(background_image.get_height() * PLAYER_VIEW_SCALE)
+    )
+    )
 world_x = (crop_surface.get_width() // 2) - (SCREEN_WIDTH // 2)
 world_y = crop_surface.get_height()
 
@@ -89,13 +95,14 @@ gun_canvas = pygame.Surface(gun_canvas_size, pygame.SRCALPHA)
 world_vx = 0
 world_vy = 0
 
-acceleration_rate = 0.5
-deceleration_rate = 0.7
+acceleration_rate = 0.5 * PLAYER_VIEW_SCALE
+deceleration_rate = 0.7 * PLAYER_VIEW_SCALE
+
+normal_max_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
+sprint_max_speed = SPRINT_MAX_SPEED * PLAYER_VIEW_SCALE
 
 move_left = move_right = move_up = move_down = False
 
-normal_max_speed = NORMAL_MAX_SPEED
-sprint_max_speed = SPRINT_MAX_SPEED
 max_speed = normal_max_speed
 allow_sprint = True
 recoil_in_progress = False
@@ -135,7 +142,7 @@ renderer = Renderer3D(screen)
 clock = pygame.time.Clock()
 running = True
 
-player_radius = 30
+player_radius = int(30 * PLAYER_VIEW_SCALE)
 
 player_hp = 300
 player_hp_max = 300
@@ -198,8 +205,8 @@ def get_player_center_world(world_x, world_y):
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
-    ex = info["x"]
-    ey = info["y"]
+    ex = info["x"] * PLAYER_VIEW_SCALE
+    ey = info["y"] * PLAYER_VIEW_SCALE
     enemy_type = info["enemy_type"]
 
     if enemy_type == "enemy2":
@@ -253,8 +260,8 @@ while running:
                 move_right = True
             elif event.key == pygame.K_SPACE:
                 # 현재 플레이어 월드 좌표 출력
-                player_world_x = world_x + player_rect.centerx
-                player_world_y = world_y + player_rect.centery
+                player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
+                player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
             elif event.key == pygame.K_TAB:
                 fade_out(screen, duration=0.3, step_delay=0.01)
@@ -330,16 +337,17 @@ while running:
         fade_in_after_resume = False
 
     delta_time = clock.get_time()
-    player_center = (world_x + player_rect.centerx, world_y + player_rect.centery)
+    player_center = (world_x + player_rect.centerx,
+                    world_y + player_rect.centery)
     #디버그
-    for enemy in enemies:
-        enemy.update(
-            dt=delta_time,
-            world_x=world_x,
-            world_y=world_y,
-            player_rect=player_rect,
-            enemies=enemies
-        )
+    # for enemy in enemies:
+    #     enemy.update(
+    #         dt=delta_time,
+    #         world_x=world_x,
+    #         world_y=world_y,
+    #         player_rect=player_rect,
+    #         enemies=enemies
+    #     )
 
      # 적의 탄환이 플레이어에 명중 시
     for enemy in enemies:
@@ -438,17 +446,17 @@ while running:
     test_world_x = world_x + world_vx
     test_world_y = world_y
 
-    player_center_world_x = test_world_x + player_rect.centerx
-    player_center_world_y = test_world_y + player_rect.centery
+    player_center_world_x = world_x + player_rect.centerx
+    player_center_world_y = world_y + player_rect.centery
 
     penetration_total_x = 0.0
 
     for obs in obstacle_manager.placed_obstacles:
         for c in obs.colliders:
             penetration = c.compute_penetration_circle(
-                (player_center_world_x, player_center_world_y),
-                player_radius,
-                (obs.world_x, obs.world_y)
+            (player_center_world_x, player_center_world_y),
+            player_radius,
+            (obs.world_x, obs.world_y)
             )
             if penetration:
                 penetration_total_x += penetration[0]
@@ -464,7 +472,7 @@ while running:
             penetration_total_x += (dx / dist) * penetration
 
     if penetration_total_x != 0.0:
-        world_x += penetration_total_x
+        world_x += penetration_total_x * 0.5
 
         n_len = math.hypot(penetration_total_x, 0.0)
         if n_len > 0:
@@ -511,7 +519,7 @@ while running:
             penetration_total_y += (dy / dist) * penetration
 
     if penetration_total_y != 0.0:
-        world_y += penetration_total_y
+        world_y += penetration_total_y * 0.5
 
         n_len = math.hypot(0.0, penetration_total_y)
         if n_len > 0:
@@ -526,6 +534,10 @@ while running:
             world_vy = dot * ty
     else:
         world_y = test_world_y
+
+    if abs(world_vx) < 0.5 and abs(world_vy) < 0.5:
+        world_vx += random.choice([-1, 1]) * 0.5
+        world_vy += random.choice([-1, 1]) * 0.5
     
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
@@ -542,7 +554,14 @@ while running:
     angle_radians = math.atan2(dy, dx)
     angle_degrees = math.degrees(angle_radians)
 
-    rotated_player_image = pygame.transform.rotate(original_player_image, -angle_degrees + 90)
+    scaled_player_image = pygame.transform.smoothscale(
+    original_player_image,
+    (
+        int(original_player_image.get_width() * PLAYER_VIEW_SCALE),
+        int(original_player_image.get_height() * PLAYER_VIEW_SCALE)
+    )
+    )
+    rotated_player_image = pygame.transform.rotate(scaled_player_image, -angle_degrees + 90)
     rotated_player_rect = rotated_player_image.get_rect(center=player_rect.center)
 
     if current_weapon == 1:
@@ -557,7 +576,14 @@ while running:
 
     gun_pos_x = player_rect.centerx + math.cos(angle_radians) * (current_distance + recoil_offset)
     gun_pos_y = player_rect.centery + math.sin(angle_radians) * (current_distance + recoil_offset)
-    rotated_gun_image = pygame.transform.rotate(current_gun_image, -angle_degrees + 90)
+    scaled_gun_image = pygame.transform.smoothscale(
+    current_gun_image,
+    (
+        int(current_gun_image.get_width() * PLAYER_VIEW_SCALE),
+        int(current_gun_image.get_height() * PLAYER_VIEW_SCALE)
+    )
+    )
+    rotated_gun_image = pygame.transform.rotate(scaled_gun_image, -angle_degrees + 90)
     rotated_gun_rect = rotated_gun_image.get_rect(center=(gun_pos_x, gun_pos_y))
 
     if current_weapon == 1:
@@ -582,22 +608,31 @@ while running:
         if current_time - last_shot_time > fire_delay:
             fire_sound.play()
 
+            if current_weapon == 1:
+                spread_angle = GUN1_SPREAD_ANGLE
+            elif current_weapon == 2:
+                spread_angle = GUN2_SPREAD_ANGLE
+            elif current_weapon == 3:
+                spread_angle = GUN3_SPREAD_ANGLE
+            else:
+                spread_angle = GUN1_SPREAD_ANGLE
             recoil_offset = 0
             recoil_velocity = -recoil_strength
 
             allow_sprint = False
             recoil_in_progress = True
 
-            spawn_offset = 30
-            vertical_offset = 6
+            spawn_offset = 30 * PLAYER_VIEW_SCALE
+            vertical_offset = 6 * PLAYER_VIEW_SCALE
             offset_angle = angle_radians + math.radians(90)
             offset_dx = math.cos(offset_angle) * vertical_offset
             offset_dy = math.sin(offset_angle) * vertical_offset
 
             if current_weapon == 3:
                 # 탄 6발 발사
-                for i in range(15):
-                    spread_angle = math.radians(random.uniform(-25, 25))
+                for i in range(GUN3_NUM_BULLETS):
+                    spread_angle_range = GUN3_SPREAD_ANGLE
+                    spread_angle = math.radians(random.uniform(-spread_angle_range, spread_angle_range))
                     direction_x = math.cos(angle_radians + spread_angle)
                     direction_y = math.sin(angle_radians + spread_angle)
 
@@ -614,8 +649,8 @@ while running:
                         target_world_y,
                         0,
                         original_bullet_image,
-                        speed=7.5,
-                        max_distance=250
+                        speed=7.5 * PLAYER_VIEW_SCALE,
+                        max_distance=500 * PLAYER_VIEW_SCALE
                     )
                     bullets.append(new_bullet)
 
@@ -628,10 +663,14 @@ while running:
                 scatter_x = bullet_world_x
                 scatter_y = bullet_world_y
 
-                scatter = ScatteredBullet(scatter_x, scatter_y, vx, vy, original_bullet_image)
-                scatter.image_original = pygame.transform.scale(original_bullet_image, (int(4.5), int(10.5)))
+                scatter.image_original = pygame.transform.scale(
+                    original_bullet_image,
+                    (
+                        int(4.5 * PLAYER_VIEW_SCALE),
+                        int(10.5 * PLAYER_VIEW_SCALE)
+                    )
+                )
                 scatter.image = scatter.image_original.copy()
-
                 scattered_bullets.append(scatter)
             else:
                 direction_x = math.cos(angle_radians)
@@ -647,10 +686,10 @@ while running:
                     bullet_world_y,
                     target_world_x,
                     target_world_y,
-                    10,
+                    spread_angle,
                     original_bullet_image,
-                    speed=10,
-                    max_distance=2000
+                    speed=10 * PLAYER_VIEW_SCALE,
+                    max_distance=2000 * PLAYER_VIEW_SCALE
                 )
 
                 bullets.append(new_bullet)
@@ -720,7 +759,7 @@ while running:
 
     # 적 enemy
     for enemy in enemies:
-        enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+        enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
     # ✅ bullets를 여기서 그린다
     for bullet in bullets[:]:
@@ -846,6 +885,10 @@ while running:
 
     kill_surface = DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255))
     screen.blit(kill_surface, (10, 70))
+
+    fps = clock.get_fps()
+    fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
+    screen.blit(fps_surface, (10, 100))
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

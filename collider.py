@@ -111,7 +111,9 @@ class Collider:
                     # 동일 좌표일 때 적당히 튕겨냄
                     return (1.0, 0.0)
                 overlap_ratio = 1.0 - value
-                penetration = overlap_ratio * 3  # 조정 가능
+                penetration = overlap_ratio * (rx + ry) * 0.5 * 0.5
+                if penetration < 0.5:
+                    penetration = 0.5
                 return (
                     (dx / norm) * penetration,
                     (dy / norm) * penetration
@@ -134,11 +136,15 @@ class Collider:
             if dist_sq < circle_radius ** 2:
                 dist = math.sqrt(dist_sq) if dist_sq > 0 else 0.0001
                 penetration = circle_radius - dist
+                if penetration < 0.5:
+                    penetration = 0.5
                 return (
                     (dx_rect / dist) * penetration,
                     (dy_rect / dist) * penetration
                 )
             else:
                 return None
+        if penetration < 0.5:
+            penetration = 0.5
 
         return None

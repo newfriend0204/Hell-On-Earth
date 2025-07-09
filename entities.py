@@ -2,28 +2,31 @@ import pygame
 import math
 import random
 from collider import Collider
+from config import PLAYER_VIEW_SCALE
 
 class Bullet:
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
                  spread_angle_degrees, bullet_image, speed=30, max_distance=500):
         scale_factor = 0.4
-        size = (int(5 * 5 * scale_factor), int(10 * 5 * scale_factor))
+        base_width = int(5 * 5 * scale_factor * PLAYER_VIEW_SCALE)
+        base_height = int(10 * 5 * scale_factor * PLAYER_VIEW_SCALE)
+        size = (max(1, base_width), max(1, base_height))
         self.original_image = pygame.transform.scale(bullet_image, size)
         self.world_x = world_x
         self.world_y = world_y
-        self.speed = speed
+        self.speed = speed * PLAYER_VIEW_SCALE
         self.trail = []
         self.to_remove = False
         self.start_x = world_x
         self.start_y = world_y
-        self.max_distance = max_distance
+        self.max_distance = max_distance * PLAYER_VIEW_SCALE
 
         angle_to_target = math.atan2(target_world_y - world_y, target_world_x - world_x)
         spread = math.radians(random.uniform(-spread_angle_degrees / 2, spread_angle_degrees / 2))
         final_angle = angle_to_target + spread
 
-        self.vx = math.cos(final_angle) * speed
-        self.vy = math.sin(final_angle) * speed
+        self.vx = math.cos(final_angle) * self.speed
+        self.vy = math.sin(final_angle) * self.speed
         self.angle_degrees = math.degrees(final_angle)
 
         self.collider = Collider(
@@ -58,7 +61,17 @@ class Bullet:
     def draw(self, screen, world_x, world_y):
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
-        rotated_image = pygame.transform.rotate(self.original_image, -self.angle_degrees - 90)
+
+        width = max(1, int(self.original_image.get_width() * PLAYER_VIEW_SCALE))
+        height = max(1, int(self.original_image.get_height() * PLAYER_VIEW_SCALE))
+
+        scaled_image = pygame.transform.smoothscale(
+            self.original_image,
+            (width, height)
+        )
+
+        rotated_image = pygame.transform.rotate(scaled_image, -self.angle_degrees - 90)
+
         rect = rotated_image.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_image, rect)
 
@@ -73,15 +86,21 @@ class Bullet:
 
 class ScatteredBullet:
     def __init__(self, x, y, vx, vy, bullet_image):
-        self.image_original = pygame.transform.scale(bullet_image, (3, 7))
+        self.image_original = pygame.transform.scale(
+            bullet_image,
+            (
+                max(1, int(3 * PLAYER_VIEW_SCALE)),
+                max(1, int(7 * PLAYER_VIEW_SCALE))
+            )
+        )
         angle = math.degrees(math.atan2(vy, vx))
         self.image_original = pygame.transform.rotate(self.image_original, angle)
         self.image = self.image_original.copy()
 
         self.pos = [x, y]
         speed_scale = random.uniform(3, 8)
-        self.vx = vx * speed_scale
-        self.vy = vy * speed_scale
+        self.vx = vx * speed_scale * PLAYER_VIEW_SCALE
+        self.vy = vy * speed_scale * PLAYER_VIEW_SCALE
 
         self.friction = 0.85
         self.spawn_time = pygame.time.get_ticks()
@@ -133,7 +152,7 @@ class ScatteredBlood:
                 "pos": [x, y],
                 "vx": math.cos(angle) * speed,
                 "vy": math.sin(angle) * speed,
-                "size": 5,
+                "size": max(1, int(5 * PLAYER_VIEW_SCALE)),
             })
 
         self.friction = 0.9

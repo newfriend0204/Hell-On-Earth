@@ -9,14 +9,14 @@ from entities import ScatteredBullet, Bullet
 # --------------------------
 
 PARTICLE_COUNT = 30
-PARTICLE_SIZE = 6
+PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
 PARTICLE_SPEED_MIN = 1
 PARTICLE_SPEED_MAX = 4
 PARTICLE_LIFETIME = 2500  # ms
 PARTICLE_FADE_TIME = 500
 
 class ParticleBlood:
-    def __init__(self, x, y):
+    def __init__(self, x, y, scale=1.0):
         self.particles = []
         self.spawn_time = pygame.time.get_ticks()
 
@@ -29,7 +29,7 @@ class ParticleBlood:
             self.particles.append({
                 "pos": [x, y],
                 "vel": [vx, vy],
-                "size": PARTICLE_SIZE,
+                "size": int(PARTICLE_SIZE * scale),
                 "alpha": 255
             })
 
@@ -104,7 +104,7 @@ class Enemy1:
         self.check_ellipse_circle_collision = check_ellipse_circle_collision_fn
 
         self.rect = self.image_original.get_rect(center=(0, 0))
-        self.speed = NORMAL_MAX_SPEED
+        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
 
         self.direction_angle = 0.0
         self.velocity_x = 0.0
@@ -116,7 +116,7 @@ class Enemy1:
         self.shoot_timer = 0
         self.shoot_delay = random.randint(500, 1500)
 
-        self.radius = 30
+        self.radius = 30 * PLAYER_VIEW_SCALE
 
         self.bullets = []
         self.scattered_bullets = []
@@ -127,7 +127,7 @@ class Enemy1:
         self.recoil_velocity = 0
         self.recoil_in_progress = False
 
-        self.current_distance = GUN1_DISTANCE_FROM_CENTER
+        self.current_distance = GUN1_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
         self.get_player_center_world_fn = get_player_center_world_fn
 
         self.last_pos = (self.world_x, self.world_y)
@@ -156,7 +156,7 @@ class Enemy1:
         self.alive = False
         blood_x = self.world_x
         blood_y = self.world_y
-        blood = ParticleBlood(blood_x, blood_y)
+        blood = ParticleBlood(blood_x, blood_y, scale=PLAYER_VIEW_SCALE)
         blood_effects.append(blood)
 
     def _revert_movement(self):
@@ -181,8 +181,8 @@ class Enemy1:
 
         self.direction_angle = math.atan2(dy, dx)
 
-        near_threshold = 150
-        far_threshold = 500
+        near_threshold = 150 * PLAYER_VIEW_SCALE
+        far_threshold = 500 * PLAYER_VIEW_SCALE
 
         if dist_to_player > far_threshold:
             self.goal_pos = player_world_pos
@@ -392,23 +392,41 @@ class Enemy1:
             ScatteredBullet(scatter_x, scatter_y, vx, vy, self.player_bullet_image)
         )
 
-    def draw(self, screen, world_x, world_y):
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
         if not self.alive:
             return
 
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
 
+        screen_x += shake_offset_x
+        screen_y += shake_offset_y
+
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
-        rotated_gun = pygame.transform.rotate(
-            self.gun_image_original, -math.degrees(self.direction_angle) + 90
+        scaled_gun = pygame.transform.smoothscale(
+        self.gun_image_original,
+            (
+                int(self.gun_image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.gun_image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
         )
+        rotated_gun = pygame.transform.rotate(
+            scaled_gun, -math.degrees(self.direction_angle) + 90
+        )
+
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
         screen.blit(rotated_gun, gun_rect)
 
+        scaled_img = pygame.transform.smoothscale(
+        self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
         rotated_img = pygame.transform.rotate(
-            self.image_original, -math.degrees(self.direction_angle) + 90
+            scaled_img, -math.degrees(self.direction_angle) + 90
         )
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
@@ -447,9 +465,9 @@ class Enemy2(Enemy1):
             kill_callback,
         )
         self.hp = 150
-        self.speed = 3.5
+        self.speed = 3.5 * PLAYER_VIEW_SCALE
         self.fire_sound = self.sounds["gun2_fire_enemy"]
-        self.current_distance = GUN2_DISTANCE_FROM_CENTER
+        self.current_distance = GUN2_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
         self.shoot_delay = random.randint(700, 1700)
 
         # 원거리 사격 관련
@@ -463,19 +481,14 @@ class Enemy2(Enemy1):
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive:
             return
-        
-        dist = math.hypot(
-        self.world_x - self.last_pos[0],
-        self.world_y - self.last_pos[1]
-        )
 
         player_world_pos = self.get_player_center_world_fn(world_x, world_y)
         dx = player_world_pos[0] - self.world_x
         dy = player_world_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
 
-        near_threshold = 150
-        far_threshold = 500
+        near_threshold = 150 * PLAYER_VIEW_SCALE
+        far_threshold = 500 * PLAYER_VIEW_SCALE
 
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
@@ -524,7 +537,7 @@ class Enemy2(Enemy1):
         self.direction_angle = math.atan2(dy, dx)
         super().update(dt, world_x, world_y, player_rect, enemies)
 
-    def shoot(self, spread_angle=15, fixed_angle=None):
+    def shoot(self, spread_angle=20, fixed_angle=None):
         self.fire_sound.play()
 
         self.recoil_offset = 0
@@ -552,8 +565,8 @@ class Enemy2(Enemy1):
             target_world_y,
             spread_angle,
             self.bullet_image,
-            speed=5,
-            max_distance=2000
+            speed=5 * PLAYER_VIEW_SCALE,
+            max_distance=2000 * PLAYER_VIEW_SCALE
         )
 
         self.bullets.append(new_bullet)
@@ -570,7 +583,7 @@ class Enemy2(Enemy1):
             ScatteredBullet(scatter_x, scatter_y, vx, vy, self.player_bullet_image)
         )
 
-    def draw(self, screen, world_x, world_y):
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
         if not self.alive:
             return
 
@@ -585,25 +598,41 @@ class Enemy2(Enemy1):
                 player_screen_x = player_pos[0] - world_x
                 player_screen_y = player_pos[1] - world_y
 
+                line_thickness = max(1, int(2 * PLAYER_VIEW_SCALE))
                 pygame.draw.line(
                     screen,
                     (255, 0, 0),
-                    (screen_x, screen_y),
-                    (player_screen_x, player_screen_y),
-                    2
+                    (screen_x + shake_offset_x, screen_y + shake_offset_y),
+                    (player_screen_x + shake_offset_x, player_screen_y + shake_offset_y),
+                    line_thickness
                 )
 
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
 
-        rotated_gun = pygame.transform.rotate(
-            self.gun_image_original, -math.degrees(self.direction_angle) + 90
+        scaled_gun = pygame.transform.smoothscale(
+        self.gun_image_original,
+            (
+                int(self.gun_image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.gun_image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
         )
+        rotated_gun = pygame.transform.rotate(
+            scaled_gun, -math.degrees(self.direction_angle) + 90
+        )
+
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
         screen.blit(rotated_gun, gun_rect)
 
+        scaled_img = pygame.transform.smoothscale(
+        self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
         rotated_img = pygame.transform.rotate(
-            self.image_original, -math.degrees(self.direction_angle) + 90
+            scaled_img, -math.degrees(self.direction_angle) + 90
         )
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)

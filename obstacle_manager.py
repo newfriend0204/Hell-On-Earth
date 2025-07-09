@@ -2,6 +2,7 @@ import pygame
 import random
 from entities import Obstacle
 from collider import Collider
+from config import PLAYER_VIEW_SCALE
 import os
 
 class ObstacleManager:
@@ -22,13 +23,13 @@ class ObstacleManager:
 
         for obs_def in map_definition["obstacles"]:
             filename = obs_def["filename"]
-            x = obs_def["x"]
-            y = obs_def["y"]
+            x = obs_def["x"] * PLAYER_VIEW_SCALE
+            y = obs_def["y"] * PLAYER_VIEW_SCALE
             scale = obs_def["scale"]
 
             orig_image = self.obstacle_images[filename]
-            new_width = int(orig_image.get_width() * scale)
-            new_height = int(orig_image.get_height() * scale)
+            new_width = int(orig_image.get_width() * scale * PLAYER_VIEW_SCALE)
+            new_height = int(orig_image.get_height() * scale * PLAYER_VIEW_SCALE)
             scaled_image = pygame.transform.smoothscale(orig_image, (new_width, new_height))
 
             # ✅ 중심 좌표를 좌상단 좌표로 변환
@@ -147,6 +148,17 @@ class ObstacleManager:
         elif "FallenLog1" in filename:
             width = w * 0.3
             height = h * 0.7
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "FallenLog2" in filename:
+            width = w * 0.7
+            height = h * 0.3
             colliders.append(
                 Collider(
                     shape="rectangle",
