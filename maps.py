@@ -275,12 +275,11 @@ CURRENT_MAP_8 = {
 
         {"filename": "Tree1.png", "x": 400.00, "y": 500.00, "scale": 0.2},
         {"filename": "Tree2.png", "x": 750.00, "y": 600.00, "scale": 0.2},
-        {"filename": "Tree1.png", "x": 300.00, "y": 1000.00, "scale": 0.2},
+        {"filename": "Tree1.png", "x": 200.00, "y": 1000.00, "scale": 0.2},
         {"filename": "Tree2.png", "x": 850.00, "y": 1100.00, "scale": 0.25},
         {"filename": "Tree1.png", "x": 400.00, "y": 1300.00, "scale": 0.2},
 
         {"filename": "Rock1.png", "x": 600.00, "y": 400.00, "scale": 0.2},
-        {"filename": "Rock2.png", "x": 900.00, "y": 800.00, "scale": 0.2},
         {"filename": "Rock3.png", "x": 250.00, "y": 700.00, "scale": 0.2},
         {"filename": "Rock1.png", "x": 700.00, "y": 1250.00, "scale": 0.2},
         {"filename": "Rock2.png", "x": 850.00, "y": 1450.00, "scale": 0.2},

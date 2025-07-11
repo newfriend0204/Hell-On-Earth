@@ -663,6 +663,14 @@ while running:
                 scatter_x = bullet_world_x
                 scatter_y = bullet_world_y
 
+                scatter = ScatteredBullet(
+                    scatter_x,
+                    scatter_y,
+                    vx,
+                    vy,
+                    original_bullet_image
+                )
+
                 scatter.image_original = pygame.transform.scale(
                     original_bullet_image,
                     (
@@ -671,6 +679,7 @@ while running:
                     )
                 )
                 scatter.image = scatter.image_original.copy()
+
                 scattered_bullets.append(scatter)
             else:
                 direction_x = math.cos(angle_radians)
