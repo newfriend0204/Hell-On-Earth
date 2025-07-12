@@ -2,6 +2,7 @@ import pygame
 import math
 import random
 from config import *
+import config
 from entities import ScatteredBullet, Bullet
 
 # --------------------------
@@ -87,6 +88,8 @@ class Enemy1:
         check_circle_collision_fn,
         check_ellipse_circle_collision_fn,
         player_bullet_image,
+        map_width,
+        map_height,
         kill_callback=None,
     ):
         self.world_x = world_x
@@ -106,7 +109,7 @@ class Enemy1:
         self.rect = self.image_original.get_rect(center=(0, 0))
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
 
-        self.direction_angle = 0.0
+        self.direction_angle = random.uniform(0, 2 * math.pi)
         self.velocity_x = 0.0
         self.velocity_y = 0.0
 
@@ -138,8 +141,11 @@ class Enemy1:
         self.alive = True
         self.blood_effect = None
 
+        self.map_width = map_width
+        self.map_height = map_height
+
     def hit(self, damage, blood_effects):
-        if not self.alive:
+        if not self.alive or not config.combat_state:
             return
 
         self.hp -= damage
@@ -166,7 +172,7 @@ class Enemy1:
         self.velocity_y = 0
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
-        if not self.alive:
+        if not self.alive or not config.combat_state:
             return
         
         dist = math.hypot(
@@ -250,8 +256,8 @@ class Enemy1:
             self.world_x += self.velocity_x
             self.world_y += self.velocity_y
 
-        self.world_x = max(0, min(self.world_x, BG_WIDTH))
-        self.world_y = max(0, min(self.world_y, BG_HEIGHT))
+        self.world_x = max(0, min(self.world_x, self.map_width))
+        self.world_y = max(0, min(self.world_y, self.map_height))
 
         if dist < 1.0 or (abs(self.velocity_x) < 0.01 and abs(self.velocity_y) < 0.01):
             self.stuck_timer += dt
@@ -448,6 +454,8 @@ class Enemy2(Enemy1):
         check_circle_collision_fn,
         check_ellipse_circle_collision_fn,
         player_bullet_image,
+        map_width,
+        map_height,
         kill_callback=None,
     ):
         super().__init__(
@@ -462,6 +470,8 @@ class Enemy2(Enemy1):
             check_circle_collision_fn,
             check_ellipse_circle_collision_fn,
             player_bullet_image,
+            map_width,
+            map_height,
             kill_callback,
         )
         self.hp = 150
@@ -477,6 +487,9 @@ class Enemy2(Enemy1):
         self.far_shot_timer = 0
         self.far_shot_check_timer = random.randint(4000, 8000)
         self.fixed_far_shot_angle = None
+
+        self.map_height = map_height
+        self.map_width = map_width
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive:

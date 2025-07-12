@@ -80,3 +80,6 @@ OBJ_PATHS = {
     2: os.path.join(ASSET_DIR, "3DObject", "Gun23DObject.obj"),
     3: os.path.join(ASSET_DIR, "3DObject", "Gun33DObject.obj"),
 }
+
+combat_state = False
+combat_enabled = True
