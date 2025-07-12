@@ -4,10 +4,12 @@ import random
 from config import *
 from asset_manager import load_images
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood
+from entities import Bullet, ScatteredBullet, ScatteredBlood, Obstacle
+from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
+from world import World
 from maps import MAPS
 
 CURRENT_MAP = MAPS[7]
@@ -77,13 +79,421 @@ if CURRENT_MAP.get("crop_rect"):
 else:
     crop_surface = pygame.transform.smoothscale(
     background_image,
-    (
-    int(background_image.get_width() * PLAYER_VIEW_SCALE),
-    int(background_image.get_height() * PLAYER_VIEW_SCALE)
+        (
+        int(background_image.get_width() * PLAYER_VIEW_SCALE),
+        int(background_image.get_height() * PLAYER_VIEW_SCALE)
+        )
     )
+
+north_hole_open = True
+south_hole_open = False
+west_hole_open = True
+east_hole_open = False
+
+expansion = 350 * PLAYER_VIEW_SCALE
+
+hole_width = 300 * PLAYER_VIEW_SCALE
+hole_height = 300 * PLAYER_VIEW_SCALE
+
+wall_thickness = 10 * PLAYER_VIEW_SCALE
+
+map_width = effective_bg_width
+map_height = effective_bg_height
+
+# 각 방향 구멍 열림 여부
+north_hole_open = True
+south_hole_open = True
+west_hole_open = True
+east_hole_open = True
+
+# 구멍 크기
+hole_width = 300 * PLAYER_VIEW_SCALE
+hole_height = 300 * PLAYER_VIEW_SCALE
+
+# 벽 두께
+wall_thickness = 10 * PLAYER_VIEW_SCALE
+
+map_width = effective_bg_width
+map_height = effective_bg_height
+
+# 가로 벽(left/right) 크기
+left_wall_width = (map_width / 2) - (hole_width / 2)
+right_wall_width = left_wall_width
+
+# 세로 벽(top/bottom) 크기
+top_wall_height = (map_height / 2) - (hole_height / 2)
+bottom_wall_height = top_wall_height
+
+walls = []
+
+# -------- 북쪽 벽 --------
+# 왼쪽
+top_left_wall = Obstacle(
+    pygame.Surface((left_wall_width, wall_thickness), pygame.SRCALPHA),
+    world_x = 0,
+    world_y = -wall_thickness,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(left_wall_width/2, wall_thickness/2),
+            size=(left_wall_width, wall_thickness),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(top_left_wall)
+
+# 오른쪽
+top_right_wall = Obstacle(
+    pygame.Surface((right_wall_width, wall_thickness), pygame.SRCALPHA),
+    world_x = map_width - right_wall_width,
+    world_y = -wall_thickness,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(right_wall_width/2, wall_thickness/2),
+            size=(right_wall_width, wall_thickness),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(top_right_wall)
+
+# 구멍 막혀있으면 중앙 벽 추가
+if not north_hole_open:
+    top_hole_wall = Obstacle(
+        pygame.Surface((hole_width, wall_thickness), pygame.SRCALPHA),
+        world_x = left_wall_width,
+        world_y = -wall_thickness,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(hole_width/2, wall_thickness/2),
+                size=(hole_width, wall_thickness),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
     )
+    walls.append(top_hole_wall)
+
+# -------- 남쪽 벽 --------
+bottom_left_wall = Obstacle(
+    pygame.Surface((left_wall_width, wall_thickness), pygame.SRCALPHA),
+    world_x = 0,
+    world_y = map_height,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(left_wall_width/2, wall_thickness/2),
+            size=(left_wall_width, wall_thickness),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(bottom_left_wall)
+
+bottom_right_wall = Obstacle(
+    pygame.Surface((right_wall_width, wall_thickness), pygame.SRCALPHA),
+    world_x = map_width - right_wall_width,
+    world_y = map_height,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(right_wall_width/2, wall_thickness/2),
+            size=(right_wall_width, wall_thickness),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(bottom_right_wall)
+
+if not south_hole_open:
+    bottom_hole_wall = Obstacle(
+        pygame.Surface((hole_width, wall_thickness), pygame.SRCALPHA),
+        world_x = left_wall_width,
+        world_y = map_height,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(hole_width/2, wall_thickness/2),
+                size=(hole_width, wall_thickness),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.append(bottom_hole_wall)
+
+# -------- 서쪽 벽 --------
+left_top_wall = Obstacle(
+    pygame.Surface((wall_thickness, top_wall_height), pygame.SRCALPHA),
+    world_x = -wall_thickness,
+    world_y = 0,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(wall_thickness/2, top_wall_height/2),
+            size=(wall_thickness, top_wall_height),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(left_top_wall)
+
+left_bottom_wall = Obstacle(
+    pygame.Surface((wall_thickness, bottom_wall_height), pygame.SRCALPHA),
+    world_x = -wall_thickness,
+    world_y = map_height - bottom_wall_height,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(wall_thickness/2, bottom_wall_height/2),
+            size=(wall_thickness, bottom_wall_height),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(left_bottom_wall)
+
+if not west_hole_open:
+    left_hole_wall = Obstacle(
+        pygame.Surface((wall_thickness, hole_height), pygame.SRCALPHA),
+        world_x = -wall_thickness,
+        world_y = top_wall_height,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(wall_thickness/2, hole_height/2),
+                size=(wall_thickness, hole_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.append(left_hole_wall)
+
+# -------- 동쪽 벽 --------
+right_top_wall = Obstacle(
+    pygame.Surface((wall_thickness, top_wall_height), pygame.SRCALPHA),
+    world_x = map_width,
+    world_y = 0,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(wall_thickness/2, top_wall_height/2),
+            size=(wall_thickness, top_wall_height),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(right_top_wall)
+
+right_bottom_wall = Obstacle(
+    pygame.Surface((wall_thickness, bottom_wall_height), pygame.SRCALPHA),
+    world_x = map_width,
+    world_y = map_height - bottom_wall_height,
+    colliders = [
+        Collider(
+            shape="rectangle",
+            center=(wall_thickness/2, bottom_wall_height/2),
+            size=(wall_thickness, bottom_wall_height),
+            bullet_passable=False
+        )
+    ],
+    image_filename="invisible_wall"
+)
+walls.append(right_bottom_wall)
+
+if not east_hole_open:
+    right_hole_wall = Obstacle(
+        pygame.Surface((wall_thickness, hole_height), pygame.SRCALPHA),
+        world_x = map_width,
+        world_y = top_wall_height,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(wall_thickness/2, hole_height/2),
+                size=(wall_thickness, hole_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.append(right_hole_wall)
+
+# -------- 북쪽 통로 --------
+if north_hole_open:
+    # 통로의 시작 y 좌표는 -wall_thickness - expansion
+    # 통로 높이는 expansion
+    top_tunnel_wall_left = Obstacle(
+        pygame.Surface((left_wall_width, expansion), pygame.SRCALPHA),
+        world_x = 0,
+        world_y = -wall_thickness - expansion,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(left_wall_width/2, expansion/2),
+                size=(left_wall_width, expansion),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    top_tunnel_wall_right = Obstacle(
+        pygame.Surface((right_wall_width, expansion), pygame.SRCALPHA),
+        world_x = map_width - right_wall_width,
+        world_y = -wall_thickness - expansion,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(right_wall_width/2, expansion/2),
+                size=(right_wall_width, expansion),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.extend([top_tunnel_wall_left, top_tunnel_wall_right])
+
+# -------- 남쪽 통로 --------
+if south_hole_open:
+    bottom_tunnel_wall_left = Obstacle(
+        pygame.Surface((left_wall_width, expansion), pygame.SRCALPHA),
+        world_x = 0,
+        world_y = map_height + wall_thickness,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(left_wall_width/2, expansion/2),
+                size=(left_wall_width, expansion),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    bottom_tunnel_wall_right = Obstacle(
+        pygame.Surface((right_wall_width, expansion), pygame.SRCALPHA),
+        world_x = map_width - right_wall_width,
+        world_y = map_height + wall_thickness,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(right_wall_width/2, expansion/2),
+                size=(right_wall_width, expansion),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.extend([bottom_tunnel_wall_left, bottom_tunnel_wall_right])
+
+# -------- 서쪽 통로 --------
+if west_hole_open:
+    left_tunnel_wall_top = Obstacle(
+        pygame.Surface((expansion, top_wall_height), pygame.SRCALPHA),
+        world_x = -wall_thickness - expansion,
+        world_y = 0,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(expansion/2, top_wall_height/2),
+                size=(expansion, top_wall_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    left_tunnel_wall_bottom = Obstacle(
+        pygame.Surface((expansion, bottom_wall_height), pygame.SRCALPHA),
+        world_x = -wall_thickness - expansion,
+        world_y = map_height - bottom_wall_height,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(expansion/2, bottom_wall_height/2),
+                size=(expansion, bottom_wall_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.extend([left_tunnel_wall_top, left_tunnel_wall_bottom])
+
+# -------- 동쪽 통로 --------
+if east_hole_open:
+    right_tunnel_wall_top = Obstacle(
+        pygame.Surface((expansion, top_wall_height), pygame.SRCALPHA),
+        world_x = map_width + wall_thickness,
+        world_y = 0,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(expansion/2, top_wall_height/2),
+                size=(expansion, top_wall_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    right_tunnel_wall_bottom = Obstacle(
+        pygame.Surface((expansion, bottom_wall_height), pygame.SRCALPHA),
+        world_x = map_width + wall_thickness,
+        world_y = map_height - bottom_wall_height,
+        colliders = [
+            Collider(
+                shape="rectangle",
+                center=(expansion/2, bottom_wall_height/2),
+                size=(expansion, bottom_wall_height),
+                bullet_passable=False
+            )
+        ],
+        image_filename="invisible_wall"
+    )
+    walls.extend([right_tunnel_wall_top, right_tunnel_wall_bottom])
+
+# obstacle_manager에 추가
+obstacle_manager.placed_obstacles.extend(walls)
+
+# 길의 높이는 hole_height
+tile_width = background_image.get_width()
+tile_height = background_image.get_height()
+
+# 터널 길이 설정
+tunnel_length = 10000 * PLAYER_VIEW_SCALE
+
+tile_width = background_image.get_width()
+tile_height = background_image.get_height()
+
+# ---------- 가로 터널 Surface ----------
+cached_horizontal_tunnel_surface = pygame.Surface((tunnel_length, hole_height), pygame.SRCALPHA)
+tiles_needed = math.ceil(tunnel_length / tile_width)
+for i in range(tiles_needed):
+    cached_horizontal_tunnel_surface.blit(
+        background_image,
+        (i * tile_width, 0),
+        area=pygame.Rect(0, top_wall_height, tile_width, hole_height)
+    )
+
+# ---------- 세로 터널 Surface ----------
+cached_vertical_tunnel_surface = pygame.Surface((hole_width, tunnel_length), pygame.SRCALPHA)
+tiles_needed = math.ceil(tunnel_length / tile_height)
+for i in range(tiles_needed):
+    cached_vertical_tunnel_surface.blit(
+        background_image,
+        (0, i * tile_height),
+        area=pygame.Rect(left_wall_width, 0, hole_width, tile_height)
+    )
+
 world_x = (crop_surface.get_width() // 2) - (SCREEN_WIDTH // 2)
-world_y = crop_surface.get_height()
+world_y = (crop_surface.get_height() // 2) - (SCREEN_HEIGHT // 2)
 
 player_rect = original_player_image.get_rect(
     center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -95,8 +505,8 @@ gun_canvas = pygame.Surface(gun_canvas_size, pygame.SRCALPHA)
 world_vx = 0
 world_vy = 0
 
-acceleration_rate = 0.5 * PLAYER_VIEW_SCALE
-deceleration_rate = 0.7 * PLAYER_VIEW_SCALE
+acceleration_rate = 0.8 * PLAYER_VIEW_SCALE
+deceleration_rate = 0.9 * PLAYER_VIEW_SCALE
 
 normal_max_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
 sprint_max_speed = SPRINT_MAX_SPEED * PLAYER_VIEW_SCALE
@@ -340,14 +750,14 @@ while running:
     player_center = (world_x + player_rect.centerx,
                     world_y + player_rect.centery)
     #디버그
-    # for enemy in enemies:
-    #     enemy.update(
-    #         dt=delta_time,
-    #         world_x=world_x,
-    #         world_y=world_y,
-    #         player_rect=player_rect,
-    #         enemies=enemies
-    #     )
+    for enemy in enemies:
+        enemy.update(
+            dt=delta_time,
+            world_x=world_x,
+            world_y=world_y,
+            player_rect=player_rect,
+            enemies=enemies
+        )
 
      # 적의 탄환이 플레이어에 명중 시
     for enemy in enemies:
@@ -534,10 +944,6 @@ while running:
             world_vy = dot * ty
     else:
         world_y = test_world_y
-
-    if abs(world_vx) < 0.5 and abs(world_vy) < 0.5:
-        world_vx += random.choice([-1, 1]) * 0.5
-        world_vy += random.choice([-1, 1]) * 0.5
     
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
@@ -545,8 +951,11 @@ while running:
     half_screen_width = SCREEN_WIDTH // 2
     half_screen_height = SCREEN_HEIGHT // 2
 
-    world_x = max(-half_screen_width, min(effective_bg_width - half_screen_width, world_x))
-    world_y = max(-half_screen_height, min(effective_bg_height - half_screen_height, world_y))
+    world_x = max(-half_screen_width - expansion,
+                min(effective_bg_width - half_screen_width + expansion, world_x))
+
+    world_y = max(-half_screen_height - expansion,
+                min(effective_bg_height - half_screen_height + expansion, world_y))
 
     mouse_x, mouse_y = pygame.mouse.get_pos()
     dx = mouse_x - player_rect.centerx
@@ -735,6 +1144,25 @@ while running:
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
     enemy.bullets = [b for b in enemy.bullets if not getattr(b, "to_remove", False)]
     screen.fill((0, 0, 0))
+
+    center_x = (tunnel_length // 2) - (hole_width // 2)
+    center_y = (tunnel_length // 2) - (hole_height // 2)
+
+    screen.blit(
+        cached_horizontal_tunnel_surface,
+        (
+            -center_x - world_x + shake_offset_x,
+            top_wall_height - world_y + shake_offset_y
+        )
+    )
+
+    screen.blit(
+        cached_vertical_tunnel_surface,
+        (
+            left_wall_width - world_x + shake_offset_x,
+            -center_y - world_y + shake_offset_y
+        )
+    )
 
     screen.blit(
     crop_surface,
