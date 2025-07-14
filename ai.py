@@ -5,15 +5,11 @@ from config import *
 import config
 from entities import ScatteredBullet, Bullet
 
-# --------------------------
-# 피튀김 파티클 클래스 정의
-# --------------------------
-
 PARTICLE_COUNT = 30
 PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
 PARTICLE_SPEED_MIN = 1
 PARTICLE_SPEED_MAX = 4
-PARTICLE_LIFETIME = 2500  # ms
+PARTICLE_LIFETIME = 2500
 PARTICLE_FADE_TIME = 500
 
 class ParticleBlood:
@@ -69,10 +65,6 @@ class ParticleBlood:
             s = pygame.Surface((size, size), pygame.SRCALPHA)
             s.fill(color)
             surface.blit(s, rect.topleft)
-
-# --------------------------
-# Enemy 클래스
-# --------------------------
 
 class Enemy1:
     def __init__(
@@ -235,7 +227,6 @@ class Enemy1:
                     penetration_total[0] += penetration[0]
                     penetration_total[1] += penetration[1]
 
-        # Enemy끼리 충돌 처리
         for other in enemies:
             if other == self:
                 continue
@@ -480,7 +471,6 @@ class Enemy2(Enemy1):
         self.current_distance = GUN2_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
         self.shoot_delay = random.randint(700, 1700)
 
-        # 원거리 사격 관련
         self.is_preparing_far_shot = False
         self.prepare_start_time = 0
         self.far_shot_step = 0
@@ -507,10 +497,8 @@ class Enemy2(Enemy1):
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
 
             if elapsed < 1500:
-                # ✅ 조준 중 → angle 계속 갱신
                 self.direction_angle = math.atan2(dy, dx)
             else:
-                # ✅ 사격 시작 → angle 고정
                 if self.fixed_far_shot_angle is None:
                     self.fixed_far_shot_angle = self.direction_angle
 
@@ -603,7 +591,6 @@ class Enemy2(Enemy1):
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
 
-        # ✅ 빨간선은 무조건 적 ↔ 플레이어로 그린다
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
             if elapsed < 1500:

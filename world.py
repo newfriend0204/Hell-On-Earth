@@ -29,11 +29,9 @@ class World:
         self.top_wall_height = top_wall_height
         self.tunnel_length = tunnel_length
 
-        # Crop 처리
         self.crop_surface, self.effective_bg_width, self.effective_bg_height = \
             self.create_crop_surface(crop_rect)
 
-        # Tunnel 생성
         self.horizontal_tunnel_surface = self.create_horizontal_tunnel()
         self.vertical_tunnel_surface = self.create_vertical_tunnel()
 
@@ -128,18 +126,17 @@ class World:
     def get_spawn_point(self, direction, margin=0):
         if direction == "north":
             x = self.effective_bg_width / 2
-            y = -self.tunnel_length + margin
+            y = -self.tunnel_length + self.PLAYER_VIEW_SCALE * 10 + margin
         elif direction == "south":
             x = self.effective_bg_width / 2
             y = self.effective_bg_height + self.PLAYER_VIEW_SCALE * 10 + margin
         elif direction == "west":
-            x = -self.tunnel_length + margin
+            x = -self.tunnel_length + self.PLAYER_VIEW_SCALE * 10 + margin
             y = self.effective_bg_height / 2
         elif direction == "east":
             x = self.effective_bg_width + self.PLAYER_VIEW_SCALE * 10 + margin
             y = self.effective_bg_height / 2
         else:
-            # fallback - center of map
             x = self.effective_bg_width / 2
             y = self.effective_bg_height / 2
         return (x, y)
@@ -150,9 +147,10 @@ class World:
                     top_wall_height, bottom_wall_height,
                     north_hole_open, south_hole_open,
                     west_hole_open, east_hole_open,
-                    expansion):
+                    expansion, invisible_wall_filename="invisible_wall", extra_wall_size=2000):
 
         walls = []
+        extra_wall_size *= self.PLAYER_VIEW_SCALE
 
         def rect_obstacle(size, world_x, world_y):
             surface = pygame.Surface(size, pygame.SRCALPHA)
@@ -167,52 +165,57 @@ class World:
                 world_x=world_x,
                 world_y=world_y,
                 colliders=[collider],
-                image_filename="invisible_wall"
+                image_filename=invisible_wall_filename,
             )
 
-        # 북쪽 벽
         walls.append(rect_obstacle((left_wall_width, wall_thickness), 0, -wall_thickness))
         walls.append(rect_obstacle((right_wall_width, wall_thickness), map_width - right_wall_width, -wall_thickness))
         if not north_hole_open:
-            walls.append(rect_obstacle((hole_width, wall_thickness), left_wall_width, -wall_thickness))
-
-        # 남쪽 벽
+            walls.append(
+                rect_obstacle(
+                    (hole_width, wall_thickness + extra_wall_size),
+                    left_wall_width,
+                    -wall_thickness - extra_wall_size
+                )
+            )
         walls.append(rect_obstacle((left_wall_width, wall_thickness), 0, map_height))
         walls.append(rect_obstacle((right_wall_width, wall_thickness), map_width - right_wall_width, map_height))
         if not south_hole_open:
-            walls.append(rect_obstacle((hole_width, wall_thickness), left_wall_width, map_height))
-
-        # 서쪽 벽
+            walls.append(
+                rect_obstacle(
+                    (hole_width, wall_thickness + extra_wall_size),
+                    left_wall_width,
+                    map_height
+                )
+            )
         walls.append(rect_obstacle((wall_thickness, top_wall_height), -wall_thickness, 0))
         walls.append(rect_obstacle((wall_thickness, bottom_wall_height), -wall_thickness, map_height - bottom_wall_height))
         if not west_hole_open:
-            walls.append(rect_obstacle((wall_thickness, hole_height), -wall_thickness, top_wall_height))
-
-        # 동쪽 벽
+            walls.append(
+                rect_obstacle(
+                    (wall_thickness + extra_wall_size, hole_height),
+                    -wall_thickness - extra_wall_size,
+                    top_wall_height
+                )
+            )
         walls.append(rect_obstacle((wall_thickness, top_wall_height), map_width, 0))
         walls.append(rect_obstacle((wall_thickness, bottom_wall_height), map_width, map_height - bottom_wall_height))
         if not east_hole_open:
-            walls.append(rect_obstacle((wall_thickness, hole_height), map_width, top_wall_height))
+            walls.append(
+                rect_obstacle(
+                    (wall_thickness + extra_wall_size, hole_height),
+                    map_width,
+                    top_wall_height
+                )
+            )
 
-        # 북쪽 통로
-        if north_hole_open:
-            walls.append(rect_obstacle((left_wall_width, expansion), 0, -wall_thickness - expansion))
-            walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, -wall_thickness - expansion))
-
-        # 남쪽 통로
-        if south_hole_open:
-            walls.append(rect_obstacle((left_wall_width, expansion), 0, map_height + wall_thickness))
-            walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, map_height + wall_thickness))
-
-        # 서쪽 통로
-        if west_hole_open:
-            walls.append(rect_obstacle((expansion, top_wall_height), -wall_thickness - expansion, 0))
-            walls.append(rect_obstacle((expansion, bottom_wall_height), -wall_thickness - expansion, map_height - bottom_wall_height))
-
-        # 동쪽 통로
-        if east_hole_open:
-            walls.append(rect_obstacle((expansion, top_wall_height), map_width + wall_thickness, 0))
-            walls.append(rect_obstacle((expansion, bottom_wall_height), map_width + wall_thickness, map_height - bottom_wall_height))
+        walls.append(rect_obstacle((left_wall_width, expansion), 0, -wall_thickness - expansion))
+        walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, -wall_thickness - expansion))
+        walls.append(rect_obstacle((left_wall_width, expansion), 0, map_height + wall_thickness))
+        walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, map_height + wall_thickness))
+        walls.append(rect_obstacle((expansion, top_wall_height), -wall_thickness - expansion, 0))
+        walls.append(rect_obstacle((expansion, bottom_wall_height), -wall_thickness - expansion, map_height - bottom_wall_height))
+        walls.append(rect_obstacle((expansion, top_wall_height), map_width + wall_thickness, 0))
+        walls.append(rect_obstacle((expansion, bottom_wall_height), map_width + wall_thickness, map_height - bottom_wall_height))
 
         return walls
-

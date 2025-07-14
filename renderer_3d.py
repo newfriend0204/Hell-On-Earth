@@ -48,7 +48,6 @@ class Renderer3D:
         obj_path = os.path.join(ASSET_DIR, "3DObject", obj_filename)
         self.vertices, self.faces = load_obj(obj_path)
 
-        # 무기별 zoom limit 및 zoom_ratio 설정
         if obj_filename == "Gun13DObject.obj":
             self.min_zoom = GUN1_MIN_ZOOM
             self.max_zoom = GUN1_MAX_ZOOM
@@ -57,7 +56,7 @@ class Renderer3D:
             self.min_zoom = GUN2_MIN_ZOOM
             self.max_zoom = GUN2_MAX_ZOOM
             self.zoom_ratio = GUN2_ZOOM_RATIO
-        elif obj_filename == "Gun33DObject.obj":    # ✅ gun3 추가
+        elif obj_filename == "Gun33DObject.obj":
             self.min_zoom = GUN3_MIN_ZOOM
             self.max_zoom = GUN3_MAX_ZOOM
             self.zoom_ratio = GUN3_ZOOM_RATIO

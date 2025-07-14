@@ -49,10 +49,10 @@ obstacle_manager = ObstacleManager(
 )
 obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
 
-north_hole_open = True
-south_hole_open = False
+north_hole_open = False
+south_hole_open = True
 west_hole_open = True
-east_hole_open = False
+east_hole_open = True
 
 expansion = 350 * PLAYER_VIEW_SCALE
 
@@ -61,7 +61,6 @@ hole_height = 300 * PLAYER_VIEW_SCALE
 
 wall_thickness = 10 * PLAYER_VIEW_SCALE
 
-# world 먼저 생성
 world = World(
     background_image=background_image,
     crop_rect=CURRENT_MAP.get("crop_rect"),
@@ -70,40 +69,34 @@ world = World(
     BG_HEIGHT=BG_HEIGHT,
     hole_width=hole_width,
     hole_height=hole_height,
-    left_wall_width=0,          # 초기값
-    top_wall_height=0,          # 초기값
+    left_wall_width=0,
+    top_wall_height=0,
     tunnel_length=10000 * PLAYER_VIEW_SCALE
 )
 
-# world로부터 실제 크기 가져오기
 effective_bg_width = world.effective_bg_width
 effective_bg_height = world.effective_bg_height
 
 map_width = effective_bg_width
 map_height = effective_bg_height
 
-# 가로 벽(left/right) 크기
 left_wall_width = (map_width / 2) - (hole_width / 2)
 right_wall_width = left_wall_width
-
-# 세로 벽(top/bottom) 크기
 top_wall_height = (map_height / 2) - (hole_height / 2)
 bottom_wall_height = top_wall_height
 
-# world의 벽 위치 다시 업데이트
 world.left_wall_width = left_wall_width
 world.top_wall_height = top_wall_height
 
-spawn_direction = "south"
+spawn_direction = "west"
 player_world_x, player_world_y = world.get_spawn_point(spawn_direction, margin=275)
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
 
-# 각 방향 구멍 열림 여부
-north_hole_open = True
+north_hole_open = False
 south_hole_open = True
 west_hole_open = True
-east_hole_open = True
+east_hole_open = False
 
 walls = world.generate_walls(
     map_width=map_width,
@@ -121,11 +114,27 @@ walls = world.generate_walls(
     east_hole_open=east_hole_open,
     expansion=expansion,
 )
-
 obstacle_manager.placed_obstacles.extend(walls)
+combat_walls_info = []
+combat_walls = []
 
-# obstacle_manager에 추가
-obstacle_manager.placed_obstacles.extend(walls)
+# for obs in walls:
+#     if obs.image_filename == "invisible_wall":
+#         if math.isclose(obs.world_y, -wall_thickness, abs_tol=1.0):
+#             extra_height = 2000 * PLAYER_VIEW_SCALE
+
+#             new_height = obs.image.get_height() + int(extra_height)
+
+#             obs.image = pygame.transform.scale(
+#                 obs.image,
+#                 (obs.image.get_width(), new_height)
+#             )
+
+#             if obs.colliders:
+#                 collider = obs.colliders[0]
+#                 collider.size = (collider.size[0], new_height)
+
+#             obs.world_y -= extra_height
 
 player_rect = original_player_image.get_rect(
     center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -200,7 +209,6 @@ def increment_kill_count():
     global kill_count
     kill_count += 1
 
-# ✅ 함수 선언을 Enemy 생성보다 위로 올림
 def check_circle_collision(center1, radius1, center2, radius2):
     dx = center1[0] - center2[0]
     dy = center1[1] - center2[1]
@@ -244,6 +252,49 @@ def get_player_center_world(world_x, world_y):
         world_x + player_rect.centerx,
         world_y + player_rect.centery
     )
+
+def draw_wall_barriers(screen, world_x, world_y):
+    if not config.combat_state:
+        return
+
+    for info in combat_walls_info:
+        img = info["image"]
+        tx, ty = info["target_pos"]
+        cx, cy = info["current_pos"]
+
+        smoothing = 0.2
+        new_x = cx + (tx - cx) * smoothing
+        new_y = cy + (ty - cy) * smoothing
+
+        if abs(new_x - tx) < 1:
+            new_x = tx
+        if abs(new_y - ty) < 1:
+            new_y = ty
+
+        info["current_pos"] = (new_x, new_y)
+
+        screen_x = new_x - world_x
+        screen_y = new_y - world_y
+
+        screen.blit(img, (screen_x, screen_y))
+
+def draw_invisible_walls(screen, world_x, world_y):
+    black_color = (0, 0, 0)
+
+    for obs in obstacle_manager.placed_obstacles:
+        if obs.image_filename != "invisible_wall":
+            continue
+
+        if obs.world_x == 0 and obs.world_y == 0:
+            continue
+
+        rect = pygame.Rect(
+            obs.world_x - world_x,
+            obs.world_y - world_y,
+            obs.image.get_width(),
+            obs.image.get_height()
+        )
+        pygame.draw.rect(screen, black_color, rect)
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -305,7 +356,6 @@ while running:
             elif event.key == pygame.K_d:
                 move_right = True
             elif event.key == pygame.K_SPACE:
-                # 현재 플레이어 월드 좌표 출력
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
@@ -397,7 +447,6 @@ while running:
                 enemies=enemies
             )
 
-     # 적의 탄환이 플레이어에 명중 시
     for enemy in enemies:
         for bullet in enemy.bullets[:]:
             bullet.update(obstacle_manager)
@@ -412,12 +461,11 @@ while running:
             ):
                 player_hp -= 20
                 damage_flash_alpha = 255
-                shake_timer = 15      # 흔들리는 프레임 수 (조절 가능)
-                shake_magnitude = 5   # 흔들림 세기 (조절 가능)
+                shake_timer = 15
+                shake_magnitude = 5
                 bullet.to_remove = True
                 continue
 
-    # 탄피 업데이트 (탄피가 배경 위, 나머지 위로 오도록)
     for scatter in scattered_bullets[:]:
         scatter.update()
         if scatter.alpha <= 0:
@@ -490,7 +538,6 @@ while running:
     world_vx = max(-max_speed, min(max_speed, world_vx))
     world_vy = max(-max_speed, min(max_speed, world_vy))
 
-    # X축 충돌 검사
     test_world_x = world_x + world_vx
     test_world_y = world_y
 
@@ -502,6 +549,88 @@ while running:
             0 <= player_center_world_y <= map_height):
             config.combat_state = True
             print("[DEBUG] Combat START!")
+            combat_walls = world.generate_walls(
+                map_width=map_width,
+                map_height=map_height,
+                wall_thickness=wall_thickness * 3,
+                hole_width=hole_width,
+                hole_height=hole_height,
+                left_wall_width=left_wall_width,
+                right_wall_width=right_wall_width,
+                top_wall_height=top_wall_height,
+                bottom_wall_height=bottom_wall_height,
+                north_hole_open=False,
+                south_hole_open=False,
+                west_hole_open=False,
+                east_hole_open=False,
+                expansion=expansion,
+                invisible_wall_filename="combat_invisible_wall"
+            )
+            obstacle_manager.placed_obstacles.extend(combat_walls)
+
+            combat_walls_info.clear()
+
+            shift = 122.22 * PLAYER_VIEW_SCALE
+            start_offset = 333.33 * PLAYER_VIEW_SCALE
+
+            scaled_img = images["wall_barrier"]
+            rotated_img = images["wall_barrier_rotated"]
+
+            scaled_width = scaled_img.get_width()
+            scaled_height = scaled_img.get_height()
+
+            rotated_width = rotated_img.get_width()
+            rotated_height = rotated_img.get_height()
+
+            black_rect_surface = pygame.Surface((scaled_width, scaled_height))
+            black_rect_surface.fill((0, 0, 0))
+
+            black_rect_surface_rotated = pygame.Surface((rotated_width, rotated_height))
+            black_rect_surface_rotated.fill((0, 0, 0))
+
+            north_target_x = left_wall_width + (hole_width - scaled_width) / 2
+            north_target_y = -wall_thickness - expansion + shift + (60 * PLAYER_VIEW_SCALE)
+            north_start_x = north_target_x - start_offset
+
+            combat_walls_info.append({
+                "side": "north",
+                "image": scaled_img,
+                "target_pos": (int(north_target_x), int(north_target_y)),
+                "current_pos": (int(north_start_x), int(north_target_y)),
+            })
+
+            south_target_x = left_wall_width + (hole_width - scaled_width) / 2
+            south_target_y = map_height + wall_thickness - shift
+            south_start_x = south_target_x + start_offset
+
+            combat_walls_info.append({
+                "side": "south",
+                "image": scaled_img,
+                "target_pos": (int(south_target_x), int(south_target_y)),
+                "current_pos": (int(south_start_x), int(south_target_y)),
+            })
+
+            west_target_x = -wall_thickness - expansion + shift + (60 * PLAYER_VIEW_SCALE)
+            west_target_y = top_wall_height + (hole_height - rotated_height) / 2
+            west_start_y = west_target_y - start_offset
+
+            combat_walls_info.append({
+                "side": "west",
+                "image": rotated_img,
+                "target_pos": (int(west_target_x), int(west_target_y)),
+                "current_pos": (int(west_target_x), int(west_start_y)),
+            })
+
+            east_target_x = map_width + wall_thickness - shift
+            east_target_y = top_wall_height + (hole_height - rotated_height) / 2
+            east_start_y = east_target_y + start_offset
+
+            combat_walls_info.append({
+                "side": "east",
+                "image": rotated_img,
+                "target_pos": (int(east_target_x), int(east_target_y)),
+                "current_pos": (int(east_target_x), int(east_start_y)),
+            })
 
     if config.combat_state:
         player_center_world_x = max(0, min(player_center_world_x, map_width))
@@ -546,8 +675,6 @@ while running:
     else:
         world_x = test_world_x
 
-
-    # Y축 충돌 검사
     test_world_x = world_x
     test_world_y = world_y + world_vy
 
@@ -686,7 +813,6 @@ while running:
             offset_dy = math.sin(offset_angle) * vertical_offset
 
             if current_weapon == 3:
-                # 탄 6발 발사
                 for i in range(GUN3_NUM_BULLETS):
                     spread_angle_range = GUN3_SPREAD_ANGLE
                     spread_angle = math.radians(random.uniform(-spread_angle_range, spread_angle_range))
@@ -711,7 +837,6 @@ while running:
                     )
                     bullets.append(new_bullet)
 
-                # ✅ 탄피는 한 개만 배출
                 eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
                 eject_speed = 1
                 vx = math.cos(eject_angle) * eject_speed
@@ -794,10 +919,15 @@ while running:
     for enemy in enemies:
         enemy.bullets = [b for b in enemy.bullets if not getattr(b, "to_remove", False)]
 
-    if not config.combat_state:
+    if config.combat_enabled and not config.combat_state:
         for bullet in bullets[:]:
-            if (0 <= bullet.collider.center[0] <= map_width and
-                0 <= bullet.collider.center[1] <= map_height):
+            bx, by = bullet.collider.center
+            if (-expansion <= bx <= map_width + expansion and
+                -expansion <= by <= map_height + expansion):
+                if (0 <= bx <= map_width and
+                    0 <= by <= map_height):
+                    bullet.to_remove = True
+            else:
                 bullet.to_remove = True
 
     if config.combat_state:
@@ -810,6 +940,11 @@ while running:
         config.combat_state = False
         config.combat_enabled = False
         print("[DEBUG] Combat END. Player can go back to tunnel.")
+        for wall in combat_walls:
+            if wall in obstacle_manager.placed_obstacles:
+                obstacle_manager.placed_obstacles.remove(wall)
+        combat_walls.clear()
+        combat_walls_info.clear()
 
     screen.fill((0, 0, 0))
 
@@ -820,6 +955,17 @@ while running:
         shake_offset_x,
         shake_offset_y
     )
+
+    clip_rect = pygame.Rect(
+        -expansion,
+        -expansion,
+        effective_bg_width + expansion * 3,
+        effective_bg_height + expansion * 3
+    )
+    screen.set_clip(clip_rect)
+
+    draw_wall_barriers(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+    draw_invisible_walls(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -846,16 +992,13 @@ while running:
 
     obstacle_manager.draw_non_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
-    # 적 enemy
     for enemy in enemies:
         enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
-    # ✅ bullets를 여기서 그린다
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
-    # 나무
     player_center_world = (
         world_x + player_rect.centerx,
         world_y + player_rect.centery
@@ -866,11 +1009,9 @@ while running:
         for c in obs.colliders:
             c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
-    # 플레이어
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
-    # ✅ 추가: HP 바 출력
     hp_bar_width = 300
     hp_bar_height = 30
     hp_bar_x = SCREEN_WIDTH // 2 - hp_bar_width // 2
@@ -882,7 +1023,6 @@ while running:
     hp_text = DEBUG_FONT.render(f"HP: {player_hp}", True, (255, 255, 255))
     screen.blit(hp_text, (hp_bar_x + hp_bar_width + 10, hp_bar_y))
 
-    # ✅ 추가: damage flash effect
     if damage_flash_alpha > 0:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
 
@@ -892,13 +1032,9 @@ while running:
             alpha = int(damage_flash_alpha * (1 - i / border_thickness))
             color = (255, 0, 0, alpha)
 
-            # 위쪽
             overlay.fill(color, rect=(i, i, SCREEN_WIDTH - i * 2, 1))
-            # 아래쪽
             overlay.fill(color, rect=(i, SCREEN_HEIGHT - i - 1, SCREEN_WIDTH - i * 2, 1))
-            # 왼쪽
             overlay.fill(color, rect=(i, i, 1, SCREEN_HEIGHT - i * 2))
-            # 오른쪽
             overlay.fill(color, rect=(SCREEN_WIDTH - i - 1, i, 1, SCREEN_HEIGHT - i * 2))
 
         screen.blit(overlay, (0, 0))
@@ -913,7 +1049,7 @@ while running:
 
         bullet_center_world = bullet.collider.center
 
-        bullet_radius = 5.0  # 안전 기본값
+        bullet_radius = 5.0
 
         if bullet.collider:
             if bullet.collider.shape == "circle":

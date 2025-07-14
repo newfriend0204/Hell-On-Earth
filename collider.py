@@ -42,9 +42,8 @@ class Collider:
         return False
 
     def draw(self, screen, offset_x, offset_y, obstacle_pos):
-        color = (255, 0, 0)  # 빨간색 선
+        color = (255, 0, 0)
 
-        # collider 중심 world좌표 계산w 
         cx, cy = obstacle_pos
         center_x = int(cx + self.center[0] - offset_x)
         center_y = int(cy + self.center[1] - offset_y)
@@ -108,7 +107,6 @@ class Collider:
             if value < 1.0:
                 norm = math.sqrt(dx * dx + dy * dy)
                 if norm == 0:
-                    # 동일 좌표일 때 적당히 튕겨냄
                     return (1.0, 0.0)
                 overlap_ratio = 1.0 - value
                 penetration = overlap_ratio * (rx + ry) * 0.5 * 0.5

@@ -22,7 +22,6 @@ def load_sounds():
     gun2_fire_enemy = pygame.mixer.Sound(path_sound("Sound", "Gun2Fire.wav"))
     gun2_fire_enemy.set_volume(0.25)
 
-    # ✅ gun3 추가
     gun3_fire = pygame.mixer.Sound(path_sound("Sound", "Gun3Fire.wav"))
     gun3_fire.set_volume(1.0)
 

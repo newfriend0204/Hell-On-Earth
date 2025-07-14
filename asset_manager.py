@@ -1,6 +1,6 @@
 import pygame
 import os
-from config import ASSET_DIR, BG_WIDTH, BG_HEIGHT
+from config import *
 
 def load_images():
     path_image = lambda *paths: os.path.join(ASSET_DIR, *paths)
@@ -20,7 +20,6 @@ def load_images():
     scale_factor2 = desired_gun2_width / gun2_img.get_width()
     gun2_img = pygame.transform.smoothscale(gun2_img, (int(gun2_img.get_width() * scale_factor2), int(gun2_img.get_height() * scale_factor2)))
 
-    # ✅ gun3 추가
     gun3_img = pygame.image.load(path_image("image", "Gun", "Gun3Player.png")).convert_alpha()
     gun3_img = pygame.transform.rotate(gun3_img, 180)
     desired_gun3_width = 60
@@ -37,6 +36,18 @@ def load_images():
     bg_img = pygame.image.load(path_image("Image", "Map1.png")).convert()
     bg_img = pygame.transform.smoothscale(bg_img, (BG_WIDTH, BG_HEIGHT))
     cursor_img = pygame.transform.smoothscale(cursor_img, (32, 32))
+
+    wall_barrier_img = pygame.image.load(path_image("Image", "Map1Wall.png")).convert_alpha()
+    scale_factor = 0.275 * PLAYER_VIEW_SCALE
+    scaled_width = int(wall_barrier_img.get_width() * scale_factor)
+    scaled_height = int(wall_barrier_img.get_height() * scale_factor)
+
+    wall_barrier_img = pygame.transform.smoothscale(
+        wall_barrier_img,
+        (scaled_width, scaled_height)
+    )
+
+    wall_barrier_img_rotated = pygame.transform.rotate(wall_barrier_img, 90)
 
     obstacle_sizes = {
         "Pond1.png": (1536, 1024),
@@ -85,4 +96,6 @@ def load_images():
         "background": bg_img,
         "obstacles": obstacle_images,
         "obstacle_masks": obstacle_masks,
+        "wall_barrier": wall_barrier_img,
+        "wall_barrier_rotated": wall_barrier_img_rotated,
     }

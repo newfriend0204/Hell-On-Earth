@@ -246,7 +246,6 @@ class Obstacle:
             else:
                 self.transparent = False
 
-        # 트렁크 먼저
         if self.trunk_image:
             trunk_width, trunk_height = self.trunk_image.get_size()
             main_width, main_height = self.image.get_size()
@@ -256,5 +255,4 @@ class Obstacle:
 
             screen.blit(self.trunk_image, (trunk_x, trunk_y))
 
-        # 나무가 위에 덮는다
         screen.blit(img_to_draw, (screen_x, screen_y))

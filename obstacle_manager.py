@@ -32,14 +32,12 @@ class ObstacleManager:
             new_height = int(orig_image.get_height() * scale * PLAYER_VIEW_SCALE)
             scaled_image = pygame.transform.smoothscale(orig_image, (new_width, new_height))
 
-            # ✅ 중심 좌표를 좌상단 좌표로 변환
             x -= new_width // 2
             y -= new_height // 2
 
             colliders = self._create_colliders_for_image(filename, new_width, new_height)
 
             if "Tree1" in filename or "Tree2" in filename:
-                # cover collider (트리 전체 크기 기준)
                 cover_collider = Collider(
                     shape="ellipse",
                     center=(new_width / 2, new_height / 2),
