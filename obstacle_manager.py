@@ -15,8 +15,10 @@ class ObstacleManager:
         self.min_scale = min_scale
         self.max_scale = max_scale
         self.num_obstacles_range = num_obstacles_range
-
         self.placed_obstacles = []
+        self.static_obstacles = []
+        self.dynamic_obstacles = []
+        self.combat_obstacles = []
 
     def generate_obstacles_from_map(self, map_definition):
         self.placed_obstacles = []
@@ -72,8 +74,7 @@ class ObstacleManager:
                     image_filename=filename
                 )
 
-            self.placed_obstacles.append(obstacle)
-
+            self.static_obstacles.append(obstacle)
 
     def _create_colliders_for_image(self, filename, w, h):
         colliders = []
@@ -177,28 +178,29 @@ class ObstacleManager:
         return colliders
     
     def draw_non_trees(self, screen, world_offset_x, world_offset_y):
-        for obs in self.placed_obstacles:
+        for obs in self.static_obstacles + self.combat_obstacles:
             if not obs.is_covering:
                 obs.draw(screen, world_offset_x, world_offset_y)
 
     def draw_trees(self, screen, world_offset_x, world_offset_y, player_center, enemies):
-        for obs in self.placed_obstacles:
+        for obs in self.static_obstacles + self.combat_obstacles:
             if obs.is_covering:
                 obs.draw(screen, world_offset_x, world_offset_y, player_center, enemies)
 
     def draw(self, screen, world_offset_x, world_offset_y):
-        for obs in self.placed_obstacles:
+        for obs in self.static_obstacles + self.combat_obstacles:
             obs.draw(screen, world_offset_x, world_offset_y)
             for c in obs.colliders:
                 c.draw(screen, world_offset_x, world_offset_y, (obs.world_x, obs.world_y))
 
     def check_collision_circle(self, circle_center_world, circle_radius):
-        for obs in self.placed_obstacles:
+        all_obs = self.static_obstacles + self.combat_obstacles
+        for obs in all_obs:
             for collider in obs.colliders:
-                collider_world_center = (
-                    obs.world_x + collider.center[0],
-                    obs.world_y + collider.center[1]
-                )
-                if collider.check_collision_circle(circle_center_world, circle_radius, (obs.world_x, obs.world_y)):
-                    return True
+                        collider_world_center = (
+                            obs.world_x + collider.center[0],
+                            obs.world_y + collider.center[1]
+                        )
+                        if collider.check_collision_circle(circle_center_world, circle_radius, (obs.world_x, obs.world_y)):
+                            return True
         return False

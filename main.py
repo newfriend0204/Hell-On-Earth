@@ -93,11 +93,6 @@ player_world_x, player_world_y = world.get_spawn_point(spawn_direction, margin=2
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
 
-north_hole_open = False
-south_hole_open = True
-west_hole_open = True
-east_hole_open = False
-
 walls = world.generate_walls(
     map_width=map_width,
     map_height=map_height,
@@ -114,27 +109,9 @@ walls = world.generate_walls(
     east_hole_open=east_hole_open,
     expansion=expansion,
 )
-obstacle_manager.placed_obstacles.extend(walls)
+obstacle_manager.static_obstacles.extend(walls)
 combat_walls_info = []
 combat_walls = []
-
-# for obs in walls:
-#     if obs.image_filename == "invisible_wall":
-#         if math.isclose(obs.world_y, -wall_thickness, abs_tol=1.0):
-#             extra_height = 2000 * PLAYER_VIEW_SCALE
-
-#             new_height = obs.image.get_height() + int(extra_height)
-
-#             obs.image = pygame.transform.scale(
-#                 obs.image,
-#                 (obs.image.get_width(), new_height)
-#             )
-
-#             if obs.colliders:
-#                 collider = obs.colliders[0]
-#                 collider.size = (collider.size[0], new_height)
-
-#             obs.world_y -= extra_height
 
 player_rect = original_player_image.get_rect(
     center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -180,7 +157,10 @@ recoil_velocity = 0
 shake_offset_x = 0
 shake_offset_y = 0
 shake_timer = 0
-shake_magnitude = 2
+shake_timer_max = 15
+shake_magnitude = 3
+shake_elapsed = 0.0
+shake_speed = 50.0
 
 walk_timer = 0
 walk_delay = 500
@@ -252,49 +232,6 @@ def get_player_center_world(world_x, world_y):
         world_x + player_rect.centerx,
         world_y + player_rect.centery
     )
-
-def draw_wall_barriers(screen, world_x, world_y):
-    if not config.combat_state:
-        return
-
-    for info in combat_walls_info:
-        img = info["image"]
-        tx, ty = info["target_pos"]
-        cx, cy = info["current_pos"]
-
-        smoothing = 0.2
-        new_x = cx + (tx - cx) * smoothing
-        new_y = cy + (ty - cy) * smoothing
-
-        if abs(new_x - tx) < 1:
-            new_x = tx
-        if abs(new_y - ty) < 1:
-            new_y = ty
-
-        info["current_pos"] = (new_x, new_y)
-
-        screen_x = new_x - world_x
-        screen_y = new_y - world_y
-
-        screen.blit(img, (screen_x, screen_y))
-
-def draw_invisible_walls(screen, world_x, world_y):
-    black_color = (0, 0, 0)
-
-    for obs in obstacle_manager.placed_obstacles:
-        if obs.image_filename != "invisible_wall":
-            continue
-
-        if obs.world_x == 0 and obs.world_y == 0:
-            continue
-
-        rect = pygame.Rect(
-            obs.world_x - world_x,
-            obs.world_y - world_y,
-            obs.image.get_width(),
-            obs.image.get_height()
-        )
-        pygame.draw.rect(screen, black_color, rect)
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -461,8 +398,9 @@ while running:
             ):
                 player_hp -= 20
                 damage_flash_alpha = 255
-                shake_timer = 15
-                shake_magnitude = 5
+                shake_timer = shake_timer_max
+                shake_elapsed = 0.0
+                shake_magnitude = 3
                 bullet.to_remove = True
                 continue
 
@@ -549,26 +487,19 @@ while running:
             0 <= player_center_world_y <= map_height):
             config.combat_state = True
             print("[DEBUG] Combat START!")
-            combat_walls = world.generate_walls(
-                map_width=map_width,
-                map_height=map_height,
-                wall_thickness=wall_thickness * 3,
-                hole_width=hole_width,
-                hole_height=hole_height,
-                left_wall_width=left_wall_width,
-                right_wall_width=right_wall_width,
-                top_wall_height=top_wall_height,
-                bottom_wall_height=bottom_wall_height,
-                north_hole_open=False,
-                south_hole_open=False,
-                west_hole_open=False,
-                east_hole_open=False,
-                expansion=expansion,
-                invisible_wall_filename="combat_invisible_wall"
-            )
-            obstacle_manager.placed_obstacles.extend(combat_walls)
 
             combat_walls_info.clear()
+
+            combat_walls = world.generate_thin_combat_walls(
+                left_wall_width=left_wall_width,
+                top_wall_height=top_wall_height,
+                hole_width=hole_width,
+                hole_height=hole_height,
+                map_width=map_width,
+                map_height=map_height
+            )
+
+            obstacle_manager.combat_obstacles.extend(combat_walls)
 
             shift = 122.22 * PLAYER_VIEW_SCALE
             start_offset = 333.33 * PLAYER_VIEW_SCALE
@@ -597,6 +528,8 @@ while running:
                 "image": scaled_img,
                 "target_pos": (int(north_target_x), int(north_target_y)),
                 "current_pos": (int(north_start_x), int(north_target_y)),
+                "start_pos": (int(north_start_x), int(north_target_y)),
+                "state": "visible",
             })
 
             south_target_x = left_wall_width + (hole_width - scaled_width) / 2
@@ -608,6 +541,8 @@ while running:
                 "image": scaled_img,
                 "target_pos": (int(south_target_x), int(south_target_y)),
                 "current_pos": (int(south_start_x), int(south_target_y)),
+                "start_pos": (int(south_start_x), int(south_target_y)),
+                "state": "visible",
             })
 
             west_target_x = -wall_thickness - expansion + shift + (60 * PLAYER_VIEW_SCALE)
@@ -619,6 +554,8 @@ while running:
                 "image": rotated_img,
                 "target_pos": (int(west_target_x), int(west_target_y)),
                 "current_pos": (int(west_target_x), int(west_start_y)),
+                "start_pos": (int(west_target_x), int(west_start_y)),
+                "state": "visible",
             })
 
             east_target_x = map_width + wall_thickness - shift
@@ -630,6 +567,8 @@ while running:
                 "image": rotated_img,
                 "target_pos": (int(east_target_x), int(east_target_y)),
                 "current_pos": (int(east_target_x), int(east_start_y)),
+                "start_pos": (int(east_target_x), int(east_start_y)),
+                "state": "visible",
             })
 
     if config.combat_state:
@@ -638,12 +577,17 @@ while running:
 
     penetration_total_x = 0.0
 
-    for obs in obstacle_manager.placed_obstacles:
+    if config.combat_state:
+        obstacles_to_check = obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles
+    else:
+        obstacles_to_check = obstacle_manager.static_obstacles
+
+    for obs in obstacles_to_check:
         for c in obs.colliders:
             penetration = c.compute_penetration_circle(
-            (player_center_world_x, player_center_world_y),
-            player_radius,
-            (obs.world_x, obs.world_y)
+                (player_center_world_x, player_center_world_y),
+                player_radius,
+                (obs.world_x, obs.world_y)
             )
             if penetration:
                 penetration_total_x += penetration[0]
@@ -683,7 +627,7 @@ while running:
 
     penetration_total_y = 0.0
 
-    for obs in obstacle_manager.placed_obstacles:
+    for obs in obstacles_to_check:
         for c in obs.colliders:
             penetration = c.compute_penetration_circle(
                 (player_center_world_x, player_center_world_y),
@@ -906,9 +850,13 @@ while running:
         recoil_in_progress = False
         allow_sprint = True
 
+    delta_seconds = clock.get_time() / 1000.0
     if shake_timer > 0:
-        shake_offset_x = random.randint(-shake_magnitude, shake_magnitude)
-        shake_offset_y = random.randint(-shake_magnitude, shake_magnitude)
+        shake_elapsed += delta_seconds
+        ratio = shake_timer / shake_timer_max
+        current_magnitude = shake_magnitude * ratio
+        shake_offset_x = math.sin(shake_elapsed * shake_speed) * current_magnitude
+        shake_offset_y = math.cos(shake_elapsed * shake_speed) * current_magnitude
         shake_timer -= 1
     else:
         shake_offset_x = 0
@@ -941,31 +889,25 @@ while running:
         config.combat_enabled = False
         print("[DEBUG] Combat END. Player can go back to tunnel.")
         for wall in combat_walls:
-            if wall in obstacle_manager.placed_obstacles:
-                obstacle_manager.placed_obstacles.remove(wall)
+            if wall in obstacle_manager.combat_obstacles:
+                obstacle_manager.combat_obstacles.remove(wall)
         combat_walls.clear()
-        combat_walls_info.clear()
+        for info in combat_walls_info:
+            info["state"] = "hiding"
+            info["target_pos"] = info["start_pos"]
 
     screen.fill((0, 0, 0))
 
-    world.draw(
+    world.draw_full(
         screen,
         world_x,
         world_y,
         shake_offset_x,
-        shake_offset_y
+        shake_offset_y,
+        combat_walls_info,
+        obstacle_manager,
+        expansion
     )
-
-    clip_rect = pygame.Rect(
-        -expansion,
-        -expansion,
-        effective_bg_width + expansion * 3,
-        effective_bg_height + expansion * 3
-    )
-    screen.set_clip(clip_rect)
-
-    draw_wall_barriers(screen, world_x - shake_offset_x, world_y - shake_offset_y)
-    draw_invisible_walls(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -1005,12 +947,9 @@ while running:
     )
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
-    for obs in obstacle_manager.placed_obstacles:
+    for obs in obstacles_to_check:
         for c in obs.colliders:
             c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
-
-    screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
-    screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
     hp_bar_width = 300
     hp_bar_height = 30

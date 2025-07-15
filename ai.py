@@ -216,7 +216,7 @@ class Enemy1:
 
         penetration_total = [0.0, 0.0]
 
-        for obs in self.obstacle_manager.placed_obstacles:
+        for obs in self.obstacle_manager.static_obstacles + self.obstacle_manager.combat_obstacles:
             for c in obs.colliders:
                 penetration = c.compute_penetration_circle(
                     (self.world_x, self.world_y),
@@ -296,7 +296,7 @@ class Enemy1:
             test_y = self.world_y + math.sin(angle) * 50
             collided = False
 
-            for obs in self.obstacle_manager.placed_obstacles:
+            for obs in self.obstacle_manager.static_obstacles + self.obstacle_manager.combat_obstacles:
                 for c in obs.colliders:
                     collider_world_center = (
                         obs.world_x + c.center[0],

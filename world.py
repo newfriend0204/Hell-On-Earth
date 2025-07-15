@@ -1,5 +1,6 @@
 import pygame
-from config import SCREEN_HEIGHT, SCREEN_WIDTH
+from config import *
+import config
 import math
 from entities import Obstacle
 from collider import Collider
@@ -219,3 +220,139 @@ class World:
         walls.append(rect_obstacle((expansion, bottom_wall_height), map_width + wall_thickness, map_height - bottom_wall_height))
 
         return walls
+    
+    def draw_wall_barriers(self, screen, world_x, world_y, combat_walls_info):
+            if not config.combat_state and not combat_walls_info:
+                return
+
+            walls_to_remove = []
+
+            for info in combat_walls_info:
+                img = info["image"]
+                tx, ty = info["target_pos"]
+                cx, cy = info["current_pos"]
+
+                smoothing = 0.2
+                new_x = cx + (tx - cx) * smoothing
+                new_y = cy + (ty - cy) * smoothing
+
+                if abs(new_x - tx) < 1 and abs(new_y - ty) < 1:
+                    new_x = tx
+                    new_y = ty
+                    if info.get("state") == "hiding":
+                        walls_to_remove.append(info)
+
+                info["current_pos"] = (new_x, new_y)
+
+                screen_x = new_x - world_x
+                screen_y = new_y - world_y
+                screen.blit(img, (screen_x, screen_y))
+
+            for info in walls_to_remove:
+                combat_walls_info.remove(info)
+
+    def draw_invisible_walls(self, screen, world_x, world_y, obstacle_manager):
+        black_color = (0, 0, 0)
+
+        for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+            if obs.image_filename != "invisible_wall":
+                continue
+
+            if obs.world_x == 0 and obs.world_y == 0:
+                continue
+
+            rect = pygame.Rect(
+                obs.world_x - world_x,
+                obs.world_y - world_y,
+                obs.image.get_width(),
+                obs.image.get_height()
+            )
+            pygame.draw.rect(screen, black_color, rect)
+
+    def draw_full(self, screen, world_x, world_y, shake_offset_x, shake_offset_y,
+                combat_walls_info, obstacle_manager, expansion):
+        self.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+
+        clip_rect = pygame.Rect(
+            -expansion,
+            -expansion,
+            self.effective_bg_width + expansion * 3,
+            self.effective_bg_height + expansion * 3
+        )
+        screen.set_clip(clip_rect)
+
+        self.draw_wall_barriers(screen, world_x - shake_offset_x, world_y - shake_offset_y, combat_walls_info)
+        self.draw_invisible_walls(screen, world_x - shake_offset_x, world_y - shake_offset_y, obstacle_manager)
+
+        screen.set_clip(None)
+
+    def generate_thin_combat_walls(
+        self,
+        left_wall_width,
+        top_wall_height,
+        hole_width,
+        hole_height,
+        map_width,
+        map_height,
+        wall_thickness=10 * PLAYER_VIEW_SCALE
+    ):
+        combat_walls = []
+        thin = wall_thickness
+
+        combat_walls.append(
+            Obstacle(
+                pygame.Surface((hole_width, thin), pygame.SRCALPHA),
+                world_x=left_wall_width,
+                world_y=-thin,
+                colliders=[Collider(
+                    shape="rectangle",
+                    center=(hole_width/2, thin/2),
+                    size=(hole_width, thin),
+                    bullet_passable=False
+                )],
+                image_filename="combat_invisible_wall"
+            )
+        )
+        combat_walls.append(
+            Obstacle(
+                pygame.Surface((hole_width, thin), pygame.SRCALPHA),
+                world_x=left_wall_width,
+                world_y=map_height,
+                colliders=[Collider(
+                    shape="rectangle",
+                    center=(hole_width/2, thin/2),
+                    size=(hole_width, thin),
+                    bullet_passable=False
+                )],
+                image_filename="combat_invisible_wall"
+            )
+        )
+        combat_walls.append(
+            Obstacle(
+                pygame.Surface((thin, hole_height), pygame.SRCALPHA),
+                world_x=-thin,
+                world_y=top_wall_height,
+                colliders=[Collider(
+                    shape="rectangle",
+                    center=(thin/2, hole_height/2),
+                    size=(thin, hole_height),
+                    bullet_passable=False
+                )],
+                image_filename="combat_invisible_wall"
+            )
+        )
+        combat_walls.append(
+            Obstacle(
+                pygame.Surface((thin, hole_height), pygame.SRCALPHA),
+                world_x=map_width,
+                world_y=top_wall_height,
+                colliders=[Collider(
+                    shape="rectangle",
+                    center=(thin/2, hole_height/2),
+                    size=(thin, hole_height),
+                    bullet_passable=False
+                )],
+                image_filename="combat_invisible_wall"
+            )
+        )
+        return combat_walls
