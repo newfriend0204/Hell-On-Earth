@@ -26,10 +26,29 @@ def load_images():
     scale_factor3 = desired_gun3_width / gun3_img.get_width()
     gun3_img = pygame.transform.smoothscale(gun3_img, (int(gun3_img.get_width() * scale_factor3), int(gun3_img.get_height() * scale_factor3)))
 
-    bullet_img = pygame.image.load(path_image("image", "Bullet.png")).convert_alpha()
+    bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
+    desired_width = 60
+    scale_factor = desired_width / bullet1_img.get_width()
+    bullet1_img = pygame.transform.smoothscale(
+        bullet1_img,
+        (
+            int(bullet1_img.get_width() * scale_factor),
+            int(bullet1_img.get_height() * scale_factor)
+        )
+    )
 
-    enemy_bullet_img = pygame.image.load(path_image("image", "Bullet.png")).convert_alpha()
-    enemy_bullet_img = enemy_bullet_img.copy()
+    cartridge_case_img = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
+    desired_width = 5
+    scale_factor = desired_width / cartridge_case_img.get_width()
+    cartridge_case_img = pygame.transform.smoothscale(
+        cartridge_case_img,
+        (
+            int(cartridge_case_img.get_width() * scale_factor),
+            int(cartridge_case_img.get_height() * scale_factor)
+        )
+    )
+
+    enemy_bullet_img = bullet1_img.copy()
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
@@ -88,7 +107,8 @@ def load_images():
         "gun1": gun1_img,
         "gun2": gun2_img,
         "gun3": gun3_img,
-        "bullet": bullet_img,
+        "bullet1": bullet1_img,
+        "cartridge_case1": cartridge_case_img,
         "enemy_bullet": enemy_bullet_img,
         "enemy1": enemy1_img,
         "enemy2": enemy2_img,

@@ -80,6 +80,7 @@ class Enemy1:
         check_circle_collision_fn,
         check_ellipse_circle_collision_fn,
         player_bullet_image,
+        cartridge_image,
         map_width,
         map_height,
         kill_callback=None,
@@ -93,27 +94,27 @@ class Enemy1:
         self.hp = 100
         self.player_bullet_image = player_bullet_image
         self.kill_callback = kill_callback
+        self.cartridge_image = cartridge_image
 
         self.obstacle_manager = obstacle_manager
         self.check_circle_collision = check_circle_collision_fn
         self.check_ellipse_circle_collision = check_ellipse_circle_collision_fn
 
         self.rect = self.image_original.get_rect(center=(0, 0))
-        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
+        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7
 
         self.direction_angle = random.uniform(0, 2 * math.pi)
         self.velocity_x = 0.0
         self.velocity_y = 0.0
 
         self.move_timer = 0
-        self.move_delay = random.randint(500, 1000)
+        self.move_delay = random.randint(600, 1200)
 
         self.shoot_timer = 0
-        self.shoot_delay = random.randint(500, 1500)
+        self.shoot_delay = random.randint(1200, 2000)
 
         self.radius = 30 * PLAYER_VIEW_SCALE
 
-        self.bullets = []
         self.scattered_bullets = []
 
         self.fire_sound = self.sounds["gun1_fire_enemy"]
@@ -268,14 +269,6 @@ class Enemy1:
             self.shoot()
             self.shoot_timer = random.randint(500, 1500)
 
-        for b in self.bullets[:]:
-            b.update(self.obstacle_manager)
-            if getattr(b, "to_remove", False):
-                self.bullets.remove(b)
-                continue
-            if b.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
-                self.bullets.remove(b)
-
         for s in self.scattered_bullets[:]:
             s.update()
             if s.alpha <= 0:
@@ -371,11 +364,11 @@ class Enemy1:
             target_world_y,
             15,
             self.bullet_image,
-            speed=5,
-            max_distance=2000
+            speed=7.5 * PLAYER_VIEW_SCALE,
+            max_distance=2000 * PLAYER_VIEW_SCALE
         )
 
-        self.bullets.append(new_bullet)
+        config.global_enemy_bullets.append(new_bullet)
 
         eject_angle = self.direction_angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
@@ -386,7 +379,7 @@ class Enemy1:
         scatter_y = bullet_world_y
 
         self.scattered_bullets.append(
-            ScatteredBullet(scatter_x, scatter_y, vx, vy, self.player_bullet_image)
+            ScatteredBullet(scatter_x, scatter_y, vx, vy, self.cartridge_image)
         )
 
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
@@ -428,9 +421,6 @@ class Enemy1:
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
-        for b in self.bullets:
-            b.draw(screen, world_x, world_y)
-
 class Enemy2(Enemy1):
     def __init__(
         self,
@@ -445,6 +435,7 @@ class Enemy2(Enemy1):
         check_circle_collision_fn,
         check_ellipse_circle_collision_fn,
         player_bullet_image,
+        cartridge_image,
         map_width,
         map_height,
         kill_callback=None,
@@ -461,15 +452,16 @@ class Enemy2(Enemy1):
             check_circle_collision_fn,
             check_ellipse_circle_collision_fn,
             player_bullet_image,
+            cartridge_image,
             map_width,
             map_height,
             kill_callback,
         )
         self.hp = 150
-        self.speed = 3.5 * PLAYER_VIEW_SCALE
+        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
         self.current_distance = GUN2_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
-        self.shoot_delay = random.randint(700, 1700)
+        self.shoot_delay = random.randint(1500, 3000)
 
         self.is_preparing_far_shot = False
         self.prepare_start_time = 0
@@ -490,8 +482,8 @@ class Enemy2(Enemy1):
         dy = player_world_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
 
-        near_threshold = 150 * PLAYER_VIEW_SCALE
-        far_threshold = 500 * PLAYER_VIEW_SCALE
+        near_threshold = 200 * PLAYER_VIEW_SCALE
+        far_threshold = 700 * PLAYER_VIEW_SCALE
 
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
@@ -507,7 +499,8 @@ class Enemy2(Enemy1):
                     if now >= self.far_shot_timer:
                         self.shoot(
                             spread_angle=0,
-                            fixed_angle=self.fixed_far_shot_angle
+                            fixed_angle=self.fixed_far_shot_angle,
+                            bullet_speed=12.5 * PLAYER_VIEW_SCALE
                         )
                         self.far_shot_step += 1
                         self.far_shot_timer = now + 200
@@ -538,7 +531,7 @@ class Enemy2(Enemy1):
         self.direction_angle = math.atan2(dy, dx)
         super().update(dt, world_x, world_y, player_rect, enemies)
 
-    def shoot(self, spread_angle=20, fixed_angle=None):
+    def shoot(self, spread_angle=20, fixed_angle=None, bullet_speed=None):
         self.fire_sound.play()
 
         self.recoil_offset = 0
@@ -566,11 +559,11 @@ class Enemy2(Enemy1):
             target_world_y,
             spread_angle,
             self.bullet_image,
-            speed=5 * PLAYER_VIEW_SCALE,
+            speed=(bullet_speed if bullet_speed is not None else 7.5 * PLAYER_VIEW_SCALE),
             max_distance=2000 * PLAYER_VIEW_SCALE
         )
 
-        self.bullets.append(new_bullet)
+        config.global_enemy_bullets.append(new_bullet)
 
         eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
@@ -581,7 +574,7 @@ class Enemy2(Enemy1):
         scatter_y = bullet_world_y
 
         self.scattered_bullets.append(
-            ScatteredBullet(scatter_x, scatter_y, vx, vy, self.player_bullet_image)
+            ScatteredBullet(scatter_x, scatter_y, vx, vy, self.cartridge_image)
         )
 
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
@@ -636,6 +629,3 @@ class Enemy2(Enemy1):
         )
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
-
-        for b in self.bullets:
-            b.draw(screen, world_x, world_y)

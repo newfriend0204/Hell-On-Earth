@@ -7,11 +7,7 @@ from config import PLAYER_VIEW_SCALE
 class Bullet:
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
                  spread_angle_degrees, bullet_image, speed=30, max_distance=500):
-        scale_factor = 0.4
-        base_width = int(5 * 5 * scale_factor * PLAYER_VIEW_SCALE)
-        base_height = int(10 * 5 * scale_factor * PLAYER_VIEW_SCALE)
-        size = (max(1, base_width), max(1, base_height))
-        self.original_image = pygame.transform.scale(bullet_image, size)
+        self.original_image = bullet_image
         self.world_x = world_x
         self.world_y = world_y
         self.speed = speed * PLAYER_VIEW_SCALE
@@ -29,10 +25,11 @@ class Bullet:
         self.vy = math.sin(final_angle) * self.speed
         self.angle_degrees = math.degrees(final_angle)
 
+        bullet_radius = bullet_image.get_width() / 2
         self.collider = Collider(
             shape="circle",
             center=(self.world_x, self.world_y),
-            size=5.0
+            size=bullet_radius
         )
 
     def update(self, obstacle_manager):
@@ -47,7 +44,11 @@ class Bullet:
             self.to_remove = True
             return
 
-        for obs in obstacle_manager.placed_obstacles:
+        for obs in (
+            obstacle_manager.placed_obstacles
+            + obstacle_manager.static_obstacles
+            + obstacle_manager.combat_obstacles
+        ):
             for c in obs.colliders:
                 if c.check_collision_circle(
                     self.collider.center,
@@ -62,21 +63,13 @@ class Bullet:
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
 
-        width = max(1, int(self.original_image.get_width() * PLAYER_VIEW_SCALE))
-        height = max(1, int(self.original_image.get_height() * PLAYER_VIEW_SCALE))
-
-        scaled_image = pygame.transform.smoothscale(
-            self.original_image,
-            (width, height)
-        )
-
-        rotated_image = pygame.transform.rotate(scaled_image, -self.angle_degrees - 90)
+        rotated_image = pygame.transform.rotate(self.original_image, -self.angle_degrees)
 
         rect = rotated_image.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_image, rect)
 
     def is_offscreen(self, screen_width, screen_height, world_x, world_y):
-        margin = 2000  # 원하는 값
+        margin = 2000
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
         return (screen_x < -margin or screen_x > screen_width + margin or
@@ -85,16 +78,14 @@ class Bullet:
 
 
 class ScatteredBullet:
-    def __init__(self, x, y, vx, vy, bullet_image):
+    def __init__(self, x, y, vx, vy, bullet_image, scale=1.0):
         self.image_original = pygame.transform.scale(
             bullet_image,
             (
-                max(1, int(3 * PLAYER_VIEW_SCALE)),
-                max(1, int(7 * PLAYER_VIEW_SCALE))
+                max(1, int(3 * PLAYER_VIEW_SCALE * scale)),
+                max(1, int(7 * PLAYER_VIEW_SCALE * scale))
             )
         )
-        angle = math.degrees(math.atan2(vy, vx))
-        self.image_original = pygame.transform.rotate(self.image_original, angle)
         self.image = self.image_original.copy()
 
         self.pos = [x, y]

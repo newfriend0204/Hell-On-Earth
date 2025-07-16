@@ -33,7 +33,8 @@ original_player_image = images["player"]
 original_gun_image_1 = images["gun1"]
 original_gun_image_2 = images["gun2"]
 original_gun_image_3 = images["gun3"]
-original_bullet_image = images["bullet"]
+original_bullet_image = images["bullet1"]
+original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
 background_image = images["background"]
 background_rect = background_image.get_rect()
@@ -251,7 +252,8 @@ for info in CURRENT_MAP["enemy_infos"]:
             obstacle_manager=obstacle_manager,
             check_circle_collision_fn=check_circle_collision,
             check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-            player_bullet_image=images["bullet"],
+            player_bullet_image=images["bullet1"],
+            cartridge_image=images["cartridge_case1"],
             kill_callback=increment_kill_count,
             map_width=map_width,
             map_height=map_height,
@@ -268,7 +270,8 @@ for info in CURRENT_MAP["enemy_infos"]:
             obstacle_manager=obstacle_manager,
             check_circle_collision_fn=check_circle_collision,
             check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-            player_bullet_image=images["bullet"],
+            player_bullet_image=images["bullet1"],
+            cartridge_image=images["cartridge_case1"],
             kill_callback=increment_kill_count,
             map_width=map_width,
             map_height=map_height,
@@ -383,26 +386,6 @@ while running:
                 player_rect=player_rect,
                 enemies=enemies
             )
-
-    for enemy in enemies:
-        for bullet in enemy.bullets[:]:
-            bullet.update(obstacle_manager)
-            if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
-                bullet.to_remove = True
-                continue
-            if check_circle_collision(
-                bullet.collider.center,
-                bullet.collider.size if isinstance(bullet.collider.size, (int, float)) else 5.0,
-                player_center,
-                player_radius
-            ):
-                player_hp -= 20
-                damage_flash_alpha = 255
-                shake_timer = shake_timer_max
-                shake_elapsed = 0.0
-                shake_magnitude = 3
-                bullet.to_remove = True
-                continue
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -794,17 +777,9 @@ while running:
                     scatter_y,
                     vx,
                     vy,
-                    original_bullet_image
+                    original_cartridge_image,
+                    scale=1.5,
                 )
-
-                scatter.image_original = pygame.transform.scale(
-                    original_bullet_image,
-                    (
-                        int(4.5 * PLAYER_VIEW_SCALE),
-                        int(10.5 * PLAYER_VIEW_SCALE)
-                    )
-                )
-                scatter.image = scatter.image_original.copy()
 
                 scattered_bullets.append(scatter)
             else:
@@ -837,7 +812,7 @@ while running:
                 scatter_x = bullet_world_x
                 scatter_y = bullet_world_y
 
-                scattered_bullets.append(ScatteredBullet(scatter_x, scatter_y, vx, vy, original_bullet_image))
+                scattered_bullets.append(ScatteredBullet(scatter_x, scatter_y, vx, vy, original_cartridge_image))
 
             shake_timer = 10
             last_shot_time = current_time
@@ -863,9 +838,6 @@ while running:
         shake_offset_y = 0
 
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
-
-    for enemy in enemies:
-        enemy.bullets = [b for b in enemy.bullets if not getattr(b, "to_remove", False)]
 
     if config.combat_enabled and not config.combat_state:
         for bullet in bullets[:]:
@@ -939,6 +911,35 @@ while running:
 
     for bullet in bullets[:]:
         bullet.update(obstacle_manager)
+        bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    for bullet in config.global_enemy_bullets[:]:
+        bullet.update(obstacle_manager)
+
+        if check_circle_collision(
+            bullet.collider.center,
+            bullet.collider.size if isinstance(bullet.collider.size, (int, float)) else 5.0,
+            player_center,
+            player_radius
+        ):
+            player_hp -= 20
+            damage_flash_alpha = 255
+            shake_timer = shake_timer_max
+            shake_elapsed = 0.0
+            shake_magnitude = 3
+
+            bullet.to_remove = True
+            config.global_enemy_bullets.remove(bullet)
+            continue
+
+        if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
+            config.global_enemy_bullets.remove(bullet)
+            continue
+
+        if getattr(bullet, "to_remove", False):
+            config.global_enemy_bullets.remove(bullet)
+            continue
+
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     player_center_world = (

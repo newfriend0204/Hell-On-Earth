@@ -83,3 +83,5 @@ OBJ_PATHS = {
 
 combat_state = False
 combat_enabled = True
+
+global_enemy_bullets = []

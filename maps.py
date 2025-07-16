@@ -1,5 +1,5 @@
 
-CURRENT_MAP_1 = {
+FIGHT_MAP_1 = {
     "obstacles": [
         {
             "filename": "Pond1.png",
@@ -48,7 +48,7 @@ CURRENT_MAP_1 = {
     }
 }
 
-CURRENT_MAP_2 = {
+FIGHT_MAP_2 = {
     "obstacles": [
         {
             "filename": "FallenLog2.png",
@@ -108,7 +108,7 @@ CURRENT_MAP_2 = {
     }
 }
 
-CURRENT_MAP_3 = {
+FIGHT_MAP_3 = {
     "obstacles": [
         {
             "filename": "FallenLog1.png",
@@ -157,7 +157,7 @@ CURRENT_MAP_3 = {
     }
 }
 
-CURRENT_MAP_4 = {
+FIGHT_MAP_4 = {
     "obstacles": [
         {"filename": "Tree1.png", "x": 200.00, "y": 150.00, "scale": 0.25},
         {"filename": "Tree1.png", "x": 500.00, "y": 100.00, "scale": 0.20},
@@ -183,7 +183,7 @@ CURRENT_MAP_4 = {
     }
 }
 
-CURRENT_MAP_5 = {
+FIGHT_MAP_5 = {
     "obstacles": [
         {"filename": "FallenLog2.png", "x": 134.68, "y": 151.77, "scale": 0.15},
         {"filename": "FallenLog2.png", "x": 404.07, "y": 80.94, "scale": 0.15},
@@ -204,7 +204,7 @@ CURRENT_MAP_5 = {
     }
 }
 
-CURRENT_MAP_6 = {
+FIGHT_MAP_6 = {
     "obstacles": [
         {"filename": "Rock1.png", "x": 200.00, "y": 150.00, "scale": 0.15},
         {"filename": "Rock1.png", "x": 400.00, "y": 150.00, "scale": 0.15},
@@ -230,7 +230,7 @@ CURRENT_MAP_6 = {
     }
 }
 
-CURRENT_MAP_7 = {
+FIGHT_MAP_7 = {
     "obstacles": [
         {"filename": "Pond1.png", "x": 300.00, "y": 200.00, "scale": 0.3},
         {"filename": "Pond2.png", "x": 1000.00, "y": 760.00, "scale": 0.3},
@@ -264,7 +264,7 @@ CURRENT_MAP_7 = {
     }
 }
 
-CURRENT_MAP_8 = {
+FIGHT_MAP_8 = {
     "obstacles": [
         {"filename": "Pond1.png", "x": 560.00, "y": 900.00, "scale": 0.5},
 
@@ -302,12 +302,12 @@ CURRENT_MAP_8 = {
 }
 
 MAPS = [
-    CURRENT_MAP_1,
-    CURRENT_MAP_2,
-    CURRENT_MAP_3,
-    CURRENT_MAP_4,
-    CURRENT_MAP_5,
-    CURRENT_MAP_6,
-    CURRENT_MAP_7,
-    CURRENT_MAP_8
+    FIGHT_MAP_1,
+    FIGHT_MAP_2,
+    FIGHT_MAP_3,
+    FIGHT_MAP_4,
+    FIGHT_MAP_5,
+    FIGHT_MAP_6,
+    FIGHT_MAP_7,
+    FIGHT_MAP_8
 ]
