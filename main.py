@@ -10,10 +10,13 @@ from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
-from world import World
-from maps import MAPS
+from world import World, generate_map, print_grid, get_map_dimensions
+from maps import MAPS, FIGHT_MAPS
 
-CURRENT_MAP = MAPS[7]
+CURRENT_MAP = MAPS[0]
+
+grid = generate_map()
+print_grid(grid)
 
 pygame.init()
 pygame.font.init()
@@ -50,10 +53,38 @@ obstacle_manager = ObstacleManager(
 )
 obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
 
+s_pos = None
+for y, row in enumerate(grid):
+    for x, cell in enumerate(row):
+        if cell == 'S':
+            s_pos = (x, y)
+            break
+    if s_pos:
+        break
+
 north_hole_open = False
-south_hole_open = True
-west_hole_open = True
-east_hole_open = True
+south_hole_open = False
+west_hole_open = False
+east_hole_open = False
+
+sx, sy = s_pos
+WIDTH, HEIGHT = get_map_dimensions()
+
+if sy > 0:
+    if grid[sy - 1][sx] != 'N':
+        north_hole_open = True
+
+if sy < HEIGHT - 1:
+    if grid[sy + 1][sx] != 'N':
+        south_hole_open = True
+
+if sx > 0:
+    if grid[sy][sx - 1] != 'N':
+        west_hole_open = True
+
+if sx < WIDTH - 1:
+    if grid[sy][sx + 1] != 'N':
+        east_hole_open = True
 
 expansion = 350 * PLAYER_VIEW_SCALE
 
@@ -89,8 +120,18 @@ bottom_wall_height = top_wall_height
 world.left_wall_width = left_wall_width
 world.top_wall_height = top_wall_height
 
-spawn_direction = "west"
-player_world_x, player_world_y = world.get_spawn_point(spawn_direction, margin=275)
+if CURRENT_MAP is MAPS[0]:
+    player_world_x, player_world_y = world.get_spawn_point(
+        direction=None,
+        is_start_map=True
+    )
+else:
+    spawn_direction = "west"
+    player_world_x, player_world_y = world.get_spawn_point(
+        spawn_direction,
+        margin=275
+    )
+
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
 
@@ -278,6 +319,12 @@ for info in CURRENT_MAP["enemy_infos"]:
         )
 
     enemies.append(enemy)
+if len(enemies) == 0:
+    config.combat_enabled = False
+    print("[DEBUG] No enemies in map. Combat disabled.")
+else:
+    config.combat_enabled = True
+    print(f"[DEBUG] Enemies in map: {len(enemies)}. Combat enabled.")
 
 while running:
     current_time = pygame.time.get_ticks()

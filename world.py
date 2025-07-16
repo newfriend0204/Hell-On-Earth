@@ -4,6 +4,118 @@ import config
 import math
 from entities import Obstacle
 from collider import Collider
+import random
+
+WIDTH, HEIGHT = 8, 8
+MIN_F_ROOMS = 8
+MAX_F_ROOMS = 8
+
+def manhattan(p1, p2):
+    return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
+
+def get_map_dimensions():
+    return WIDTH, HEIGHT
+
+def find_path(start, end):
+    path = []
+    x, y = start
+    while (x, y) != end:
+        moves = []
+        if x < end[0]:
+            moves.append((x+1, y))
+        elif x > end[0]:
+            moves.append((x-1, y))
+        if y < end[1]:
+            moves.append((x, y+1))
+        elif y > end[1]:
+            moves.append((x, y-1))
+        if not moves:
+            break
+        x, y = random.choice(moves)
+        path.append((x, y))
+    return path
+
+def neighbors(x, y):
+    offsets = [(-1,0),(1,0),(0,-1),(0,1)]
+    return [(x+dx, y+dy) for dx, dy in offsets
+            if 0 <= x+dx < WIDTH and 0 <= y+dy < HEIGHT]
+
+def count_adjacent_fight(grid, ex, ey):
+    count = 0
+    for nx, ny in neighbors(ex, ey):
+        if grid[ny][nx] == 'F':
+            count += 1
+    return count
+
+def generate_map():
+    grid = [['N']*WIDTH for _ in range(HEIGHT)]
+    min_distance = MIN_F_ROOMS - 1
+    max_distance = MAX_F_ROOMS - 1
+
+    while True:
+        sx, sy = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
+        tries = 0
+        while True:
+            ex, ey = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
+            dist = manhattan((sx, sy), (ex, ey))
+            if min_distance <= dist <= max_distance and (sx, sy) != (ex, ey):
+                break
+            tries += 1
+            if tries > 1000:
+                sx, sy = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
+                tries = 0
+
+        path = find_path((sx, sy), (ex, ey))
+        grid = [['N']*WIDTH for _ in range(HEIGHT)]
+        grid[sy][sx] = 'S'
+        grid[ey][ex] = 'E'
+        f_positions = []
+        for px, py in path:
+            if grid[py][px] == 'N':
+                grid[py][px] = 'F'
+                f_positions.append((px, py))
+
+        total_f_needed = max(MIN_F_ROOMS, min(MAX_F_ROOMS, len(f_positions)))
+        total_f_needed = max(total_f_needed, MIN_F_ROOMS)
+
+        if len(f_positions) < total_f_needed:
+            available = []
+            for fx, fy in f_positions:
+                for nx, ny in neighbors(fx, fy):
+                    if grid[ny][nx] == 'N' and (nx, ny) != (ex, ey):
+                        available.append((nx, ny))
+            random.shuffle(available)
+            for nx, ny in available:
+                if len(f_positions) >= total_f_needed:
+                    break
+                grid[ny][nx] = 'F'
+                if count_adjacent_fight(grid, ex, ey) > 1:
+                    grid[ny][nx] = 'N'
+                else:
+                    f_positions.append((nx, ny))
+
+        visited = set()
+        stack = [(sx, sy)]
+        while stack:
+            cx, cy = stack.pop()
+            visited.add((cx, cy))
+            for nx, ny in neighbors(cx, cy):
+                if (nx, ny) not in visited and grid[ny][nx] in ('F', 'E'):
+                    stack.append((nx, ny))
+        all_f_reachable = all(pos in visited for pos in f_positions)
+        if all_f_reachable and len(f_positions) >= MIN_F_ROOMS:
+            break
+    return grid
+
+def print_grid(grid):
+    SYMBOLS = {
+        'N': '⬛',
+        'S': '⬜',
+        'E': '🟥',
+        'F': '🟩',
+    }
+    for row in grid:
+        print("".join(SYMBOLS.get(cell, ' ') for cell in row))
 
 class World:
     def __init__(
@@ -124,7 +236,11 @@ class World:
             (self.crop_surface.get_height() // 2) - (SCREEN_HEIGHT // 2)
         )
     
-    def get_spawn_point(self, direction, margin=0):
+    def get_spawn_point(self, direction, margin=0, is_start_map=False):
+        if is_start_map:
+            x = self.crop_surface.get_width() / 2
+            y = self.crop_surface.get_height() / 2
+            return (x, y)
         if direction == "north":
             x = self.effective_bg_width / 2
             y = -self.tunnel_length + self.PLAYER_VIEW_SCALE * 10 + margin

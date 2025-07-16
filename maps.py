@@ -1,3 +1,21 @@
+START_MAP = {
+    "obstacles":[],
+    "enemy_infos":[],
+    "crop_rect": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.5
+    }
+}
+
+END_MAP = {
+    "obstacles":[],
+    "enemy_infos":[],
+    "crop_rect": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.5
+    }
+}
+
 
 FIGHT_MAP_1 = {
     "obstacles": [
@@ -302,6 +320,11 @@ FIGHT_MAP_8 = {
 }
 
 MAPS = [
+    START_MAP,
+    END_MAP
+]
+
+FIGHT_MAPS = [
     FIGHT_MAP_1,
     FIGHT_MAP_2,
     FIGHT_MAP_3,
