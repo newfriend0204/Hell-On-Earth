@@ -61,6 +61,7 @@ for y, row in enumerate(grid):
             break
     if s_pos:
         break
+current_room_pos = list(s_pos)
 
 north_hole_open = False
 south_hole_open = False
@@ -129,7 +130,7 @@ else:
     spawn_direction = "west"
     player_world_x, player_world_y = world.get_spawn_point(
         spawn_direction,
-        margin=275
+        margin=50
     )
 
 world_x = player_world_x - SCREEN_WIDTH // 2
@@ -226,6 +227,191 @@ damage_flash_fade_speed = 5
 blood_effects = []
 
 kill_count = 0
+
+changing_room = False
+visited_f_rooms = {}
+DIRECTION_OFFSET = {
+    "north": (0, -1),
+    "south": (0, 1),
+    "west": (-1, 0),
+    "east": (1, 0)
+}
+
+SPAWN_FROM_OPPOSITE = {
+    "north": "south",
+    "south": "north",
+    "west": "east",
+    "east": "west"
+}
+
+def change_room(direction):
+    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
+    WIDTH, HEIGHT = get_map_dimensions()
+
+    changing_room = True
+
+    dx, dy = DIRECTION_OFFSET[direction]
+    new_x = current_room_pos[0] + dx
+    new_y = current_room_pos[1] + dy
+
+    if not (0 <= new_x < WIDTH and 0 <= new_y < HEIGHT):
+        print("[DEBUG] 이동 불가: 맵 경계 밖")
+        changing_room = False
+        return
+
+    new_room_type = grid[new_y][new_x]
+    spawn_direction = SPAWN_FROM_OPPOSITE[direction]
+
+    if new_room_type == 'N':
+        print("[DEBUG] 이동 불가: 빈 방")
+        changing_room = False
+        return
+
+    combat_walls_info.clear()
+    combat_walls.clear()
+    obstacle_manager.combat_obstacles.clear()
+
+    if new_room_type == 'F':
+        room_key = (new_x, new_y)
+        if room_key not in visited_f_rooms:
+            fight_map_index = random.randint(0, len(FIGHT_MAPS) - 1)
+            visited_f_rooms[room_key] = {
+                "fight_map_index": fight_map_index,
+                "cleared": False
+            }
+            print(f"[DEBUG] FIGHT_MAP 랜덤 선택: index {fight_map_index}")
+        fight_map_index = visited_f_rooms[room_key]["fight_map_index"]
+        CURRENT_MAP = FIGHT_MAPS[fight_map_index]
+
+        if visited_f_rooms[room_key]["cleared"]:
+            CURRENT_MAP = {
+                "obstacles": CURRENT_MAP["obstacles"],
+                "enemy_infos": [],
+                "crop_rect": CURRENT_MAP["crop_rect"]
+            }
+    else:
+        CURRENT_MAP = MAPS[0]
+
+    current_room_pos = [new_x, new_y]
+    sx, sy = new_x, new_y
+    WIDTH, HEIGHT = get_map_dimensions()
+
+    north_hole_open = (sy > 0 and grid[sy - 1][sx] != 'N')
+    south_hole_open = (sy < HEIGHT - 1 and grid[sy + 1][sx] != 'N')
+    west_hole_open = (sx > 0 and grid[sy][sx - 1] != 'N')
+    east_hole_open = (sx < WIDTH - 1 and grid[sy][sx + 1] != 'N')
+
+    new_world = World(
+        background_image=background_image,
+        crop_rect=CURRENT_MAP.get("crop_rect"),
+        PLAYER_VIEW_SCALE=PLAYER_VIEW_SCALE,
+        BG_WIDTH=BG_WIDTH,
+        BG_HEIGHT=BG_HEIGHT,
+        hole_width=hole_width,
+        hole_height=hole_height,
+        left_wall_width=0,
+        top_wall_height=0,
+        tunnel_length=10000 * PLAYER_VIEW_SCALE
+    )
+
+    map_width = new_world.effective_bg_width
+    map_height = new_world.effective_bg_height
+
+    left_wall_width = (map_width / 2) - (hole_width / 2)
+    right_wall_width = left_wall_width
+    top_wall_height = (map_height / 2) - (hole_height / 2)
+    bottom_wall_height = top_wall_height
+
+    new_world.left_wall_width = left_wall_width
+    new_world.top_wall_height = top_wall_height
+
+    player_center_x = player_rect.centerx
+    player_center_y = player_rect.centery
+
+    spawn_world_x, spawn_world_y = new_world.get_spawn_point(
+        direction=spawn_direction,
+        margin=50
+    )
+
+    world = new_world
+    world_x = spawn_world_x - player_center_x
+    world_y = spawn_world_y - player_center_y
+
+    global effective_bg_width, effective_bg_height
+    effective_bg_width = world.effective_bg_width
+    effective_bg_height = world.effective_bg_height
+
+    walls = world.generate_walls(
+        map_width=map_width,
+        map_height=map_height,
+        wall_thickness=wall_thickness,
+        hole_width=hole_width,
+        hole_height=hole_height,
+        left_wall_width=left_wall_width,
+        right_wall_width=right_wall_width,
+        top_wall_height=top_wall_height,
+        bottom_wall_height=bottom_wall_height,
+        north_hole_open=north_hole_open,
+        south_hole_open=south_hole_open,
+        west_hole_open=west_hole_open,
+        east_hole_open=east_hole_open,
+        expansion=expansion
+    )
+    obstacle_manager.static_obstacles = [w for w in obstacle_manager.static_obstacles if w.image_filename != "invisible_wall"]
+    obstacle_manager.static_obstacles.extend(walls)
+
+    enemies = []
+    for info in CURRENT_MAP["enemy_infos"]:
+        ex = info["x"] * PLAYER_VIEW_SCALE
+        ey = info["y"] * PLAYER_VIEW_SCALE
+        enemy_type = info["enemy_type"]
+
+        if enemy_type == "enemy2":
+            enemy = Enemy2(
+                world_x=ex,
+                world_y=ey,
+                image=images["enemy2"],
+                gun_image=images["gun2"],
+                bullet_image=images["enemy_bullet"],
+                sounds=sounds,
+                get_player_center_world_fn=get_player_center_world,
+                obstacle_manager=obstacle_manager,
+                check_circle_collision_fn=check_circle_collision,
+                check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
+                player_bullet_image=images["bullet1"],
+                cartridge_image=images["cartridge_case1"],
+                kill_callback=increment_kill_count,
+                map_width=map_width,
+                map_height=map_height
+            )
+        else:
+            enemy = Enemy1(
+                world_x=ex,
+                world_y=ey,
+                image=images["enemy1"],
+                gun_image=images["gun1"],
+                bullet_image=images["enemy_bullet"],
+                sounds=sounds,
+                get_player_center_world_fn=get_player_center_world,
+                obstacle_manager=obstacle_manager,
+                check_circle_collision_fn=check_circle_collision,
+                check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
+                player_bullet_image=images["bullet1"],
+                cartridge_image=images["cartridge_case1"],
+                kill_callback=increment_kill_count,
+                map_width=map_width,
+                map_height=map_height
+            )
+        enemies.append(enemy)
+
+    if len(CURRENT_MAP["enemy_infos"]) == 0:
+        config.combat_state = False
+        config.combat_enabled = False
+    else:
+        config.combat_state = False
+        config.combat_enabled = True
+
+    pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
 def increment_kill_count():
     global kill_count
@@ -333,6 +519,9 @@ while running:
     for event in events:
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.USEREVENT + 1:
+            changing_room = False
+            pygame.time.set_timer(pygame.USEREVENT + 1, 0)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
                 move_up = True
@@ -391,6 +580,25 @@ while running:
                     change_animation_timer = 0.0
                     previous_distance = current_distance
                     target_distance = GUN3_DISTANCE_FROM_CENTER
+            elif event.key == pygame.K_q:
+                print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
+                for enemy in enemies[:]:
+                    if enemy.alive:
+                        enemy.hit(9999, blood_effects)  # 강제로 사망시킴
+                        enemies.remove(enemy)
+                        blood_effects.append(ScatteredBlood(enemy.world_x, enemy.world_y))
+
+                config.combat_state = False
+                config.combat_enabled = False
+
+                for wall in combat_walls:
+                    if wall in obstacle_manager.combat_obstacles:
+                        obstacle_manager.combat_obstacles.remove(wall)
+                combat_walls.clear()
+
+                for info in combat_walls_info:
+                    info["state"] = "hiding"
+                    info["target_pos"] = info["start_pos"]
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_w:
                 move_up = False
@@ -410,6 +618,10 @@ while running:
     if paused:
         renderer.handle_events(events)
         renderer.render_model(clock)
+        clock.tick(60)
+        continue
+
+    if changing_room:
         clock.tick(60)
         continue
 
@@ -1085,6 +1297,21 @@ while running:
         if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
             bullet.to_remove = True
             continue
+    
+    if not changing_room:
+        if world_x <= -half_screen_width - expansion:
+            print("[DEBUG] Changing room to west")
+            change_room("west")
+        elif world_x >= effective_bg_width - half_screen_width + expansion:
+            print("[DEBUG] Changing room to east")
+            change_room("east")
+
+        if world_y <= -half_screen_height - expansion:
+            print("[DEBUG] Changing room to north")
+            change_room("north")
+        elif world_y >= effective_bg_height - half_screen_height + expansion:
+            print("[DEBUG] Changing room to south")
+            change_room("south")
 
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))

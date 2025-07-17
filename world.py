@@ -237,25 +237,25 @@ class World:
         )
     
     def get_spawn_point(self, direction, margin=0, is_start_map=False):
-        if is_start_map:
-            x = self.crop_surface.get_width() / 2
-            y = self.crop_surface.get_height() / 2
-            return (x, y)
+        if is_start_map or direction is None:
+            return (self.effective_bg_width / 2, self.effective_bg_height / 2)
+
         if direction == "north":
-            x = self.effective_bg_width / 2
-            y = -self.tunnel_length + self.PLAYER_VIEW_SCALE * 10 + margin
+            x = self.left_wall_width + self.hole_width / 2
+            y = -margin
         elif direction == "south":
-            x = self.effective_bg_width / 2
-            y = self.effective_bg_height + self.PLAYER_VIEW_SCALE * 10 + margin
+            x = self.left_wall_width + self.hole_width / 2
+            y = self.effective_bg_height + margin
         elif direction == "west":
-            x = -self.tunnel_length + self.PLAYER_VIEW_SCALE * 10 + margin
-            y = self.effective_bg_height / 2
+            x = -margin
+            y = self.top_wall_height + self.hole_height / 2
         elif direction == "east":
-            x = self.effective_bg_width + self.PLAYER_VIEW_SCALE * 10 + margin
-            y = self.effective_bg_height / 2
+            x = self.effective_bg_width + margin
+            y = self.top_wall_height + self.hole_height / 2
         else:
             x = self.effective_bg_width / 2
             y = self.effective_bg_height / 2
+
         return (x, y)
 
     def generate_walls(self, map_width, map_height, wall_thickness, 
