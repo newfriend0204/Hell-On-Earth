@@ -330,7 +330,7 @@ def change_room(direction):
 
     spawn_world_x, spawn_world_y = new_world.get_spawn_point(
         direction=spawn_direction,
-        margin=50
+        margin=275
     )
 
     world = new_world
@@ -636,15 +636,15 @@ while running:
                     world_y + player_rect.centery)
     
     #적 바보 만들기
-    for enemy in enemies:
-        if config.combat_state:
-            enemy.update(
-                dt=delta_time,
-                world_x=world_x,
-                world_y=world_y,
-                player_rect=player_rect,
-                enemies=enemies
-            )
+    # for enemy in enemies:
+    #     if config.combat_state:
+    #         enemy.update(
+    #             dt=delta_time,
+    #             world_x=world_x,
+    #             world_y=world_y,
+    #             player_rect=player_rect,
+    #             enemies=enemies
+    #         )
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -725,44 +725,44 @@ while running:
     player_center_world_y = world_y + player_rect.centery
 
     if config.combat_enabled and not config.combat_state:
-        if (0 <= player_center_world_x <= map_width and
-            0 <= player_center_world_y <= map_height):
+        if (0 <= player_center_world_x <= effective_bg_width and
+            0 <= player_center_world_y <= effective_bg_height):
             config.combat_state = True
             print("[DEBUG] Combat START!")
 
             combat_walls_info.clear()
 
+            # 전투 충돌용 투명벽 생성
             combat_walls = world.generate_thin_combat_walls(
                 left_wall_width=left_wall_width,
                 top_wall_height=top_wall_height,
                 hole_width=hole_width,
-                hole_height=hole_height,
-                map_width=map_width,
-                map_height=map_height
+                hole_height=hole_height
             )
-
             obstacle_manager.combat_obstacles.extend(combat_walls)
 
-            shift = 122.22 * PLAYER_VIEW_SCALE
-            start_offset = 333.33 * PLAYER_VIEW_SCALE
+            # 정중앙 정렬 보정값
+            adjust_x = (effective_bg_width - hole_width) / 2 - left_wall_width
+            adjust_y = (effective_bg_height - hole_height) / 2 - top_wall_height
+
+            shift = effective_bg_width * 0.075
+            start_offset = effective_bg_width * 0.2
 
             scaled_img = images["wall_barrier"]
             rotated_img = images["wall_barrier_rotated"]
 
             scaled_width = scaled_img.get_width()
             scaled_height = scaled_img.get_height()
-
             rotated_width = rotated_img.get_width()
             rotated_height = rotated_img.get_height()
 
-            black_rect_surface = pygame.Surface((scaled_width, scaled_height))
-            black_rect_surface.fill((0, 0, 0))
+            # 중앙 좌표 계산
+            center_x = left_wall_width + adjust_x + (hole_width / 2)
+            center_y = top_wall_height + adjust_y + (hole_height / 2)
 
-            black_rect_surface_rotated = pygame.Surface((rotated_width, rotated_height))
-            black_rect_surface_rotated.fill((0, 0, 0))
-
-            north_target_x = left_wall_width + (hole_width - scaled_width) / 2
-            north_target_y = -wall_thickness - expansion + shift + (60 * PLAYER_VIEW_SCALE)
+            # ⬆️ North Wall
+            north_target_x = center_x - (scaled_width / 2)
+            north_target_y = 0 - wall_thickness + shift
             north_start_x = north_target_x - start_offset
 
             combat_walls_info.append({
@@ -774,8 +774,9 @@ while running:
                 "state": "visible",
             })
 
-            south_target_x = left_wall_width + (hole_width - scaled_width) / 2
-            south_target_y = map_height + wall_thickness - shift
+            # ⬇️ South Wall
+            south_target_x = center_x - (scaled_width / 2)
+            south_target_y = effective_bg_height + wall_thickness - shift
             south_start_x = south_target_x + start_offset
 
             combat_walls_info.append({
@@ -787,8 +788,9 @@ while running:
                 "state": "visible",
             })
 
-            west_target_x = -wall_thickness - expansion + shift + (60 * PLAYER_VIEW_SCALE)
-            west_target_y = top_wall_height + (hole_height - rotated_height) / 2
+            # ⬅️ West Wall
+            west_target_x = 0 - wall_thickness + shift
+            west_target_y = center_y - (rotated_height / 2)
             west_start_y = west_target_y - start_offset
 
             combat_walls_info.append({
@@ -800,8 +802,9 @@ while running:
                 "state": "visible",
             })
 
-            east_target_x = map_width + wall_thickness - shift
-            east_target_y = top_wall_height + (hole_height - rotated_height) / 2
+            # ➡️ East Wall
+            east_target_x = effective_bg_width + wall_thickness - shift
+            east_target_y = center_y - (rotated_height / 2)
             east_start_y = east_target_y + start_offset
 
             combat_walls_info.append({
@@ -812,10 +815,6 @@ while running:
                 "start_pos": (int(east_target_x), int(east_start_y)),
                 "state": "visible",
             })
-
-    if config.combat_state:
-        player_center_world_x = max(0, min(player_center_world_x, map_width))
-        player_center_world_y = max(0, min(player_center_world_y, map_height))
 
     penetration_total_x = 0.0
 

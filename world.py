@@ -408,67 +408,52 @@ class World:
         top_wall_height,
         hole_width,
         hole_height,
-        map_width,
-        map_height,
         wall_thickness=10 * PLAYER_VIEW_SCALE
     ):
-        combat_walls = []
         thin = wall_thickness
+        effective_width = self.effective_bg_width
+        effective_height = self.effective_bg_height
 
-        combat_walls.append(
-            Obstacle(
-                pygame.Surface((hole_width, thin), pygame.SRCALPHA),
-                world_x=left_wall_width,
-                world_y=-thin,
-                colliders=[Collider(
-                    shape="rectangle",
-                    center=(hole_width/2, thin/2),
-                    size=(hole_width, thin),
-                    bullet_passable=False
-                )],
-                image_filename="combat_invisible_wall"
-            )
-        )
-        combat_walls.append(
-            Obstacle(
-                pygame.Surface((hole_width, thin), pygame.SRCALPHA),
-                world_x=left_wall_width,
-                world_y=map_height,
-                colliders=[Collider(
-                    shape="rectangle",
-                    center=(hole_width/2, thin/2),
-                    size=(hole_width, thin),
-                    bullet_passable=False
-                )],
-                image_filename="combat_invisible_wall"
-            )
-        )
-        combat_walls.append(
-            Obstacle(
-                pygame.Surface((thin, hole_height), pygame.SRCALPHA),
-                world_x=-thin,
-                world_y=top_wall_height,
-                colliders=[Collider(
-                    shape="rectangle",
-                    center=(thin/2, hole_height/2),
-                    size=(thin, hole_height),
-                    bullet_passable=False
-                )],
-                image_filename="combat_invisible_wall"
-            )
-        )
-        combat_walls.append(
-            Obstacle(
-                pygame.Surface((thin, hole_height), pygame.SRCALPHA),
-                world_x=map_width,
-                world_y=top_wall_height,
-                colliders=[Collider(
-                    shape="rectangle",
-                    center=(thin/2, hole_height/2),
-                    size=(thin, hole_height),
-                    bullet_passable=False
-                )],
-                image_filename="combat_invisible_wall"
-            )
-        )
+        # 조정값: 중앙 정렬용
+        adjust_x = (effective_width - hole_width) / 2 - left_wall_width
+        adjust_y = (effective_height - hole_height) / 2 - top_wall_height
+
+        combat_walls = []
+
+        # NORTH
+        combat_walls.append(Obstacle(
+            pygame.Surface((hole_width, thin), pygame.SRCALPHA),
+            world_x=left_wall_width + adjust_x,
+            world_y=0 - thin,
+            colliders=[Collider("rectangle", (hole_width / 2, thin / 2), (hole_width, thin), False)],
+            image_filename="combat_invisible_wall"
+        ))
+
+        # SOUTH
+        combat_walls.append(Obstacle(
+            pygame.Surface((hole_width, thin), pygame.SRCALPHA),
+            world_x=left_wall_width + adjust_x,
+            world_y=effective_height,
+            colliders=[Collider("rectangle", (hole_width / 2, thin / 2), (hole_width, thin), False)],
+            image_filename="combat_invisible_wall"
+        ))
+
+        # WEST
+        combat_walls.append(Obstacle(
+            pygame.Surface((thin, hole_height), pygame.SRCALPHA),
+            world_x=0 - thin,
+            world_y=top_wall_height + adjust_y,
+            colliders=[Collider("rectangle", (thin / 2, hole_height / 2), (thin, hole_height), False)],
+            image_filename="combat_invisible_wall"
+        ))
+
+        # EAST
+        combat_walls.append(Obstacle(
+            pygame.Surface((thin, hole_height), pygame.SRCALPHA),
+            world_x=effective_width,
+            world_y=top_wall_height + adjust_y,
+            colliders=[Collider("rectangle", (thin / 2, hole_height / 2), (thin, hole_height), False)],
+            image_filename="combat_invisible_wall"
+        ))
+
         return combat_walls
