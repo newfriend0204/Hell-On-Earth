@@ -301,6 +301,9 @@ def change_room(direction):
     west_hole_open = (sx > 0 and grid[sy][sx - 1] != 'N')
     east_hole_open = (sx < WIDTH - 1 and grid[sy][sx + 1] != 'N')
 
+    obstacle_manager.static_obstacles.clear()
+    obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
+
     new_world = World(
         background_image=background_image,
         crop_rect=CURRENT_MAP.get("crop_rect"),
@@ -359,6 +362,14 @@ def change_room(direction):
     )
     obstacle_manager.static_obstacles = [w for w in obstacle_manager.static_obstacles if w.image_filename != "invisible_wall"]
     obstacle_manager.static_obstacles.extend(walls)
+
+    bullets.clear()
+    scattered_bullets.clear()
+    blood_effects.clear()
+    config.global_enemy_bullets.clear()
+    for enemy in enemies:
+        if hasattr(enemy, "scattered_bullets"):
+            enemy.scattered_bullets.clear()
 
     enemies = []
     for info in CURRENT_MAP["enemy_infos"]:
@@ -431,6 +442,13 @@ def check_ellipse_circle_collision(circle_center, circle_radius, ellipse_center,
            (dy ** 2) / ((ry + circle_radius) ** 2)
     return test <= 1.0
 
+
+def get_player_center_world(world_x, world_y):
+    return (
+        world_x + player_rect.centerx,
+        world_y + player_rect.centery
+    )
+
 def fade_out(screen, duration, step_delay):
     overlay = pygame.Surface(screen.get_size())
     overlay.fill((0, 0, 0))
@@ -455,11 +473,100 @@ def fade_in(screen, duration, step_delay):
         pygame.display.flip()
         clock.tick(1 / step_delay)
 
-def get_player_center_world(world_x, world_y):
-    return (
-        world_x + player_rect.centerx,
-        world_y + player_rect.centery
-    )
+def make_swipe_gradient(width, height, horizontal=True, reverse=False):
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    for i in range(width if horizontal else height):
+        alpha = int(255 * (i / (width-1 if horizontal else height-1)))
+        if reverse:
+            alpha = 255 - alpha
+        if horizontal:
+            pygame.draw.rect(overlay, (0, 0, 0, alpha), (i, 0, 1, height))
+        else:
+            pygame.draw.rect(overlay, (0, 0, 0, alpha), (0, i, width, 1))
+    return overlay
+
+def swipe_transition(screen, old_surface, new_surface, direction="right", duration=0.45, fps=60):
+    width, height = screen.get_size()
+    frames = int(duration * fps)
+    clock = pygame.time.Clock()
+    horizontal = direction in ("left", "right")
+    reverse = direction in ("left", "up")
+    overlay = make_swipe_gradient(width, height, horizontal=horizontal, reverse=reverse)
+    for i in range(frames + 1):
+        t = i / frames
+        offset = int((width if horizontal else height) * t)
+        screen.fill((0,0,0))
+        # **진입**
+        if direction == "right":
+            screen.blit(new_surface, (0,0))
+            screen.blit(overlay, (-width + offset, 0))
+        elif direction == "left":
+            screen.blit(new_surface, (0,0))
+            screen.blit(overlay, (width - offset, 0))
+        elif direction == "down":
+            screen.blit(new_surface, (0,0))
+            screen.blit(overlay, (0, -height + offset))
+        elif direction == "up":
+            screen.blit(new_surface, (0,0))
+            screen.blit(overlay, (0, height - offset))
+        pygame.display.flip()
+        clock.tick(fps)
+
+def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="right", duration=0.5, fps=60):
+    width, height = screen.get_size()
+    frames = int(duration * fps // 2)
+    clock = pygame.time.Clock()
+    # 진입: 커튼 덮기 (ease-out)
+    for i in range(frames+1):
+        t = i / frames
+        t_eased = 1 - (1 - t) * (1 - t)  # ease-out 수식
+        if direction in ("left", "right"):
+            x = int(width * t_eased)
+            if direction == "right":
+                screen.blit(old_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,0,x,height))
+            else:
+                screen.blit(old_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (width-x,0,x,height))
+        else:
+            y = int(height * t_eased)
+            if direction == "down":
+                screen.blit(old_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,0,width,y))
+            else:
+                screen.blit(old_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,height-y,width,y))
+        pygame.display.flip()
+        clock.tick(fps)
+
+    draw_new_room_fn()
+    new_surface = screen.copy()
+    screen.fill((0,0,0))
+    pygame.display.flip()
+    pygame.time.delay(100)  # 정지
+
+    # 퇴장: 커튼 열기 (ease-in)
+    for i in range(frames+1):
+        t = i / frames
+        t_eased = t * t  # ease-in 수식
+        if direction in ("left", "right"):
+            x = int(width * t_eased)
+            if direction == "right":
+                screen.blit(new_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (x,0,width-x,height))
+            else:
+                screen.blit(new_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,0,width-x,height))
+        else:
+            y = int(height * t_eased)
+            if direction == "down":
+                screen.blit(new_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,y,width,height-y))
+            else:
+                screen.blit(new_surface, (0,0))
+                pygame.draw.rect(screen, (0,0,0), (0,0,width,height-y))
+        pygame.display.flip()
+        clock.tick(fps)
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -636,15 +743,15 @@ while running:
                     world_y + player_rect.centery)
     
     #적 바보 만들기
-    # for enemy in enemies:
-    #     if config.combat_state:
-    #         enemy.update(
-    #             dt=delta_time,
-    #             world_x=world_x,
-    #             world_y=world_y,
-    #             player_rect=player_rect,
-    #             enemies=enemies
-    #         )
+    for enemy in enemies:
+        if config.combat_state:
+            enemy.update(
+                dt=delta_time,
+                world_x=world_x,
+                world_y=world_y,
+                player_rect=player_rect,
+                enemies=enemies
+            )
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -732,21 +839,8 @@ while running:
 
             combat_walls_info.clear()
 
-            # 전투 충돌용 투명벽 생성
-            combat_walls = world.generate_thin_combat_walls(
-                left_wall_width=left_wall_width,
-                top_wall_height=top_wall_height,
-                hole_width=hole_width,
-                hole_height=hole_height
-            )
-            obstacle_manager.combat_obstacles.extend(combat_walls)
-
-            # 정중앙 정렬 보정값
             adjust_x = (effective_bg_width - hole_width) / 2 - left_wall_width
             adjust_y = (effective_bg_height - hole_height) / 2 - top_wall_height
-
-            shift = effective_bg_width * 0.075
-            start_offset = effective_bg_width * 0.2
 
             scaled_img = images["wall_barrier"]
             rotated_img = images["wall_barrier_rotated"]
@@ -756,65 +850,82 @@ while running:
             rotated_width = rotated_img.get_width()
             rotated_height = rotated_img.get_height()
 
-            # 중앙 좌표 계산
             center_x = left_wall_width + adjust_x + (hole_width / 2)
             center_y = top_wall_height + adjust_y + (hole_height / 2)
 
-            # ⬆️ North Wall
-            north_target_x = center_x - (scaled_width / 2)
-            north_target_y = 0 - wall_thickness + shift
-            north_start_x = north_target_x - start_offset
+            # 미세 보정값 (필요시 실험)
+            offset_x = -0.5
+            offset_y = -0.5
+
+            WALL_SPAWN_OFFSET_FACTOR = 1.2
+
+            # 북쪽
+            north_target_x = center_x - scaled_width / 2 + offset_x
+            north_target_y = 0 - wall_thickness + offset_y - 155
+            north_start_x = north_target_x - scaled_width
+            north_start_y = north_target_y
 
             combat_walls_info.append({
                 "side": "north",
                 "image": scaled_img,
                 "target_pos": (int(north_target_x), int(north_target_y)),
-                "current_pos": (int(north_start_x), int(north_target_y)),
-                "start_pos": (int(north_start_x), int(north_target_y)),
+                "current_pos": (int(north_start_x), int(north_start_y)),
+                "start_pos": (int(north_start_x), int(north_start_y)),
                 "state": "visible",
             })
 
-            # ⬇️ South Wall
-            south_target_x = center_x - (scaled_width / 2)
-            south_target_y = effective_bg_height + wall_thickness - shift
-            south_start_x = south_target_x + start_offset
-
-            combat_walls_info.append({
-                "side": "south",
-                "image": scaled_img,
-                "target_pos": (int(south_target_x), int(south_target_y)),
-                "current_pos": (int(south_start_x), int(south_target_y)),
-                "start_pos": (int(south_start_x), int(south_target_y)),
-                "state": "visible",
-            })
-
-            # ⬅️ West Wall
-            west_target_x = 0 - wall_thickness + shift
-            west_target_y = center_y - (rotated_height / 2)
-            west_start_y = west_target_y - start_offset
+            # 서쪽
+            west_target_x = 0 - wall_thickness + offset_x - 155
+            west_target_y = center_y - rotated_height / 2 + offset_y
+            west_start_x = west_target_x
+            west_start_y = west_target_y - rotated_height
 
             combat_walls_info.append({
                 "side": "west",
                 "image": rotated_img,
                 "target_pos": (int(west_target_x), int(west_target_y)),
-                "current_pos": (int(west_target_x), int(west_start_y)),
-                "start_pos": (int(west_target_x), int(west_start_y)),
+                "current_pos": (int(west_start_x), int(west_start_y)),
+                "start_pos": (int(west_start_x), int(west_start_y)),
                 "state": "visible",
             })
 
-            # ➡️ East Wall
-            east_target_x = effective_bg_width + wall_thickness - shift
-            east_target_y = center_y - (rotated_height / 2)
-            east_start_y = east_target_y + start_offset
+            # 남쪽
+            south_target_x = center_x - scaled_width / 2 + offset_x
+            south_target_y = effective_bg_height + offset_y - 95
+            south_start_x = south_target_x + scaled_width
+            south_start_y = south_target_y
+
+            combat_walls_info.append({
+                "side": "south",
+                "image": scaled_img,
+                "target_pos": (int(south_target_x), int(south_target_y)),
+                "current_pos": (int(south_start_x), int(south_start_y)),
+                "start_pos": (int(south_start_x), int(south_start_y)),
+                "state": "visible",
+            })
+
+            # 동쪽
+            east_target_x = effective_bg_width + offset_x - 95
+            east_target_y = center_y - rotated_height / 2 + offset_y
+            east_start_x = east_target_x
+            east_start_y = east_target_y + rotated_height
 
             combat_walls_info.append({
                 "side": "east",
                 "image": rotated_img,
                 "target_pos": (int(east_target_x), int(east_target_y)),
-                "current_pos": (int(east_target_x), int(east_start_y)),
-                "start_pos": (int(east_target_x), int(east_start_y)),
+                "current_pos": (int(east_start_x), int(east_start_y)),
+                "start_pos": (int(east_start_x), int(east_start_y)),
                 "state": "visible",
             })
+
+            combat_walls = world.generate_thin_combat_walls(
+                left_wall_width=left_wall_width,
+                top_wall_height=top_wall_height,
+                hole_width=hole_width,
+                hole_height=hole_height
+            )
+            obstacle_manager.combat_obstacles.extend(combat_walls)
 
     penetration_total_x = 0.0
 
@@ -1097,23 +1208,6 @@ while running:
 
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
 
-    if config.combat_enabled and not config.combat_state:
-        for bullet in bullets[:]:
-            bx, by = bullet.collider.center
-            if (-expansion <= bx <= map_width + expansion and
-                -expansion <= by <= map_height + expansion):
-                if (0 <= bx <= map_width and
-                    0 <= by <= map_height):
-                    bullet.to_remove = True
-            else:
-                bullet.to_remove = True
-
-    if config.combat_state:
-        for bullet in bullets[:]:
-            if not (0 <= bullet.collider.center[0] <= map_width and
-                    0 <= bullet.collider.center[1] <= map_height):
-                bullet.to_remove = True
-
     if config.combat_state and all(not enemy.alive for enemy in enemies):
         config.combat_state = False
         config.combat_enabled = False
@@ -1298,19 +1392,32 @@ while running:
             continue
     
     if not changing_room:
+        slide_direction = None
         if world_x <= -half_screen_width - expansion:
-            print("[DEBUG] Changing room to west")
-            change_room("west")
+            slide_direction = "right"
+            next_dir = "west"
         elif world_x >= effective_bg_width - half_screen_width + expansion:
-            print("[DEBUG] Changing room to east")
-            change_room("east")
-
-        if world_y <= -half_screen_height - expansion:
-            print("[DEBUG] Changing room to north")
-            change_room("north")
+            slide_direction = "left"
+            next_dir = "east"
+        elif world_y <= -half_screen_height - expansion:
+            slide_direction = "down"
+            next_dir = "north"
         elif world_y >= effective_bg_height - half_screen_height + expansion:
-            print("[DEBUG] Changing room to south")
-            change_room("south")
+            slide_direction = "up"
+            next_dir = "south"
+        else:
+            slide_direction = None
+
+    if slide_direction:
+        def draw_new_room():
+            change_room(next_dir)
+            world.draw_full(
+                screen, world_x, world_y, shake_offset_x, shake_offset_y,
+                combat_walls_info, obstacle_manager, expansion
+            )
+        old_surface = screen.copy()
+        swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
+        continue
 
     screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
