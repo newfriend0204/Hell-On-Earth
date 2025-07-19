@@ -246,8 +246,9 @@ SPAWN_FROM_OPPOSITE = {
 
 def change_room(direction):
     global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
-    WIDTH, HEIGHT = get_map_dimensions()
+    global effective_bg_width, effective_bg_height
 
+    WIDTH, HEIGHT = get_map_dimensions()
     changing_room = True
 
     dx, dy = DIRECTION_OFFSET[direction]
@@ -266,6 +267,13 @@ def change_room(direction):
         print("[DEBUG] 이동 불가: 빈 방")
         changing_room = False
         return
+
+    curr_center_x = effective_bg_width / 2
+    curr_center_y = effective_bg_height / 2
+    player_world_x = world_x + player_rect.centerx
+    player_world_y = world_y + player_rect.centery
+    dx_from_center = player_world_x - curr_center_x
+    dy_from_center = player_world_y - curr_center_y
 
     combat_walls_info.clear()
     combat_walls.clear()
@@ -336,11 +344,15 @@ def change_room(direction):
         margin=275
     )
 
+    if direction in ("west", "east"):
+        spawn_world_y += dy_from_center
+    else:
+        spawn_world_x += dx_from_center
+
     world = new_world
     world_x = spawn_world_x - player_center_x
     world_y = spawn_world_y - player_center_y
 
-    global effective_bg_width, effective_bg_height
     effective_bg_width = world.effective_bg_width
     effective_bg_height = world.effective_bg_height
 
@@ -491,12 +503,11 @@ def swipe_transition(screen, old_surface, new_surface, direction="right", durati
     clock = pygame.time.Clock()
     horizontal = direction in ("left", "right")
     reverse = direction in ("left", "up")
-    overlay = make_swipe_gradient(width, height, horizontal=horizontal, reverse=reverse)
+    overlay = make_soft_curtain(width, height, horizontal=(direction in ("left", "right")), direction=direction)
     for i in range(frames + 1):
         t = i / frames
         offset = int((width if horizontal else height) * t)
         screen.fill((0,0,0))
-        # **진입**
         if direction == "right":
             screen.blit(new_surface, (0,0))
             screen.blit(overlay, (-width + offset, 0))
@@ -516,55 +527,204 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
     width, height = screen.get_size()
     frames = int(duration * fps // 2)
     clock = pygame.time.Clock()
-    # 진입: 커튼 덮기 (ease-out)
-    for i in range(frames+1):
+    horizontal = direction in ("left", "right")
+
+    overlay = make_soft_curtain(width, height, horizontal=horizontal, direction=direction)
+
+    for i in range(frames + 1):
         t = i / frames
-        t_eased = 1 - (1 - t) * (1 - t)  # ease-out 수식
-        if direction in ("left", "right"):
-            x = int(width * t_eased)
+        t_eased = 1 - (1 - t) ** 2
+        offset = int((width if horizontal else height) * t_eased)
+
+        screen.blit(old_surface, (0, 0))
+
+        if direction == "right":
+            screen.blit(overlay, (offset - width, 0))
+        elif direction == "left":
+            screen.blit(overlay, (width - offset, 0))
+        elif direction == "down":
+            screen.blit(overlay, (0, offset - height))
+        elif direction == "up":
+            screen.blit(overlay, (0, height - offset))
+
+    pygame.display.flip()
+    clock.tick(fps)
+
+    draw_new_room_fn()
+    new_surface = screen.copy()
+
+    for i in range(frames + 1):
+        t = i / frames
+        t_eased = t ** 2
+        offset = int((width if horizontal else height) * t_eased)
+
+        screen.blit(new_surface, (0, 0))
+
+        if direction == "right":
+            screen.blit(overlay, (offset - width, 0))
+        elif direction == "left":
+            screen.blit(overlay, (width - offset, 0))
+        elif direction == "down":
+            screen.blit(overlay, (0, offset - height))
+        elif direction == "up":
+            screen.blit(overlay, (0, height - offset))
+
+        pygame.display.flip()
+        clock.tick(fps)
+
+def make_soft_curtain(width, height, horizontal=True, direction="right"):
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    fade_ratio = 0.25
+    if horizontal:
+        for x in range(width):
             if direction == "right":
-                screen.blit(old_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,0,x,height))
+                progress = x / width
             else:
-                screen.blit(old_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (width-x,0,x,height))
-        else:
-            y = int(height * t_eased)
+                progress = (width - x) / width
+
+            fade = min(1.0, max(0.0, progress / fade_ratio))
+            alpha = int(255 * fade)
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (x, 0), (x, height))
+    else:
+        for y in range(height):
             if direction == "down":
-                screen.blit(old_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,0,width,y))
+                progress = y / height
             else:
-                screen.blit(old_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,height-y,width,y))
+                progress = (height - y) / height
+
+            fade = min(1.0, max(0.0, progress / fade_ratio))
+            alpha = int(255 * fade)
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, y, width, 1))
+
+    return overlay
+
+def make_soft_curtain(width, height, horizontal=True, direction="right"):
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    fade_ratio = 0.25
+
+    if horizontal:
+        for x in range(width):
+            if direction == "right":
+                progress = x / width
+            else:
+                progress = (width - x) / width
+
+            fade = min(1.0, max(0.0, progress / fade_ratio))
+            alpha = int(255 * fade)
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (x, 0), (x, height))
+    else:
+        for y in range(height):
+            if direction == "down":
+                progress = (height - y) / height
+            else:
+                progress = y / height
+
+            fade = min(1.0, max(0.0, progress / fade_ratio))
+            alpha = int(255 * fade)
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, y), (width, y))
+
+    return overlay
+
+def make_soft_curtain(width, height, horizontal=True, direction="right"):
+    scale = 2
+    curtain_width = int(width * scale)
+    curtain_height = int(height * scale)
+    overlay = pygame.Surface((curtain_width, curtain_height), pygame.SRCALPHA)
+
+    fade_length = int((curtain_width if horizontal else curtain_height) * 0.25)
+
+    if horizontal:
+        for x in range(curtain_width):
+            if direction == "right":
+                pos = curtain_width - x
+            else:
+                pos = x
+
+            if pos < fade_length:
+                fade = pos / fade_length
+                alpha = int(255 * fade)
+            else:
+                alpha = 255
+
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (x, 0), (x, curtain_height))
+    else:
+        for y in range(curtain_height):
+            if direction == "down":
+                pos = curtain_height - y
+            else:
+                pos = y
+
+            if pos < fade_length:
+                fade = pos / fade_length
+                alpha = int(255 * fade)
+            else:
+                alpha = 255
+
+            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, y), (curtain_width, y))
+
+    return overlay
+
+def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="right", duration=0.5, fps=60):
+    width, height = screen.get_size()
+    frames = int(duration * fps // 2)
+    clock = pygame.time.Clock()
+    horizontal = direction in ("left", "right")
+
+    overlay = make_soft_curtain(width, height, horizontal=horizontal, direction=direction)
+    curtain_width, curtain_height = overlay.get_size()
+
+    max_offset = (curtain_width if horizontal else curtain_height) - (width if horizontal else height) // 4
+
+    for i in range(frames + 1):
+        t = i / frames
+        t_eased = 1 - (1 - t) ** 2
+        offset = int(max_offset * t_eased)
+
+        screen.blit(old_surface, (0, 0))
+
+        if direction == "right":
+            screen.blit(overlay, (offset - curtain_width, 0))
+        elif direction == "left":
+            screen.blit(overlay, (width - offset, 0))
+        elif direction == "down":
+            screen.blit(overlay, (0, offset - curtain_height))
+        elif direction == "up":
+            screen.blit(overlay, (0, height - offset))
+
         pygame.display.flip()
         clock.tick(fps)
 
     draw_new_room_fn()
     new_surface = screen.copy()
-    screen.fill((0,0,0))
-    pygame.display.flip()
-    pygame.time.delay(100)  # 정지
+    pygame.time.delay(100)
 
-    # 퇴장: 커튼 열기 (ease-in)
-    for i in range(frames+1):
+    reverse_direction = {
+        "left": "right",
+        "right": "left",
+        "up": "down",
+        "down": "up"
+    }[direction]
+
+    overlay = make_soft_curtain(width, height, horizontal=horizontal, direction=reverse_direction)
+    curtain_width, curtain_height = overlay.get_size()
+    max_offset = (curtain_width if horizontal else curtain_height) - (width if horizontal else height) // 4
+
+    for i in range(frames + 1):
         t = i / frames
-        t_eased = t * t  # ease-in 수식
-        if direction in ("left", "right"):
-            x = int(width * t_eased)
-            if direction == "right":
-                screen.blit(new_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (x,0,width-x,height))
-            else:
-                screen.blit(new_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,0,width-x,height))
-        else:
-            y = int(height * t_eased)
-            if direction == "down":
-                screen.blit(new_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,y,width,height-y))
-            else:
-                screen.blit(new_surface, (0,0))
-                pygame.draw.rect(screen, (0,0,0), (0,0,width,height-y))
+        t_eased = t ** 2
+        offset = int(max_offset * (1 - t_eased))
+
+        screen.blit(new_surface, (0, 0))
+
+        if reverse_direction == "right":
+            screen.blit(overlay, (offset - curtain_width, 0))
+        elif reverse_direction == "left":
+            screen.blit(overlay, (width - offset, 0))
+        elif reverse_direction == "down":
+            screen.blit(overlay, (0, offset - curtain_height))
+        elif reverse_direction == "up":
+            screen.blit(overlay, (0, height - offset))
+
         pygame.display.flip()
         clock.tick(fps)
 
@@ -853,13 +1013,10 @@ while running:
             center_x = left_wall_width + adjust_x + (hole_width / 2)
             center_y = top_wall_height + adjust_y + (hole_height / 2)
 
-            # 미세 보정값 (필요시 실험)
             offset_x = -0.5
             offset_y = -0.5
 
             WALL_SPAWN_OFFSET_FACTOR = 1.2
-
-            # 북쪽
             north_target_x = center_x - scaled_width / 2 + offset_x
             north_target_y = 0 - wall_thickness + offset_y - 155
             north_start_x = north_target_x - scaled_width
@@ -874,7 +1031,6 @@ while running:
                 "state": "visible",
             })
 
-            # 서쪽
             west_target_x = 0 - wall_thickness + offset_x - 155
             west_target_y = center_y - rotated_height / 2 + offset_y
             west_start_x = west_target_x
@@ -889,7 +1045,6 @@ while running:
                 "state": "visible",
             })
 
-            # 남쪽
             south_target_x = center_x - scaled_width / 2 + offset_x
             south_target_y = effective_bg_height + offset_y - 95
             south_start_x = south_target_x + scaled_width
@@ -904,7 +1059,6 @@ while running:
                 "state": "visible",
             })
 
-            # 동쪽
             east_target_x = effective_bg_width + offset_x - 95
             east_target_y = center_y - rotated_height / 2 + offset_y
             east_start_x = east_target_x
@@ -1408,13 +1562,44 @@ while running:
         else:
             slide_direction = None
 
+    def render_game_frame():
+        screen.fill((0, 0, 0))
+
+        world.draw_full(
+            screen, world_x, world_y, shake_offset_x, shake_offset_y,
+            combat_walls_info, obstacle_manager, expansion
+        )
+
+        player_center_world = (
+            world_x + player_rect.centerx,
+            world_y + player_rect.centery
+        )
+
+        obstacle_manager.draw_non_trees(screen, world_x, world_y)
+        for blood in blood_effects:
+            blood.draw(screen, world_x, world_y)
+        for enemy in enemies:
+            enemy.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+
+        for bullet in bullets:
+            bullet.draw(screen, world_x, world_y)
+        for bullet in config.global_enemy_bullets:
+            bullet.draw(screen, world_x, world_y)
+
+        obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
+
+        hp_ratio = max(0, player_hp / player_hp_max)
+        current_width = int(300 * hp_ratio)
+        pygame.draw.rect(screen, (80, 80, 80), (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT - 60, 300, 30))
+        pygame.draw.rect(screen, (0, 255, 0), (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT - 60, current_width, 30))
+        screen.blit(DEBUG_FONT.render(f"Speed: {math.sqrt(world_vx ** 2 + world_vy ** 2):.2f}", True, (255, 255, 255)), (10, 10))
+        screen.blit(DEBUG_FONT.render(f"Weapon: gun{current_weapon}", True, (255, 255, 255)), (10, 40))
+        screen.blit(DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255)), (10, 70))
+
     if slide_direction:
         def draw_new_room():
             change_room(next_dir)
-            world.draw_full(
-                screen, world_x, world_y, shake_offset_x, shake_offset_y,
-                combat_walls_info, obstacle_manager, expansion
-            )
+            render_game_frame()
         old_surface = screen.copy()
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
         continue
