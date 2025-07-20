@@ -268,6 +268,7 @@ class World:
 
         walls = []
         extra_wall_size *= self.PLAYER_VIEW_SCALE
+        expansion_extension = 300 * self.PLAYER_VIEW_SCALE
 
         def rect_obstacle(size, world_x, world_y):
             surface = pygame.Surface(size, pygame.SRCALPHA)
@@ -288,55 +289,85 @@ class World:
         walls.append(rect_obstacle((left_wall_width, wall_thickness), 0, -wall_thickness))
         walls.append(rect_obstacle((right_wall_width, wall_thickness), map_width - right_wall_width, -wall_thickness))
         if not north_hole_open:
-            walls.append(
-                rect_obstacle(
-                    (hole_width, wall_thickness + extra_wall_size),
-                    left_wall_width,
-                    -wall_thickness - extra_wall_size
-                )
-            )
+            walls.append(rect_obstacle(
+                (hole_width, wall_thickness + extra_wall_size),
+                left_wall_width,
+                -wall_thickness - extra_wall_size
+            ))
+
         walls.append(rect_obstacle((left_wall_width, wall_thickness), 0, map_height))
         walls.append(rect_obstacle((right_wall_width, wall_thickness), map_width - right_wall_width, map_height))
         if not south_hole_open:
-            walls.append(
-                rect_obstacle(
-                    (hole_width, wall_thickness + extra_wall_size),
-                    left_wall_width,
-                    map_height
-                )
-            )
+            walls.append(rect_obstacle(
+                (hole_width, wall_thickness + extra_wall_size),
+                left_wall_width,
+                map_height
+            ))
+
         walls.append(rect_obstacle((wall_thickness, top_wall_height), -wall_thickness, 0))
         walls.append(rect_obstacle((wall_thickness, bottom_wall_height), -wall_thickness, map_height - bottom_wall_height))
         if not west_hole_open:
-            walls.append(
-                rect_obstacle(
-                    (wall_thickness + extra_wall_size, hole_height),
-                    -wall_thickness - extra_wall_size,
-                    top_wall_height
-                )
-            )
+            walls.append(rect_obstacle(
+                (wall_thickness + extra_wall_size, hole_height),
+                -wall_thickness - extra_wall_size,
+                top_wall_height
+            ))
+
         walls.append(rect_obstacle((wall_thickness, top_wall_height), map_width, 0))
         walls.append(rect_obstacle((wall_thickness, bottom_wall_height), map_width, map_height - bottom_wall_height))
         if not east_hole_open:
-            walls.append(
-                rect_obstacle(
-                    (wall_thickness + extra_wall_size, hole_height),
-                    map_width,
-                    top_wall_height
-                )
-            )
+            walls.append(rect_obstacle(
+                (wall_thickness + extra_wall_size, hole_height),
+                map_width,
+                top_wall_height
+            ))
 
-        walls.append(rect_obstacle((left_wall_width, expansion), 0, -wall_thickness - expansion))
-        walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, -wall_thickness - expansion))
-        walls.append(rect_obstacle((left_wall_width, expansion), 0, map_height + wall_thickness))
-        walls.append(rect_obstacle((right_wall_width, expansion), map_width - right_wall_width, map_height + wall_thickness))
-        walls.append(rect_obstacle((expansion, top_wall_height), -wall_thickness - expansion, 0))
-        walls.append(rect_obstacle((expansion, bottom_wall_height), -wall_thickness - expansion, map_height - bottom_wall_height))
-        walls.append(rect_obstacle((expansion, top_wall_height), map_width + wall_thickness, 0))
-        walls.append(rect_obstacle((expansion, bottom_wall_height), map_width + wall_thickness, map_height - bottom_wall_height))
+        walls.append(rect_obstacle(
+            (left_wall_width + expansion_extension, expansion),
+            0 - expansion_extension,
+            -expansion
+        ))
+        walls.append(rect_obstacle(
+            (right_wall_width + expansion_extension, expansion),
+            map_width - right_wall_width,
+            -expansion
+        ))
+
+        walls.append(rect_obstacle(
+            (left_wall_width + expansion_extension, expansion),
+            0 - expansion_extension,
+            map_height
+        ))
+        walls.append(rect_obstacle(
+            (right_wall_width + expansion_extension, expansion),
+            map_width - right_wall_width,
+            map_height
+        ))
+
+        walls.append(rect_obstacle(
+            (expansion, top_wall_height + expansion_extension),
+            -expansion,
+            0 - expansion_extension
+        ))
+        walls.append(rect_obstacle(
+            (expansion, bottom_wall_height + expansion_extension),
+            -expansion,
+            map_height - bottom_wall_height
+        ))
+
+        walls.append(rect_obstacle(
+            (expansion, top_wall_height + expansion_extension),
+            map_width,
+            0 - expansion_extension
+        ))
+        walls.append(rect_obstacle(
+            (expansion, bottom_wall_height + expansion_extension),
+            map_width,
+            map_height - bottom_wall_height
+        ))
 
         return walls
-    
+
     def draw_wall_barriers(self, screen, world_x, world_y, combat_walls_info):
             if not config.combat_state and not combat_walls_info:
                 return
@@ -414,13 +445,10 @@ class World:
         effective_width = self.effective_bg_width
         effective_height = self.effective_bg_height
 
-        # 조정값: 중앙 정렬용
         adjust_x = (effective_width - hole_width) / 2 - left_wall_width
         adjust_y = (effective_height - hole_height) / 2 - top_wall_height
 
         combat_walls = []
-
-        # NORTH
         combat_walls.append(Obstacle(
             pygame.Surface((hole_width, thin), pygame.SRCALPHA),
             world_x=left_wall_width + adjust_x,
@@ -429,7 +457,6 @@ class World:
             image_filename="combat_invisible_wall"
         ))
 
-        # SOUTH
         combat_walls.append(Obstacle(
             pygame.Surface((hole_width, thin), pygame.SRCALPHA),
             world_x=left_wall_width + adjust_x,
@@ -438,7 +465,6 @@ class World:
             image_filename="combat_invisible_wall"
         ))
 
-        # WEST
         combat_walls.append(Obstacle(
             pygame.Surface((thin, hole_height), pygame.SRCALPHA),
             world_x=0 - thin,
@@ -447,7 +473,6 @@ class World:
             image_filename="combat_invisible_wall"
         ))
 
-        # EAST
         combat_walls.append(Obstacle(
             pygame.Surface((thin, hole_height), pygame.SRCALPHA),
             world_x=effective_width,

@@ -899,7 +899,7 @@ while running:
         fade_in_after_resume = False
 
     delta_time = clock.get_time()
-    player_center = (world_x + player_rect.centerx,
+    player_center = (world_x + player_rect.centerx, 
                     world_y + player_rect.centery)
     
     #적 바보 만들기
@@ -1454,9 +1454,10 @@ while running:
     )
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
-    for obs in obstacles_to_check:
-        for c in obs.colliders:
-            c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
+    # 빨간색 선 히트박스 보이기
+    # for obs in obstacles_to_check:
+    #     for c in obs.colliders:
+    #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     hp_bar_width = 300
     hp_bar_height = 30
