@@ -52,6 +52,9 @@ def load_images():
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
+    map_cursor_img = pygame.image.load(path_image("Image", "MapCursor.png")).convert_alpha()
+    map_cursor_img = pygame.transform.smoothscale(map_cursor_img, (18, 18))
+
     bg_img = pygame.image.load(path_image("Image", "Map1.png")).convert()
     bg_img = pygame.transform.smoothscale(bg_img, (BG_WIDTH, BG_HEIGHT))
     cursor_img = pygame.transform.smoothscale(cursor_img, (32, 32))
@@ -113,6 +116,7 @@ def load_images():
         "enemy1": enemy1_img,
         "enemy2": enemy2_img,
         "cursor": cursor_img,
+        "map_cursor": map_cursor_img,
         "background": bg_img,
         "obstacles": obstacle_images,
         "obstacle_masks": obstacle_masks,

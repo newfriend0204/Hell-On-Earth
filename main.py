@@ -728,6 +728,100 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
         pygame.display.flip()
         clock.tick(fps)
 
+def draw_minimap(screen, grid, current_room_pos, cursor_image):
+    mini_tile = 14
+    tile_gap = 3
+    padding = 10
+    background_margin = 5
+    grid_width = len(grid[0])
+    grid_height = len(grid)
+
+    total_width = grid_width * (mini_tile + tile_gap) - tile_gap
+    total_height = grid_height * (mini_tile + tile_gap) - tile_gap
+
+    start_x = SCREEN_WIDTH - total_width - padding
+    start_y = padding
+
+    background_surface = pygame.Surface(
+        (total_width + background_margin * 2, total_height + background_margin * 2),
+        pygame.SRCALPHA
+    )
+    background_surface.fill((100, 100, 100, 160))
+    screen.blit(background_surface, (start_x - background_margin, start_y - background_margin))
+
+    valid_cells = {'F', 'S', 'E'}
+    connection_color = (160, 160, 160)
+    connection_thickness = 5
+
+    for y in range(grid_height):
+        for x in range(grid_width):
+            cell = grid[y][x]
+            if cell not in valid_cells:
+                continue
+            cx = start_x + x * (mini_tile + tile_gap) + mini_tile // 2
+            cy = start_y + y * (mini_tile + tile_gap) + mini_tile // 2
+
+            if x + 1 < grid_width and grid[y][x + 1] in valid_cells:
+                cx2 = start_x + (x + 1) * (mini_tile + tile_gap) + mini_tile // 2
+                rect = pygame.Rect(
+                    min(cx, cx2),
+                    cy - connection_thickness // 2,
+                    abs(cx2 - cx),
+                    connection_thickness
+                )
+                pygame.draw.rect(screen, connection_color, rect)
+
+            if y + 1 < grid_height and grid[y + 1][x] in valid_cells:
+                cy2 = start_y + (y + 1) * (mini_tile + tile_gap) + mini_tile // 2
+                rect = pygame.Rect(
+                    cx - connection_thickness // 2,
+                    min(cy, cy2),
+                    connection_thickness,
+                    abs(cy2 - cy)
+                )
+                pygame.draw.rect(screen, connection_color, rect)
+
+    for y in range(grid_height):
+        for x in range(grid_width):
+            cell = grid[y][x]
+            color = None
+            alpha = 255
+
+            if cell == 'S':
+                color = (0, 255, 0)
+            elif cell == 'E':
+                color = (255, 0, 0)
+            elif cell == 'F':
+                color = (160, 160, 160)
+            elif cell == 'N':
+                color = (100, 100, 100)
+                alpha = 20
+
+            if color:
+                rect = pygame.Rect(
+                    start_x + x * (mini_tile + tile_gap),
+                    start_y + y * (mini_tile + tile_gap),
+                    mini_tile,
+                    mini_tile
+                )
+                tile_surface = pygame.Surface((mini_tile, mini_tile), pygame.SRCALPHA)
+                tile_surface.fill((*color, alpha))
+                screen.blit(tile_surface, rect.topleft)
+    cx, cy = current_room_pos
+    cursor_center_x = start_x + cx * (mini_tile + tile_gap) + mini_tile // 2
+    cursor_center_y = start_y + cy * (mini_tile + tile_gap) + mini_tile // 2
+
+    time_ms = pygame.time.get_ticks()
+    phase = (time_ms // 1000) % 2
+
+    base_size = 18
+    scale_factor = 1.2 if phase == 1 else 0.8
+    cursor_size = int(base_size * scale_factor)
+
+    scaled_cursor = pygame.transform.smoothscale(cursor_image, (cursor_size, cursor_size))
+    cursor_rect = scaled_cursor.get_rect(center=(cursor_center_x, cursor_center_y))
+    screen.blit(scaled_cursor, cursor_rect)
+
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
     ex = info["x"] * PLAYER_VIEW_SCALE
@@ -1622,6 +1716,8 @@ while running:
     fps = clock.get_fps()
     fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
     screen.blit(fps_surface, (10, 100))
+
+    draw_minimap(screen, grid, current_room_pos, images["map_cursor"])
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

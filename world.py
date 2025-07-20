@@ -16,23 +16,35 @@ def manhattan(p1, p2):
 def get_map_dimensions():
     return WIDTH, HEIGHT
 
+def count_direction_changes(path):
+    changes = 0
+    if len(path) < 2:
+        return 0
+    dx0 = path[1][0] - path[0][0]
+    dy0 = path[1][1] - path[0][1]
+    for i in range(2, len(path)):
+        dx = path[i][0] - path[i-1][0]
+        dy = path[i][1] - path[i-1][1]
+        if (dx, dy) != (dx0, dy0):
+            changes += 1
+            dx0, dy0 = dx, dy
+    return changes
+
 def find_path(start, end):
     path = []
     x, y = start
     while (x, y) != end:
         moves = []
-        if x < end[0]:
-            moves.append((x+1, y))
-        elif x > end[0]:
-            moves.append((x-1, y))
-        if y < end[1]:
-            moves.append((x, y+1))
-        elif y > end[1]:
-            moves.append((x, y-1))
-        if not moves:
-            break
-        x, y = random.choice(moves)
-        path.append((x, y))
+        if x < end[0]: moves.append((x+1, y))
+        if x > end[0]: moves.append((x-1, y))
+        if y < end[1]: moves.append((x, y+1))
+        if y > end[1]: moves.append((x, y-1))
+        random.shuffle(moves)
+        for mx, my in moves:
+            if (mx, my) != path[-1] if path else True:
+                x, y = mx, my
+                path.append((x, y))
+                break
     return path
 
 def neighbors(x, y):
@@ -41,59 +53,66 @@ def neighbors(x, y):
             if 0 <= x+dx < WIDTH and 0 <= y+dy < HEIGHT]
 
 def count_adjacent_fight(grid, ex, ey):
-    count = 0
-    for nx, ny in neighbors(ex, ey):
-        if grid[ny][nx] == 'F':
-            count += 1
-    return count
+    return sum(1 for nx, ny in neighbors(ex, ey) if grid[ny][nx] == 'F')
+
+def expand_f_rooms(grid, f_positions, ex, ey, target_count):
+    attempts = 0
+    while len(f_positions) < target_count and attempts < 1000:
+        added = False
+        new_candidates = []
+        for fx, fy in f_positions:
+            for nx, ny in neighbors(fx, fy):
+                if grid[ny][nx] == 'N' and (nx, ny) != (ex, ey):
+                    new_candidates.append((nx, ny))
+        random.shuffle(new_candidates)
+        for nx, ny in new_candidates:
+            grid[ny][nx] = 'F'
+            if count_adjacent_fight(grid, ex, ey) > 1:
+                grid[ny][nx] = 'N'
+                continue
+            f_positions.append((nx, ny))
+            added = True
+            break
+        if not added:
+            break
+        attempts += 1
 
 def generate_map():
-    grid = [['N']*WIDTH for _ in range(HEIGHT)]
-    min_distance = MIN_F_ROOMS - 1
-    max_distance = MAX_F_ROOMS - 1
-
     while True:
-        sx, sy = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
+        grid = [['N']*WIDTH for _ in range(HEIGHT)]
+
+        sx, sy = random.randint(2, 5), random.randint(2, 5)
+
+        # E 방은 외곽 제외, S와 거리 1~6
         tries = 0
         while True:
-            ex, ey = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
+            ex, ey = random.randint(1, WIDTH-2), random.randint(1, HEIGHT-2)
             dist = manhattan((sx, sy), (ex, ey))
-            if min_distance <= dist <= max_distance and (sx, sy) != (ex, ey):
+            if 1 <= dist <= 6 and (sx, sy) != (ex, ey):
                 break
             tries += 1
             if tries > 1000:
-                sx, sy = random.randint(0, WIDTH-1), random.randint(0, HEIGHT-1)
-                tries = 0
+                continue
 
         path = find_path((sx, sy), (ex, ey))
-        grid = [['N']*WIDTH for _ in range(HEIGHT)]
+        if count_direction_changes(path) < 3:
+            continue
+
         grid[sy][sx] = 'S'
         grid[ey][ex] = 'E'
         f_positions = []
+
         for px, py in path:
             if grid[py][px] == 'N':
                 grid[py][px] = 'F'
                 f_positions.append((px, py))
 
-        total_f_needed = max(MIN_F_ROOMS, min(MAX_F_ROOMS, len(f_positions)))
-        total_f_needed = max(total_f_needed, MIN_F_ROOMS)
+        expand_f_rooms(grid, f_positions, ex, ey, MIN_F_ROOMS)
 
-        if len(f_positions) < total_f_needed:
-            available = []
-            for fx, fy in f_positions:
-                for nx, ny in neighbors(fx, fy):
-                    if grid[ny][nx] == 'N' and (nx, ny) != (ex, ey):
-                        available.append((nx, ny))
-            random.shuffle(available)
-            for nx, ny in available:
-                if len(f_positions) >= total_f_needed:
-                    break
-                grid[ny][nx] = 'F'
-                if count_adjacent_fight(grid, ex, ey) > 1:
-                    grid[ny][nx] = 'N'
-                else:
-                    f_positions.append((nx, ny))
+        if len(f_positions) < MIN_F_ROOMS:
+            continue  # 확장 실패 → 새 맵 시도
 
+        # 연결성 확인
         visited = set()
         stack = [(sx, sy)]
         while stack:
@@ -102,10 +121,12 @@ def generate_map():
             for nx, ny in neighbors(cx, cy):
                 if (nx, ny) not in visited and grid[ny][nx] in ('F', 'E'):
                     stack.append((nx, ny))
+
         all_f_reachable = all(pos in visited for pos in f_positions)
-        if all_f_reachable and len(f_positions) >= MIN_F_ROOMS:
-            break
-    return grid
+        if not all_f_reachable:
+            continue
+
+        return grid
 
 def print_grid(grid):
     SYMBOLS = {
