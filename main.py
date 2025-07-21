@@ -26,6 +26,7 @@ DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
 
 pygame.mouse.set_visible(False)
 
+#screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Hell On Earth")
 
@@ -462,7 +463,7 @@ def get_player_center_world(world_x, world_y):
     )
 
 def fade_out(screen, duration, step_delay):
-    overlay = pygame.Surface(screen.get_size())
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     overlay.fill((0, 0, 0))
     steps = int(duration / step_delay)
     clock = pygame.time.Clock()
@@ -474,7 +475,7 @@ def fade_out(screen, duration, step_delay):
         clock.tick(1 / step_delay)
 
 def fade_in(screen, duration, step_delay):
-    overlay = pygame.Surface(screen.get_size())
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     overlay.fill((0, 0, 0))
     steps = int(duration / step_delay)
     clock = pygame.time.Clock()
@@ -728,7 +729,7 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
         pygame.display.flip()
         clock.tick(fps)
 
-def draw_minimap(screen, grid, current_room_pos, cursor_image):
+def draw_minimap(screen, grid, current_room_pos):
     mini_tile = 14
     tile_gap = 3
     padding = 10
@@ -739,7 +740,8 @@ def draw_minimap(screen, grid, current_room_pos, cursor_image):
     total_width = grid_width * (mini_tile + tile_gap) - tile_gap
     total_height = grid_height * (mini_tile + tile_gap) - tile_gap
 
-    start_x = SCREEN_WIDTH - total_width - padding
+    display_width, display_height = screen.get_size()
+    start_x = display_width - total_width - padding
     start_y = padding
 
     background_surface = pygame.Surface(
@@ -751,35 +753,26 @@ def draw_minimap(screen, grid, current_room_pos, cursor_image):
 
     valid_cells = {'F', 'S', 'E'}
     connection_color = (160, 160, 160)
-    connection_thickness = 5
+    connection_thickness = 4
 
     for y in range(grid_height):
         for x in range(grid_width):
             cell = grid[y][x]
             if cell not in valid_cells:
                 continue
+
             cx = start_x + x * (mini_tile + tile_gap) + mini_tile // 2
             cy = start_y + y * (mini_tile + tile_gap) + mini_tile // 2
 
             if x + 1 < grid_width and grid[y][x + 1] in valid_cells:
                 cx2 = start_x + (x + 1) * (mini_tile + tile_gap) + mini_tile // 2
-                rect = pygame.Rect(
-                    min(cx, cx2),
-                    cy - connection_thickness // 2,
-                    abs(cx2 - cx),
-                    connection_thickness
-                )
-                pygame.draw.rect(screen, connection_color, rect)
+                pygame.draw.rect(screen, connection_color,
+                    pygame.Rect(min(cx, cx2), cy - connection_thickness // 2, abs(cx2 - cx), connection_thickness))
 
             if y + 1 < grid_height and grid[y + 1][x] in valid_cells:
                 cy2 = start_y + (y + 1) * (mini_tile + tile_gap) + mini_tile // 2
-                rect = pygame.Rect(
-                    cx - connection_thickness // 2,
-                    min(cy, cy2),
-                    connection_thickness,
-                    abs(cy2 - cy)
-                )
-                pygame.draw.rect(screen, connection_color, rect)
+                pygame.draw.rect(screen, connection_color,
+                    pygame.Rect(cx - connection_thickness // 2, min(cy, cy2), connection_thickness, abs(cy2 - cy)))
 
     for y in range(grid_height):
         for x in range(grid_width):
@@ -788,9 +781,9 @@ def draw_minimap(screen, grid, current_room_pos, cursor_image):
             alpha = 255
 
             if cell == 'S':
-                color = (0, 255, 0)
+                color = (120, 255, 120)
             elif cell == 'E':
-                color = (255, 0, 0)
+                color = (255, 120, 120)
             elif cell == 'F':
                 color = (160, 160, 160)
             elif cell == 'N':
@@ -807,20 +800,42 @@ def draw_minimap(screen, grid, current_room_pos, cursor_image):
                 tile_surface = pygame.Surface((mini_tile, mini_tile), pygame.SRCALPHA)
                 tile_surface.fill((*color, alpha))
                 screen.blit(tile_surface, rect.topleft)
+
     cx, cy = current_room_pos
     cursor_center_x = start_x + cx * (mini_tile + tile_gap) + mini_tile // 2
     cursor_center_y = start_y + cy * (mini_tile + tile_gap) + mini_tile // 2
 
     time_ms = pygame.time.get_ticks()
-    phase = (time_ms // 1000) % 2
+    phase = (time_ms // 1500) % 2
 
-    base_size = 18
-    scale_factor = 1.2 if phase == 1 else 0.8
+    base_size = 32
+    scale_factor = 0.6 if phase == 0 else 0.65
+
     cursor_size = int(base_size * scale_factor)
+    half = cursor_size // 2
 
-    scaled_cursor = pygame.transform.smoothscale(cursor_image, (cursor_size, cursor_size))
-    cursor_rect = scaled_cursor.get_rect(center=(cursor_center_x, cursor_center_y))
-    screen.blit(scaled_cursor, cursor_rect)
+    bar = 2
+    edge = 6
+
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x - half, cursor_center_y - half, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x - half, cursor_center_y - half, edge, bar))
+
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x + half - bar, cursor_center_y - half, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x + half - edge, cursor_center_y - half, edge, bar))
+
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x - half, cursor_center_y + half - edge, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x - half, cursor_center_y + half - bar, edge, bar))
+
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x + half - bar, cursor_center_y + half - edge, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0),
+        (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -1555,17 +1570,20 @@ while running:
 
     hp_bar_width = 300
     hp_bar_height = 30
-    hp_bar_x = SCREEN_WIDTH // 2 - hp_bar_width // 2
-    hp_bar_y = SCREEN_HEIGHT - 60
+    display_width, display_height = screen.get_size()
+    hp_bar_x = display_width // 2 - hp_bar_width // 2
+    hp_bar_y = display_height - 60
     hp_ratio = max(0, player_hp / player_hp_max)
     current_width = int(hp_bar_width * hp_ratio)
     pygame.draw.rect(screen, (80, 80, 80), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
     pygame.draw.rect(screen, (0, 255, 0), (hp_bar_x, hp_bar_y, current_width, hp_bar_height))
     hp_text = DEBUG_FONT.render(f"HP: {player_hp}", True, (255, 255, 255))
     screen.blit(hp_text, (hp_bar_x + hp_bar_width + 10, hp_bar_y))
+    display_w, display_h = screen.get_size()
 
     if damage_flash_alpha > 0:
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        display_w, display_h = screen.get_size()
+        overlay = pygame.Surface((display_w, display_h), pygame.SRCALPHA)
 
         border_thickness = 40
 
@@ -1573,10 +1591,10 @@ while running:
             alpha = int(damage_flash_alpha * (1 - i / border_thickness))
             color = (255, 0, 0, alpha)
 
-            overlay.fill(color, rect=(i, i, SCREEN_WIDTH - i * 2, 1))
-            overlay.fill(color, rect=(i, SCREEN_HEIGHT - i - 1, SCREEN_WIDTH - i * 2, 1))
-            overlay.fill(color, rect=(i, i, 1, SCREEN_HEIGHT - i * 2))
-            overlay.fill(color, rect=(SCREEN_WIDTH - i - 1, i, 1, SCREEN_HEIGHT - i * 2))
+            overlay.fill(color, rect=(i, i, display_w - i * 2, 1))
+            overlay.fill(color, rect=(i, display_h - i - 1, display_w - i * 2, 1))
+            overlay.fill(color, rect=(i, i, 1, display_h - i * 2))
+            overlay.fill(color, rect=(display_w - i - 1, i, 1, display_h - i * 2))
 
         screen.blit(overlay, (0, 0))
         damage_flash_alpha = max(0, damage_flash_alpha - damage_flash_fade_speed)
@@ -1683,10 +1701,17 @@ while running:
 
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 
+        display_w, display_h = screen.get_size()
         hp_ratio = max(0, player_hp / player_hp_max)
-        current_width = int(300 * hp_ratio)
-        pygame.draw.rect(screen, (80, 80, 80), (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT - 60, 300, 30))
-        pygame.draw.rect(screen, (0, 255, 0), (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT - 60, current_width, 30))
+        hp_bar_width = 300
+        hp_bar_height = 30
+        hp_bar_x = display_w // 2 - hp_bar_width // 2
+        hp_bar_y = display_h - 60
+        current_width = int(hp_bar_width * hp_ratio)
+
+        pygame.draw.rect(screen, (80, 80, 80), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
+        pygame.draw.rect(screen, (0, 255, 0), (hp_bar_x, hp_bar_y, current_width, hp_bar_height))
+
         screen.blit(DEBUG_FONT.render(f"Speed: {math.sqrt(world_vx ** 2 + world_vy ** 2):.2f}", True, (255, 255, 255)), (10, 10))
         screen.blit(DEBUG_FONT.render(f"Weapon: gun{current_weapon}", True, (255, 255, 255)), (10, 40))
         screen.blit(DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255)), (10, 70))
@@ -1717,12 +1742,11 @@ while running:
     fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
     screen.blit(fps_surface, (10, 100))
 
-    draw_minimap(screen, grid, current_room_pos, images["map_cursor"])
+    draw_minimap(screen, grid, current_room_pos)
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)
 
     pygame.display.flip()
     clock.tick(60)
-
 pygame.quit()

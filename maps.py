@@ -203,8 +203,8 @@ FIGHT_MAP_4 = {
 
 FIGHT_MAP_5 = {
     "obstacles": [
-        {"filename": "FallenLog2.png", "x": 134.68, "y": 151.77, "scale": 0.15},
-        {"filename": "FallenLog2.png", "x": 404.07, "y": 80.94, "scale": 0.15},
+        {"filename": "FallenLog2.png", "x": 134.68, "y": 181.77, "scale": 0.15},
+        {"filename": "FallenLog2.png", "x": 404.07, "y": 100.94, "scale": 0.15},
         {"filename": "Rock1.png", "x": 583.63, "y": 131.53, "scale": 0.15},
         {"filename": "Tree1.png", "x": 179.58, "y": 404.72, "scale": 0.25},
         {"filename": "Pond1.png", "x": 583.63, "y": 455.31, "scale": 0.25}

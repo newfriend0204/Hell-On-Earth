@@ -4,8 +4,8 @@ import pygame
 # 플레이어 시야 스케일 (1.0 = 기본 시야)
 PLAYER_VIEW_SCALE = 0.9
 
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 750
 
 # 배경 크기
 BG_WIDTH = int(1600 * PLAYER_VIEW_SCALE)

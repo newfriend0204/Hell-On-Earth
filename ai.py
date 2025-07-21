@@ -7,9 +7,9 @@ from entities import ScatteredBullet, Bullet
 
 PARTICLE_COUNT = 30
 PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
-PARTICLE_SPEED_MIN = 1
-PARTICLE_SPEED_MAX = 4
-PARTICLE_LIFETIME = 2500
+PARTICLE_SPEED_MIN = 4
+PARTICLE_SPEED_MAX = 12
+PARTICLE_LIFETIME = 2000
 PARTICLE_FADE_TIME = 500
 
 class ParticleBlood:
@@ -110,8 +110,11 @@ class Enemy1:
         self.move_timer = 0
         self.move_delay = random.randint(600, 1200)
 
-        self.shoot_timer = 0
-        self.shoot_delay = random.randint(1200, 2000)
+        self.shoot_delay_min = 1200
+        self.shoot_delay_max = 1500
+        self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+        self.shoot_timer = None
+        self.aware_of_player = False
 
         self.radius = 30 * PLAYER_VIEW_SCALE
 
@@ -264,10 +267,17 @@ class Enemy1:
             self._escape_stuck()
             self.stuck_count = 0
 
-        self.shoot_timer -= dt
-        if self.shoot_timer <= 0 and dist_to_player < far_threshold:
-            self.shoot()
-            self.shoot_timer = random.randint(500, 1500)
+        if not self.aware_of_player and dist_to_player < far_threshold:
+            self.aware_of_player = True
+            self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+            self.shoot_timer = self.shoot_delay
+
+        if self.aware_of_player and self.shoot_timer is not None:
+            self.shoot_timer -= dt
+            if self.shoot_timer <= 0:
+                self.shoot()
+                self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+                self.shoot_timer = self.shoot_delay
 
         for s in self.scattered_bullets[:]:
             s.update()
@@ -364,7 +374,7 @@ class Enemy1:
             target_world_y,
             15,
             self.bullet_image,
-            speed=7.5 * PLAYER_VIEW_SCALE,
+            speed=10 * PLAYER_VIEW_SCALE,
             max_distance=2000 * PLAYER_VIEW_SCALE
         )
 
@@ -461,7 +471,11 @@ class Enemy2(Enemy1):
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
         self.current_distance = GUN2_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
-        self.shoot_delay = random.randint(1500, 3000)
+
+        self.shoot_delay_min = 1250
+        self.shoot_delay_max = 2000
+        self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+        self.shoot_timer = None
 
         self.is_preparing_far_shot = False
         self.prepare_start_time = 0
@@ -523,10 +537,7 @@ class Enemy2(Enemy1):
                 self.far_shot_check_timer = random.randint(4000, 8000)
 
         if near_threshold < dist_to_player <= far_threshold:
-            self.shoot_timer -= dt
-            if self.shoot_timer <= 0:
-                self.shoot()
-                self.shoot_timer = random.randint(700, 1700)
+            pass
 
         self.direction_angle = math.atan2(dy, dx)
         super().update(dt, world_x, world_y, player_rect, enemies)
@@ -559,7 +570,7 @@ class Enemy2(Enemy1):
             target_world_y,
             spread_angle,
             self.bullet_image,
-            speed=(bullet_speed if bullet_speed is not None else 7.5 * PLAYER_VIEW_SCALE),
+            speed=(bullet_speed if bullet_speed is not None else 10 * PLAYER_VIEW_SCALE),
             max_distance=2000 * PLAYER_VIEW_SCALE
         )
 

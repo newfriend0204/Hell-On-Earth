@@ -37,6 +37,10 @@ class Bullet:
         self.world_y += self.vy
         self.collider.center = (self.world_x, self.world_y)
 
+        self.trail.append((self.world_x, self.world_y))
+        if len(self.trail) > 25:
+            self.trail.pop(0)
+
         dx = self.world_x - self.start_x
         dy = self.world_y - self.start_y
         travel_distance = math.hypot(dx, dy)
@@ -60,11 +64,25 @@ class Bullet:
                         return
             
     def draw(self, screen, world_x, world_y):
+        for pos in self.trail:
+            screen_x = pos[0] - world_x
+            screen_y = pos[1] - world_y
+
+            trail_width = 20
+            trail_height = 4
+            alpha = 40
+
+            trail_surf = pygame.Surface((trail_width, trail_height), pygame.SRCALPHA)
+            trail_surf.fill((255, 255, 255, alpha))
+
+            rotated_trail = pygame.transform.rotate(trail_surf, -self.angle_degrees)
+            rect = rotated_trail.get_rect(center=(screen_x, screen_y))
+
+            screen.blit(rotated_trail, rect)
+
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
-
         rotated_image = pygame.transform.rotate(self.original_image, -self.angle_degrees)
-
         rect = rotated_image.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_image, rect)
 
