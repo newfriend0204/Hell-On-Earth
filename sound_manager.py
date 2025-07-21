@@ -10,6 +10,11 @@ def load_sounds():
     walk_sound = pygame.mixer.Sound(path_sound("Sound", "ForestWalk.mp3"))
     walk_sound.set_volume(0.3)
 
+    enmey_die_sound = pygame.mixer.Sound(path_sound("Sound", "EnemyDie.mp3"))
+    enmey_die_sound.set_volume(0.3)
+
+    room_move_sound = pygame.mixer.Sound(path_sound("Sound", "RoomMove.mp3"))
+
     gun1_fire = pygame.mixer.Sound(path_sound("Sound", "Gun1Fire.wav"))
     gun1_fire.set_volume(GUN1_VOLUME)
 
@@ -30,6 +35,8 @@ def load_sounds():
 
     return {
         "walk": walk_sound,
+        "enmey_die": enmey_die_sound,
+        "room_move": room_move_sound,
         "gun1_fire": gun1_fire,
         "gun1_fire_enemy": gun1_fire_enemy,
         "gun2_fire": gun2_fire,

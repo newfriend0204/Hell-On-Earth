@@ -156,6 +156,7 @@ class Enemy1:
             self.kill_callback()
         self.hp = 0
         self.alive = False
+        self.sounds["enmey_die"].play()
         blood_x = self.world_x
         blood_y = self.world_y
         blood = ParticleBlood(blood_x, blood_y, scale=PLAYER_VIEW_SCALE)

@@ -10,6 +10,32 @@ WIDTH, HEIGHT = 8, 8
 MIN_F_ROOMS = 8
 MAX_F_ROOMS = 8
 
+room_states = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
+
+def initialize_room_states(grid):
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            cell = grid[y][x]
+            if cell == 'N':
+                room_states[y][x] = 0
+            elif cell == 'S':
+                room_states[y][x] = 1
+            elif cell == 'E':
+                room_states[y][x] = 2
+            elif cell == 'F':
+                room_states[y][x] = 4
+
+def update_room_state_after_combat(y, x):
+    if room_states[y][x] in (4, 5):
+        room_states[y][x] = 6 
+
+def reveal_neighbors(x, y, grid):
+    for nx, ny in neighbors(x, y):
+        if grid[ny][nx] == 'E' and room_states[ny][nx] == 2:
+            room_states[ny][nx] = 3
+        elif grid[ny][nx] == 'F' and room_states[ny][nx] == 4:
+            room_states[ny][nx] = 5
+
 def manhattan(p1, p2):
     return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
 

@@ -10,13 +10,24 @@ from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
-from world import World, generate_map, print_grid, get_map_dimensions
+from world import (
+    World,
+    generate_map,
+    print_grid,
+    get_map_dimensions,
+    room_states,
+    initialize_room_states,
+    reveal_neighbors,
+    update_room_state_after_combat
+)
 from maps import MAPS, FIGHT_MAPS
 
 CURRENT_MAP = MAPS[0]
 
 grid = generate_map()
 print_grid(grid)
+
+initialize_room_states(grid)
 
 pygame.init()
 pygame.font.init()
@@ -63,6 +74,7 @@ for y, row in enumerate(grid):
     if s_pos:
         break
 current_room_pos = list(s_pos)
+reveal_neighbors(s_pos[0], s_pos[1], grid)
 
 north_hole_open = False
 south_hole_open = False
@@ -298,6 +310,8 @@ def change_room(direction):
                 "enemy_infos": [],
                 "crop_rect": CURRENT_MAP["crop_rect"]
             }
+            config.combat_state = False
+            config.combat_enabled = False
     else:
         CURRENT_MAP = MAPS[0]
 
@@ -434,6 +448,9 @@ def change_room(direction):
     else:
         config.combat_state = False
         config.combat_enabled = True
+
+    sounds["room_move"].play()
+    print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {room_states[new_y][new_x]}")
 
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
@@ -574,59 +591,6 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
         clock.tick(fps)
 
 def make_soft_curtain(width, height, horizontal=True, direction="right"):
-    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-    fade_ratio = 0.25
-    if horizontal:
-        for x in range(width):
-            if direction == "right":
-                progress = x / width
-            else:
-                progress = (width - x) / width
-
-            fade = min(1.0, max(0.0, progress / fade_ratio))
-            alpha = int(255 * fade)
-            pygame.draw.line(overlay, (0, 0, 0, alpha), (x, 0), (x, height))
-    else:
-        for y in range(height):
-            if direction == "down":
-                progress = y / height
-            else:
-                progress = (height - y) / height
-
-            fade = min(1.0, max(0.0, progress / fade_ratio))
-            alpha = int(255 * fade)
-            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, y, width, 1))
-
-    return overlay
-
-def make_soft_curtain(width, height, horizontal=True, direction="right"):
-    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-    fade_ratio = 0.25
-
-    if horizontal:
-        for x in range(width):
-            if direction == "right":
-                progress = x / width
-            else:
-                progress = (width - x) / width
-
-            fade = min(1.0, max(0.0, progress / fade_ratio))
-            alpha = int(255 * fade)
-            pygame.draw.line(overlay, (0, 0, 0, alpha), (x, 0), (x, height))
-    else:
-        for y in range(height):
-            if direction == "down":
-                progress = (height - y) / height
-            else:
-                progress = y / height
-
-            fade = min(1.0, max(0.0, progress / fade_ratio))
-            alpha = int(255 * fade)
-            pygame.draw.line(overlay, (0, 0, 0, alpha), (0, y), (width, y))
-
-    return overlay
-
-def make_soft_curtain(width, height, horizontal=True, direction="right"):
     scale = 2
     curtain_width = int(width * scale)
     curtain_height = int(height * scale)
@@ -748,47 +712,45 @@ def draw_minimap(screen, grid, current_room_pos):
         (total_width + background_margin * 2, total_height + background_margin * 2),
         pygame.SRCALPHA
     )
-    background_surface.fill((100, 100, 100, 160))
+    background_surface.fill((100, 100, 100, 200))
     screen.blit(background_surface, (start_x - background_margin, start_y - background_margin))
 
-    valid_cells = {'F', 'S', 'E'}
-    connection_color = (160, 160, 160)
-    connection_thickness = 4
+    connectable_states = {1, 3, 5, 6}
 
     for y in range(grid_height):
         for x in range(grid_width):
-            cell = grid[y][x]
-            if cell not in valid_cells:
-                continue
+            state = room_states[y][x]
 
             cx = start_x + x * (mini_tile + tile_gap) + mini_tile // 2
             cy = start_y + y * (mini_tile + tile_gap) + mini_tile // 2
 
-            if x + 1 < grid_width and grid[y][x + 1] in valid_cells:
+            if x + 1 < grid_width and state in connectable_states and room_states[y][x + 1] in connectable_states:
                 cx2 = start_x + (x + 1) * (mini_tile + tile_gap) + mini_tile // 2
-                pygame.draw.rect(screen, connection_color,
-                    pygame.Rect(min(cx, cx2), cy - connection_thickness // 2, abs(cx2 - cx), connection_thickness))
+                pygame.draw.rect(screen, (50, 50, 50),
+                    pygame.Rect(min(cx, cx2), cy - 2, abs(cx2 - cx), 4))
 
-            if y + 1 < grid_height and grid[y + 1][x] in valid_cells:
+            if y + 1 < grid_height and state in connectable_states and room_states[y + 1][x] in connectable_states:
                 cy2 = start_y + (y + 1) * (mini_tile + tile_gap) + mini_tile // 2
-                pygame.draw.rect(screen, connection_color,
-                    pygame.Rect(cx - connection_thickness // 2, min(cy, cy2), connection_thickness, abs(cy2 - cy)))
+                pygame.draw.rect(screen, (50, 50, 50),
+                    pygame.Rect(cx - 2, min(cy, cy2), 4, abs(cy2 - cy)))
 
     for y in range(grid_height):
         for x in range(grid_width):
-            cell = grid[y][x]
+            state = room_states[y][x]
             color = None
             alpha = 255
 
-            if cell == 'S':
-                color = (120, 255, 120)
-            elif cell == 'E':
-                color = (255, 120, 120)
-            elif cell == 'F':
-                color = (160, 160, 160)
-            elif cell == 'N':
-                color = (100, 100, 100)
+            if state in (0, 2, 4):
+                color = (50, 50, 50)
                 alpha = 20
+            elif state == 1:
+                color = (120, 255, 120)
+            elif state == 3:
+                color = (255, 120, 120)
+            elif state == 5:
+                color = (50, 50, 50)
+            elif state == 6:
+                color = (160, 160, 160)
 
             if color:
                 rect = pygame.Rect(
@@ -807,35 +769,21 @@ def draw_minimap(screen, grid, current_room_pos):
 
     time_ms = pygame.time.get_ticks()
     phase = (time_ms // 1500) % 2
-
     base_size = 32
     scale_factor = 0.6 if phase == 0 else 0.65
-
     cursor_size = int(base_size * scale_factor)
     half = cursor_size // 2
-
     bar = 2
     edge = 6
 
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x - half, cursor_center_y - half, bar, edge))
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x - half, cursor_center_y - half, edge, bar))
-
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x + half - bar, cursor_center_y - half, bar, edge))
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x + half - edge, cursor_center_y - half, edge, bar))
-
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x - half, cursor_center_y + half - edge, bar, edge))
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x - half, cursor_center_y + half - bar, edge, bar))
-
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x + half - bar, cursor_center_y + half - edge, bar, edge))
-    pygame.draw.rect(screen, (255, 0, 0),
-        (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y - half, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y - half, edge, bar))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - bar, cursor_center_y - half, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - edge, cursor_center_y - half, edge, bar))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y + half - edge, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y + half - bar, edge, bar))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - bar, cursor_center_y + half - edge, bar, edge))
+    pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -963,6 +911,13 @@ while running:
                         enemy.hit(9999, blood_effects)  # 강제로 사망시킴
                         enemies.remove(enemy)
                         blood_effects.append(ScatteredBlood(enemy.world_x, enemy.world_y))
+                        cx, cy = current_room_pos
+                room_key = (cx, cy)
+
+                if room_key in visited_f_rooms:
+                    visited_f_rooms[room_key]["cleared"] = True
+
+                update_room_state_after_combat(cy, cx)
 
                 config.combat_state = False
                 config.combat_enabled = False
@@ -1105,6 +1060,8 @@ while running:
             0 <= player_center_world_y <= effective_bg_height):
             config.combat_state = True
             print("[DEBUG] Combat START!")
+
+            reveal_neighbors(current_room_pos[0], current_room_pos[1], grid)
 
             combat_walls_info.clear()
 
@@ -1472,13 +1429,23 @@ while running:
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
 
     if config.combat_state and all(not enemy.alive for enemy in enemies):
+        cx, cy = current_room_pos
+        room_key = (cx, cy)
+
+        if room_key in visited_f_rooms:
+            visited_f_rooms[room_key]["cleared"] = True
+
+        update_room_state_after_combat(cy, cx)
+
         config.combat_state = False
         config.combat_enabled = False
         print("[DEBUG] Combat END. Player can go back to tunnel.")
+
         for wall in combat_walls:
             if wall in obstacle_manager.combat_obstacles:
                 obstacle_manager.combat_obstacles.remove(wall)
         combat_walls.clear()
+
         for info in combat_walls_info:
             info["state"] = "hiding"
             info["target_pos"] = info["start_pos"]
