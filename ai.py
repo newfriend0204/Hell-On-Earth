@@ -126,8 +126,8 @@ class Enemy1:
         self.recoil_velocity = 0
         self.recoil_in_progress = False
 
-        self.current_distance = 45 * PLAYER_VIEW_SCALE  # weapon.py 기준
-        self.recoil_strength = 6  # weapon.py 기준
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+        self.recoil_strength = 6
         self.get_player_center_world_fn = get_player_center_world_fn
 
         self.last_pos = (self.world_x, self.world_y)
@@ -465,8 +465,8 @@ class Enemy2(Enemy1):
         self.hp = 150
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
-        self.current_distance = 50 * PLAYER_VIEW_SCALE  # weapon.py 기준
-        self.recoil_strength = 8  # weapon.py 기준
+        self.current_distance = 50 * PLAYER_VIEW_SCALE
+        self.recoil_strength = 8
 
         self.shoot_delay_min = 1250
         self.shoot_delay_max = 2000
@@ -615,7 +615,6 @@ class Enemy2(Enemy1):
         else:
             desired_width = 30
 
-        # 2. 총 이미지 리사이징
         original_width = self.gun_image_original.get_width()
         original_height = self.gun_image_original.get_height()
         scale_factor = desired_width / original_width
@@ -624,7 +623,6 @@ class Enemy2(Enemy1):
             (desired_width, int(original_height * scale_factor))
         )
 
-        # 3. 회전
         rotated_gun = pygame.transform.rotate(
             scaled_gun, -math.degrees(self.direction_angle) - 90
         )

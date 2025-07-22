@@ -1015,7 +1015,6 @@ while running:
         else:
             current_distance = ((t - 0.5) / 0.5) * target_distance
 
-        # 무기 교체는 t >= 1.0 에서 확정
         if t >= 1.0:
             changing_weapon = False
             current_weapon = change_weapon_target

@@ -15,7 +15,6 @@ def load_images():
     gun3_img = pygame.image.load(path_image("image", "Gun", "Gun3Player.png")).convert_alpha()
     gun3_img = pygame.transform.smoothscale(gun3_img, (60, int(gun3_img.get_height() * (60 / gun3_img.get_width()))))
 
-    # Bullet image resized here
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
     desired_width = 60
     scale_factor = desired_width / bullet1_img.get_width()
@@ -30,7 +29,6 @@ def load_images():
     enemy_bullet_img = bullet1_img.copy()
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
-    # Cartridge case resized here
     cartridge_case_img = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
     cartridge_case_img = pygame.transform.smoothscale(
         cartridge_case_img,
@@ -102,7 +100,6 @@ def load_images():
     }
 
 def load_weapon_assets(images):
-    # Use pre-loaded and resized images from load_images()
     weapons = {
         "gun1": {
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun1.png")).convert_alpha(),

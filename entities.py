@@ -13,7 +13,7 @@ class Bullet:
         self.world_y = world_y
         self.speed = speed * PLAYER_VIEW_SCALE
         self.trail = []
-        self.trail_enabled = True  # 무기에서 설정됨
+        self.trail_enabled = True
         self.to_remove = False
         self.start_x = world_x
         self.start_y = world_y
@@ -40,7 +40,6 @@ class Bullet:
         self.world_y += self.vy
         self.collider.center = (self.world_x, self.world_y)
 
-        # ✅ trail 기록은 조건부
         if self.trail_enabled:
             self.trail.append((self.world_x, self.world_y))
             if len(self.trail) > 25:
@@ -69,7 +68,6 @@ class Bullet:
                         return
 
     def draw(self, screen, world_x, world_y):
-        # ✅ trail 그리기 전에 조건 확인
         if self.trail_enabled:
             for pos in self.trail:
                 screen_x = pos[0] - world_x
