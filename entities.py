@@ -3,19 +3,22 @@ import math
 import random
 from collider import Collider
 from config import PLAYER_VIEW_SCALE
+import config
 
 class Bullet:
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
-                 spread_angle_degrees, bullet_image, speed=30, max_distance=500):
+                 spread_angle_degrees, bullet_image, speed=30, max_distance=500, damage=10):
         self.original_image = bullet_image
         self.world_x = world_x
         self.world_y = world_y
         self.speed = speed * PLAYER_VIEW_SCALE
         self.trail = []
+        self.trail_enabled = True  # 무기에서 설정됨
         self.to_remove = False
         self.start_x = world_x
         self.start_y = world_y
         self.max_distance = max_distance * PLAYER_VIEW_SCALE
+        self.damage = damage
 
         angle_to_target = math.atan2(target_world_y - world_y, target_world_x - world_x)
         spread = math.radians(random.uniform(-spread_angle_degrees / 2, spread_angle_degrees / 2))
@@ -37,9 +40,11 @@ class Bullet:
         self.world_y += self.vy
         self.collider.center = (self.world_x, self.world_y)
 
-        self.trail.append((self.world_x, self.world_y))
-        if len(self.trail) > 25:
-            self.trail.pop(0)
+        # ✅ trail 기록은 조건부
+        if self.trail_enabled:
+            self.trail.append((self.world_x, self.world_y))
+            if len(self.trail) > 25:
+                self.trail.pop(0)
 
         dx = self.world_x - self.start_x
         dy = self.world_y - self.start_y
@@ -62,23 +67,24 @@ class Bullet:
                     if not c.bullet_passable:
                         self.to_remove = True
                         return
-            
+
     def draw(self, screen, world_x, world_y):
-        for pos in self.trail:
-            screen_x = pos[0] - world_x
-            screen_y = pos[1] - world_y
+        # ✅ trail 그리기 전에 조건 확인
+        if self.trail_enabled:
+            for pos in self.trail:
+                screen_x = pos[0] - world_x
+                screen_y = pos[1] - world_y
 
-            trail_width = 20
-            trail_height = 4
-            alpha = 40
+                trail_width = 20
+                trail_height = 4
+                alpha = 40
 
-            trail_surf = pygame.Surface((trail_width, trail_height), pygame.SRCALPHA)
-            trail_surf.fill((255, 255, 255, alpha))
+                trail_surf = pygame.Surface((trail_width, trail_height), pygame.SRCALPHA)
+                trail_surf.fill((255, 255, 255, alpha))
 
-            rotated_trail = pygame.transform.rotate(trail_surf, -self.angle_degrees)
-            rect = rotated_trail.get_rect(center=(screen_x, screen_y))
-
-            screen.blit(rotated_trail, rect)
+                rotated_trail = pygame.transform.rotate(trail_surf, -self.angle_degrees)
+                rect = rotated_trail.get_rect(center=(screen_x, screen_y))
+                screen.blit(rotated_trail, rect)
 
         screen_x = self.world_x - world_x
         screen_y = self.world_y - world_y
@@ -92,8 +98,6 @@ class Bullet:
         screen_y = self.world_y - world_y
         return (screen_x < -margin or screen_x > screen_width + margin or
                 screen_y < -margin or screen_y > screen_height + margin)
-
-
 
 class ScatteredBullet:
     def __init__(self, x, y, vx, vy, bullet_image, scale=1.0):
@@ -119,6 +123,10 @@ class ScatteredBullet:
 
         self.rotation_angle = 0
         self.rotation_speed = random.uniform(5, 15) * random.choice([-1, 1])
+    
+    @staticmethod
+    def get_player_world_position():
+        return config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
 
     def update(self):
         self.pos[0] += self.vx

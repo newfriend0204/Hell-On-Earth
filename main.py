@@ -3,13 +3,14 @@ import math
 import random
 from config import *
 import config
-from asset_manager import load_images
+from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
 from entities import Bullet, ScatteredBullet, ScatteredBlood
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
+from weapon import WEAPON_CLASSES
 from world import (
     World,
     generate_map,
@@ -43,11 +44,9 @@ pygame.display.set_caption("Hell On Earth")
 
 images = load_images()
 sounds = load_sounds()
+weapon_assets = load_weapon_assets(images)
 
 original_player_image = images["player"]
-original_gun_image_1 = images["gun1"]
-original_gun_image_2 = images["gun2"]
-original_gun_image_3 = images["gun3"]
 original_bullet_image = images["bullet1"]
 original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
@@ -173,9 +172,6 @@ player_rect = original_player_image.get_rect(
     center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 )
 
-gun_canvas_size = original_gun_image_1.get_size()
-gun_canvas = pygame.Surface(gun_canvas_size, pygame.SRCALPHA)
-
 world_vx = 0
 world_vy = 0
 
@@ -202,7 +198,7 @@ current_distance = 0
 current_weapon = 1
 bullets = []
 scattered_bullets = []
-last_shot_time = 0
+config.bullets = bullets
 
 mouse_left_button_down = False
 mouse_right_button_down = False
@@ -256,6 +252,31 @@ SPAWN_FROM_OPPOSITE = {
     "west": "east",
     "east": "west"
 }
+
+def consume_ammo(cost):
+    global ammo_gauge
+    ammo_gauge -= cost
+
+current_weapon_index = 0
+ammo_gauge = 100
+
+config.world_x = world_x
+config.world_y = world_y
+config.player_rect = player_rect
+config.bullets = bullets
+config.scattered_bullets = scattered_bullets
+config.PLAYER_VIEW_SCALE = PLAYER_VIEW_SCALE  
+
+def get_player_world_position():
+    return (
+        world_x + player_rect.centerx,
+        world_y + player_rect.centery
+    )
+
+weapons = [
+    cls.create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position)
+    for cls in WEAPON_CLASSES
+]
 
 def change_room(direction):
     global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
@@ -884,26 +905,28 @@ while running:
                     pygame.mouse.set_visible(False)
                     fade_in_after_resume = True
             elif event.key == pygame.K_1:
-                if current_weapon != 1 and not changing_weapon:
+                if current_weapon_index != 0:
                     changing_weapon = True
                     change_weapon_target = 1
                     change_animation_timer = 0.0
                     previous_distance = current_distance
-                    target_distance = GUN1_DISTANCE_FROM_CENTER
+                    target_distance = weapons[0].distance_from_center
             elif event.key == pygame.K_2:
-                if current_weapon != 2 and not changing_weapon:
+                if current_weapon_index != 1:
                     changing_weapon = True
                     change_weapon_target = 2
                     change_animation_timer = 0.0
                     previous_distance = current_distance
-                    target_distance = GUN2_DISTANCE_FROM_CENTER
+                    target_distance = weapons[1].distance_from_center
             elif event.key == pygame.K_3:
-                if current_weapon != 3 and not changing_weapon:
+                if current_weapon_index != 2:
                     changing_weapon = True
                     change_weapon_target = 3
                     change_animation_timer = 0.0
                     previous_distance = current_distance
-                    target_distance = GUN3_DISTANCE_FROM_CENTER
+                    target_distance = weapons[2].distance_from_center
+            # elif event.key == pygame.K_4:
+            #     current_weapon_index = 3
             elif event.key == pygame.K_q:
                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
                 for enemy in enemies[:]:
@@ -963,8 +986,9 @@ while running:
         fade_in_after_resume = False
 
     delta_time = clock.get_time()
-    player_center = (world_x + player_rect.centerx, 
-                    world_y + player_rect.centery)
+    player_center = (world_x + player_rect.centerx, world_y + player_rect.centery)
+    weapon = weapons[current_weapon_index]
+    current_weapon_instance = weapon
     
     #적 바보 만들기
     for enemy in enemies:
@@ -982,29 +1006,24 @@ while running:
         if scatter.alpha <= 0:
             scattered_bullets.remove(scatter)
 
-    if current_weapon == 1:
-        distance_from_center = GUN1_DISTANCE_FROM_CENTER
-    elif current_weapon == 2:
-        distance_from_center = GUN2_DISTANCE_FROM_CENTER
-    elif current_weapon == 3:
-        distance_from_center = GUN3_DISTANCE_FROM_CENTER
-    else:
-        distance_from_center = GUN1_DISTANCE_FROM_CENTER
-
     if changing_weapon:
         change_animation_timer += clock.get_time() / 1000.0
         t = min(change_animation_timer / change_animation_time, 1.0)
+
         if t < 0.5:
             current_distance = (1.0 - (t / 0.5)) * previous_distance
         else:
-            if current_weapon != change_weapon_target:
-                current_weapon = change_weapon_target
             current_distance = ((t - 0.5) / 0.5) * target_distance
+
+        # 무기 교체는 t >= 1.0 에서 확정
         if t >= 1.0:
             changing_weapon = False
-            current_distance = target_distance
+            current_weapon = change_weapon_target
+            current_weapon_index = current_weapon - 1
+            weapon = weapons[current_weapon_index]
+            current_distance = weapon.distance_from_center
     else:
-        current_distance = distance_from_center
+        current_distance = weapon.distance_from_center
 
     keys = pygame.key.get_pressed()
 
@@ -1017,14 +1036,8 @@ while running:
         else:
             max_speed = normal_max_speed
 
-    if current_weapon == 1:
-        max_speed *= (1 - GUN1_SPEED_PENALTY)
-    elif current_weapon == 2:
-        max_speed *= (1 - GUN2_SPEED_PENALTY)
-    elif current_weapon == 3:
-        max_speed *= (1 - GUN3_SPEED_PENALTY)
-    else:
-        max_speed *= (1 - GUN1_SPEED_PENALTY)
+    if weapon:
+        max_speed *= (1 - weapon.speed_penalty)
 
     if move_left:
         world_vx -= acceleration_rate
@@ -1264,147 +1277,19 @@ while running:
     rotated_player_image = pygame.transform.rotate(scaled_player_image, -angle_degrees + 90)
     rotated_player_rect = rotated_player_image.get_rect(center=player_rect.center)
 
-    if current_weapon == 1:
-        current_gun_image = original_gun_image_1
-    elif current_weapon == 2:
-        current_gun_image = original_gun_image_2
-    elif current_weapon == 3:
-        current_gun_image = original_gun_image_3 
-    else:
-        current_gun_image = original_gun_image_1
-
-
     gun_pos_x = player_rect.centerx + math.cos(angle_radians) * (current_distance + recoil_offset)
     gun_pos_y = player_rect.centery + math.sin(angle_radians) * (current_distance + recoil_offset)
-    scaled_gun_image = pygame.transform.smoothscale(
-    current_gun_image,
-    (
-        int(current_gun_image.get_width() * PLAYER_VIEW_SCALE),
-        int(current_gun_image.get_height() * PLAYER_VIEW_SCALE)
-    )
-    )
-    rotated_gun_image = pygame.transform.rotate(scaled_gun_image, -angle_degrees + 90)
-    rotated_gun_rect = rotated_gun_image.get_rect(center=(gun_pos_x, gun_pos_y))
 
-    if current_weapon == 1:
-        fire_delay = GUN1_FIRE_DELAY
-        recoil_strength = GUN1_RECOIL
-        fire_sound = sounds["gun1_fire"]
-    elif current_weapon == 2:
-        fire_delay = GUN2_FIRE_DELAY
-        recoil_strength = GUN2_RECOIL
-        fire_sound = sounds["gun2_fire"]
-    elif current_weapon == 3:
-        fire_delay = GUN3_FIRE_DELAY
-        recoil_strength = GUN3_RECOIL
-        fire_sound = sounds["gun3_fire"]
-    else:
-        fire_delay = GUN1_FIRE_DELAY
-        recoil_strength = GUN1_RECOIL
-        fire_sound = sounds["gun1_fire"]
+    fire_delay = weapon.fire_delay
+    recoil_strength = weapon.recoil_strength
 
-
-    if mouse_left_button_down and not changing_weapon:
-        if current_time - last_shot_time > fire_delay:
-            fire_sound.play()
-
-            if current_weapon == 1:
-                spread_angle = GUN1_SPREAD_ANGLE
-            elif current_weapon == 2:
-                spread_angle = GUN2_SPREAD_ANGLE
-            elif current_weapon == 3:
-                spread_angle = GUN3_SPREAD_ANGLE
-            else:
-                spread_angle = GUN1_SPREAD_ANGLE
-            recoil_offset = 0
-            recoil_velocity = -recoil_strength
-
-            allow_sprint = False
-            recoil_in_progress = True
-
-            spawn_offset = 30 * PLAYER_VIEW_SCALE
-            vertical_offset = 6 * PLAYER_VIEW_SCALE
-            offset_angle = angle_radians + math.radians(90)
-            offset_dx = math.cos(offset_angle) * vertical_offset
-            offset_dy = math.sin(offset_angle) * vertical_offset
-
-            if current_weapon == 3:
-                for i in range(GUN3_NUM_BULLETS):
-                    spread_angle_range = GUN3_SPREAD_ANGLE
-                    spread_angle = math.radians(random.uniform(-spread_angle_range, spread_angle_range))
-                    direction_x = math.cos(angle_radians + spread_angle)
-                    direction_y = math.sin(angle_radians + spread_angle)
-
-                    bullet_world_x = world_x + player_rect.centerx + direction_x * spawn_offset + offset_dx
-                    bullet_world_y = world_y + player_rect.centery + direction_y * spawn_offset + offset_dy
-
-                    target_world_x = bullet_world_x + direction_x * 100
-                    target_world_y = bullet_world_y + direction_y * 100
-
-                    new_bullet = Bullet(
-                        bullet_world_x,
-                        bullet_world_y,
-                        target_world_x,
-                        target_world_y,
-                        0,
-                        original_bullet_image,
-                        speed=7.5 * PLAYER_VIEW_SCALE,
-                        max_distance=500 * PLAYER_VIEW_SCALE
-                    )
-                    bullets.append(new_bullet)
-
-                eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
-                eject_speed = 1
-                vx = math.cos(eject_angle) * eject_speed
-                vy = math.sin(eject_angle) * eject_speed
-
-                scatter_x = bullet_world_x
-                scatter_y = bullet_world_y
-
-                scatter = ScatteredBullet(
-                    scatter_x,
-                    scatter_y,
-                    vx,
-                    vy,
-                    original_cartridge_image,
-                    scale=1.5,
-                )
-
-                scattered_bullets.append(scatter)
-            else:
-                direction_x = math.cos(angle_radians)
-                direction_y = math.sin(angle_radians)
-
-                bullet_world_x = world_x + player_rect.centerx + direction_x * spawn_offset + offset_dx
-                bullet_world_y = world_y + player_rect.centery + direction_y * spawn_offset + offset_dy
-                target_world_x = world_x + mouse_x
-                target_world_y = world_y + mouse_y
-
-                new_bullet = Bullet(
-                    bullet_world_x,
-                    bullet_world_y,
-                    target_world_x,
-                    target_world_y,
-                    spread_angle,
-                    original_bullet_image,
-                    speed=10 * PLAYER_VIEW_SCALE,
-                    max_distance=2000 * PLAYER_VIEW_SCALE
-                )
-
-                bullets.append(new_bullet)
-
-                eject_angle = angle_radians + math.radians(90 + random.uniform(-15, 15))
-                eject_speed = 1
-                vx = math.cos(eject_angle) * eject_speed
-                vy = math.sin(eject_angle) * eject_speed
-
-                scatter_x = bullet_world_x
-                scatter_y = bullet_world_y
-
-                scattered_bullets.append(ScatteredBullet(scatter_x, scatter_y, vx, vy, original_cartridge_image))
-
-            shake_timer = 10
-            last_shot_time = current_time
+    if weapon:
+        if not changing_weapon:
+            weapon.on_update(mouse_left_button_down)
+            if weapon.last_shot_time == pygame.time.get_ticks():
+                recoil_in_progress = True
+                recoil_velocity = -weapon.recoil_strength
+                allow_sprint = False
 
     recoil_velocity += 1.5
     recoil_offset += recoil_velocity
@@ -1427,6 +1312,7 @@ while running:
         shake_offset_y = 0
 
     bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
+    config.bullets = bullets
 
     if config.combat_state and all(not enemy.alive for enemy in enemies):
         cx, cy = current_room_pos
@@ -1661,11 +1547,6 @@ while running:
         for enemy in enemies:
             enemy.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
 
-        for bullet in bullets:
-            bullet.draw(screen, world_x, world_y)
-        for bullet in config.global_enemy_bullets:
-            bullet.draw(screen, world_x, world_y)
-
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 
         display_w, display_h = screen.get_size()
@@ -1691,7 +1572,22 @@ while running:
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
         continue
 
-    screen.blit(rotated_gun_image, rotated_gun_rect.move(shake_offset_x, shake_offset_y))
+    if weapon:
+        render_weapon = weapon
+        if changing_weapon and t >= 0.5:
+            render_weapon = weapons[change_weapon_target - 1]
+
+        if render_weapon:
+            scaled_image = pygame.transform.smoothscale(
+                render_weapon.topdown_image,
+                (
+                    int(render_weapon.topdown_image.get_width() * PLAYER_VIEW_SCALE),
+                    int(render_weapon.topdown_image.get_height() * PLAYER_VIEW_SCALE)
+                )
+            )
+            rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
+            rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
+            screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
     speed = math.sqrt(world_vx ** 2 + world_vy ** 2)
@@ -1713,7 +1609,7 @@ while running:
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)
-
+    
     pygame.display.flip()
     clock.tick(60)
 pygame.quit()

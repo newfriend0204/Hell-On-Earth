@@ -88,7 +88,7 @@ class Enemy1:
         self.world_x = world_x
         self.world_y = world_y
         self.image_original = image
-        self.gun_image_original = gun_image
+        self.gun_image_original = pygame.transform.flip(gun_image, True, False)
         self.bullet_image = bullet_image
         self.sounds = sounds
         self.hp = 100
@@ -126,7 +126,8 @@ class Enemy1:
         self.recoil_velocity = 0
         self.recoil_in_progress = False
 
-        self.current_distance = GUN1_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
+        self.current_distance = 45 * PLAYER_VIEW_SCALE  # weapon.py 기준
+        self.recoil_strength = 6  # weapon.py 기준
         self.get_player_center_world_fn = get_player_center_world_fn
 
         self.last_pos = (self.world_x, self.world_y)
@@ -156,7 +157,7 @@ class Enemy1:
             self.kill_callback()
         self.hp = 0
         self.alive = False
-        self.sounds["enmey_die"].play()
+        self.sounds["enemy_die"].play()
         blood_x = self.world_x
         blood_y = self.world_y
         blood = ParticleBlood(blood_x, blood_y, scale=PLAYER_VIEW_SCALE)
@@ -353,7 +354,7 @@ class Enemy1:
         self.fire_sound.play()
 
         self.recoil_offset = 0
-        self.recoil_velocity = -GUN1_RECOIL
+        self.recoil_velocity = -self.recoil_strength
         self.recoil_in_progress = True
 
         spawn_offset = 30
@@ -405,15 +406,8 @@ class Enemy1:
 
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
-        scaled_gun = pygame.transform.smoothscale(
-        self.gun_image_original,
-            (
-                int(self.gun_image_original.get_width() * PLAYER_VIEW_SCALE),
-                int(self.gun_image_original.get_height() * PLAYER_VIEW_SCALE)
-            )
-        )
         rotated_gun = pygame.transform.rotate(
-            scaled_gun, -math.degrees(self.direction_angle) + 90
+            self.gun_image_original, -math.degrees(self.direction_angle) - 90
         )
 
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
@@ -471,7 +465,8 @@ class Enemy2(Enemy1):
         self.hp = 150
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
-        self.current_distance = GUN2_DISTANCE_FROM_CENTER * PLAYER_VIEW_SCALE
+        self.current_distance = 50 * PLAYER_VIEW_SCALE  # weapon.py 기준
+        self.recoil_strength = 8  # weapon.py 기준
 
         self.shoot_delay_min = 1250
         self.shoot_delay_max = 2000
@@ -547,7 +542,7 @@ class Enemy2(Enemy1):
         self.fire_sound.play()
 
         self.recoil_offset = 0
-        self.recoil_velocity = -GUN2_RECOIL
+        self.recoil_velocity = -self.recoil_strength
         self.recoil_in_progress = True
 
         angle = fixed_angle if fixed_angle is not None else self.direction_angle
@@ -615,15 +610,23 @@ class Enemy2(Enemy1):
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
 
+        if isinstance(self, Enemy2):
+            desired_width = 50
+        else:
+            desired_width = 30
+
+        # 2. 총 이미지 리사이징
+        original_width = self.gun_image_original.get_width()
+        original_height = self.gun_image_original.get_height()
+        scale_factor = desired_width / original_width
         scaled_gun = pygame.transform.smoothscale(
-        self.gun_image_original,
-            (
-                int(self.gun_image_original.get_width() * PLAYER_VIEW_SCALE),
-                int(self.gun_image_original.get_height() * PLAYER_VIEW_SCALE)
-            )
+            self.gun_image_original,
+            (desired_width, int(original_height * scale_factor))
         )
+
+        # 3. 회전
         rotated_gun = pygame.transform.rotate(
-            scaled_gun, -math.degrees(self.direction_angle) + 90
+            scaled_gun, -math.degrees(self.direction_angle) - 90
         )
 
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))

@@ -9,23 +9,13 @@ def load_images():
     player_img = pygame.transform.smoothscale(player_img, (90, 90))
 
     gun1_img = pygame.image.load(path_image("image", "Gun", "Gun1Player.png")).convert_alpha()
-    gun1_img = pygame.transform.rotate(gun1_img, 180)
-    desired_gun1_width = 30
-    scale_factor1 = desired_gun1_width / gun1_img.get_width()
-    gun1_img = pygame.transform.smoothscale(gun1_img, (int(gun1_img.get_width() * scale_factor1), int(gun1_img.get_height() * scale_factor1)))
-
+    gun1_img = pygame.transform.smoothscale(gun1_img, (30, int(gun1_img.get_height() * (30 / gun1_img.get_width()))))
     gun2_img = pygame.image.load(path_image("image", "Gun", "Gun2Player.png")).convert_alpha()
-    gun2_img = pygame.transform.rotate(gun2_img, 180)
-    desired_gun2_width = 50
-    scale_factor2 = desired_gun2_width / gun2_img.get_width()
-    gun2_img = pygame.transform.smoothscale(gun2_img, (int(gun2_img.get_width() * scale_factor2), int(gun2_img.get_height() * scale_factor2)))
-
+    gun2_img = pygame.transform.smoothscale(gun2_img, (50, int(gun2_img.get_height() * (50 / gun2_img.get_width()))))
     gun3_img = pygame.image.load(path_image("image", "Gun", "Gun3Player.png")).convert_alpha()
-    gun3_img = pygame.transform.rotate(gun3_img, 180)
-    desired_gun3_width = 60
-    scale_factor3 = desired_gun3_width / gun3_img.get_width()
-    gun3_img = pygame.transform.smoothscale(gun3_img, (int(gun3_img.get_width() * scale_factor3), int(gun3_img.get_height() * scale_factor3)))
+    gun3_img = pygame.transform.smoothscale(gun3_img, (60, int(gun3_img.get_height() * (60 / gun3_img.get_width()))))
 
+    # Bullet image resized here
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
     desired_width = 60
     scale_factor = desired_width / bullet1_img.get_width()
@@ -37,36 +27,28 @@ def load_images():
         )
     )
 
-    cartridge_case_img = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
-    desired_width = 5
-    scale_factor = desired_width / cartridge_case_img.get_width()
-    cartridge_case_img = pygame.transform.smoothscale(
-        cartridge_case_img,
-        (
-            int(cartridge_case_img.get_width() * scale_factor),
-            int(cartridge_case_img.get_height() * scale_factor)
-        )
-    )
-
     enemy_bullet_img = bullet1_img.copy()
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
+    # Cartridge case resized here
+    cartridge_case_img = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
+    cartridge_case_img = pygame.transform.smoothscale(
+        cartridge_case_img,
+        (5, int(cartridge_case_img.get_height() * 5 / cartridge_case_img.get_width()))
+    )
+
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
+    cursor_img = pygame.transform.smoothscale(cursor_img, (32, 32))
 
     bg_img = pygame.image.load(path_image("Image", "Map1.png")).convert()
     bg_img = pygame.transform.smoothscale(bg_img, (BG_WIDTH, BG_HEIGHT))
-    cursor_img = pygame.transform.smoothscale(cursor_img, (32, 32))
 
     wall_barrier_img = pygame.image.load(path_image("Image", "Map1Wall.png")).convert_alpha()
     scale_factor = 0.275 * PLAYER_VIEW_SCALE
-    scaled_width = int(wall_barrier_img.get_width() * scale_factor)
-    scaled_height = int(wall_barrier_img.get_height() * scale_factor)
-
-    wall_barrier_img = pygame.transform.smoothscale(
-        wall_barrier_img,
-        (scaled_width, scaled_height)
-    )
-
+    wall_barrier_img = pygame.transform.smoothscale(wall_barrier_img, (
+        int(wall_barrier_img.get_width() * scale_factor),
+        int(wall_barrier_img.get_height() * scale_factor)
+    ))
     wall_barrier_img_rotated = pygame.transform.rotate(wall_barrier_img, 90)
 
     obstacle_sizes = {
@@ -79,7 +61,7 @@ def load_images():
         "Tree2.png": (1024, 1024),
         "FallenLog1.png": (1024, 1536),
         "FallenLog2.png": (1536, 1024),
-        "TreeStump.png" : (1024, 1024),
+        "TreeStump.png": (1024, 1024),
     }
 
     obstacle_dir = path_image("Image", "Obstacle")
@@ -91,11 +73,9 @@ def load_images():
             if filename in obstacle_sizes:
                 img_path = os.path.join(obstacle_dir, filename)
                 image = pygame.image.load(img_path).convert_alpha()
-                new_size = obstacle_sizes[filename]
-                image = pygame.transform.smoothscale(image, new_size)
-                mask = pygame.mask.from_surface(image)
+                image = pygame.transform.smoothscale(image, obstacle_sizes[filename])
                 obstacle_images[filename] = image
-                obstacle_masks[filename] = mask
+                obstacle_masks[filename] = pygame.mask.from_surface(image)
 
     enemy1_img = pygame.image.load(path_image("image", "character", "Enemy1.png")).convert_alpha()
     enemy1_img = pygame.transform.smoothscale(enemy1_img, (90, 90))
@@ -120,3 +100,27 @@ def load_images():
         "wall_barrier": wall_barrier_img,
         "wall_barrier_rotated": wall_barrier_img_rotated,
     }
+
+def load_weapon_assets(images):
+    # Use pre-loaded and resized images from load_images()
+    weapons = {
+        "gun1": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun1.png")).convert_alpha(),
+            "topdown": images["gun1"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun2": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun2.png")).convert_alpha(),
+            "topdown": images["gun2"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun3": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun3.png")).convert_alpha(),
+            "topdown": images["gun3"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+    }
+    return weapons
