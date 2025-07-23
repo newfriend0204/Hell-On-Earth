@@ -268,16 +268,44 @@ config.bullets = bullets
 config.scattered_bullets = scattered_bullets
 config.PLAYER_VIEW_SCALE = PLAYER_VIEW_SCALE  
 
+weapon_ui_cache = {
+    "slot_surface": None,
+    "numbers": [],
+    "resized_images": {}
+}
+
 def get_player_world_position():
     return (
         world_x + player_rect.centerx,
         world_y + player_rect.centery
     )
 
+def init_weapon_ui_cache(weapons):
+    slot_width = 92
+    slot_height = 54
+    slot_alpha = 180
+
+    surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
+    surface.fill((200, 200, 200, slot_alpha))
+    weapon_ui_cache["slot_surface"] = surface
+
+    font = pygame.font.SysFont('arial', 18)
+    weapon_ui_cache["numbers"] = [font.render(str(i + 1), True, (255, 255, 255)) for i in range(4)]
+
+    weapon_ui_cache["resized_images"].clear()
+    for weapon in weapons:
+        img = weapon.front_image
+        img_w, img_h = img.get_size()
+        scale = min(slot_width / img_w, slot_height / img_h) * 0.85
+        new_size = (int(img_w * scale), int(img_h * scale))
+        scaled_img = pygame.transform.smoothscale(img, new_size)
+        weapon_ui_cache["resized_images"][id(img)] = scaled_img
+
 weapons = [
     cls.create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position)
     for cls in WEAPON_CLASSES
 ]
+init_weapon_ui_cache(weapons)
 
 def change_room(direction):
     global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
@@ -564,55 +592,6 @@ def swipe_transition(screen, old_surface, new_surface, direction="right", durati
         pygame.display.flip()
         clock.tick(fps)
 
-def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="right", duration=0.5, fps=60):
-    width, height = screen.get_size()
-    frames = int(duration * fps // 2)
-    clock = pygame.time.Clock()
-    horizontal = direction in ("left", "right")
-
-    overlay = make_soft_curtain(width, height, horizontal=horizontal, direction=direction)
-
-    for i in range(frames + 1):
-        t = i / frames
-        t_eased = 1 - (1 - t) ** 2
-        offset = int((width if horizontal else height) * t_eased)
-
-        screen.blit(old_surface, (0, 0))
-
-        if direction == "right":
-            screen.blit(overlay, (offset - width, 0))
-        elif direction == "left":
-            screen.blit(overlay, (width - offset, 0))
-        elif direction == "down":
-            screen.blit(overlay, (0, offset - height))
-        elif direction == "up":
-            screen.blit(overlay, (0, height - offset))
-
-    pygame.display.flip()
-    clock.tick(fps)
-
-    draw_new_room_fn()
-    new_surface = screen.copy()
-
-    for i in range(frames + 1):
-        t = i / frames
-        t_eased = t ** 2
-        offset = int((width if horizontal else height) * t_eased)
-
-        screen.blit(new_surface, (0, 0))
-
-        if direction == "right":
-            screen.blit(overlay, (offset - width, 0))
-        elif direction == "left":
-            screen.blit(overlay, (width - offset, 0))
-        elif direction == "down":
-            screen.blit(overlay, (0, offset - height))
-        elif direction == "up":
-            screen.blit(overlay, (0, height - offset))
-
-        pygame.display.flip()
-        clock.tick(fps)
-
 def make_soft_curtain(width, height, horizontal=True, direction="right"):
     scale = 2
     curtain_width = int(width * scale)
@@ -807,6 +786,69 @@ def draw_minimap(screen, grid, current_room_pos):
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y + half - bar, edge, bar))
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - bar, cursor_center_y + half - edge, bar, edge))
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
+
+def draw_weapon_ui(screen, weapons, current_weapon_index):
+    slot_width = 92
+    slot_height = 54
+    padding = 8
+    offset_y_selected = -5
+    screen_width, screen_height = screen.get_size()
+    total_width = 4 * slot_width + 3 * padding
+    start_x = screen_width - total_width - 20
+    y_base = screen_height - slot_height - 20
+
+    slot_surface = weapon_ui_cache["slot_surface"]
+    numbers = weapon_ui_cache["numbers"]
+    resized = weapon_ui_cache["resized_images"]
+
+    mouse_pos = pygame.mouse.get_pos()
+    tooltip_weapon_name = None
+
+    for i in range(4):
+        x = start_x + i * (slot_width + padding)
+        y = y_base
+        if i == current_weapon_index:
+            y += offset_y_selected
+
+        rect = pygame.Rect(x, y, slot_width, slot_height)
+        screen.blit(slot_surface, (x, y))
+
+        if i < len(weapons):
+            weapon = weapons[i]
+            img = weapon.front_image
+            img_id = id(img)
+
+            if img_id not in resized:
+                img_w, img_h = img.get_size()
+                scale = min(slot_width / img_w, slot_height / img_h) * 0.85
+                new_size = (int(img_w * scale), int(img_h * scale))
+                scaled_img = pygame.transform.smoothscale(img, new_size)
+                resized[img_id] = scaled_img
+
+            scaled_img = resized[img_id]
+            img_rect = scaled_img.get_rect(center=(x + slot_width // 2, y + slot_height // 2))
+            screen.blit(scaled_img, img_rect)
+
+            if rect.collidepoint(mouse_pos):
+                tooltip_weapon_name = weapon.name  # 무기 이름 표시용
+
+        # 숫자 (1~4)
+        screen.blit(numbers[i], (x + 5, y + slot_height - numbers[i].get_height() - 5))
+
+        # 선택된 슬롯 테두리
+        if i == current_weapon_index:
+            pygame.draw.rect(screen, (255, 255, 255), (x, y, slot_width, slot_height), 2)
+
+    # 마우스 오버 툴팁 표시
+    if tooltip_weapon_name and not config.combat_state:
+        tooltip_font = pygame.font.SysFont("arial", 18)
+        tooltip_surface = tooltip_font.render(tooltip_weapon_name, True, (255, 255, 255))
+        tooltip_bg = pygame.Surface((tooltip_surface.get_width() + 10, tooltip_surface.get_height() + 6), pygame.SRCALPHA)
+        tooltip_bg.fill((0, 0, 0))  # 반투명 검은 배경
+        tooltip_x = mouse_pos[0] + 10
+        tooltip_y = mouse_pos[1] - tooltip_surface.get_height() - 14
+        screen.blit(tooltip_bg, (tooltip_x, tooltip_y))
+        screen.blit(tooltip_surface, (tooltip_x + 5, tooltip_y + 3))
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -1565,21 +1607,6 @@ while running:
 
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 
-        display_w, display_h = screen.get_size()
-        hp_ratio = max(0, player_hp / player_hp_max)
-        hp_bar_width = 300
-        hp_bar_height = 30
-        hp_bar_x = display_w // 2 - hp_bar_width // 2
-        hp_bar_y = display_h - 60
-        current_width = int(hp_bar_width * hp_ratio)
-
-        pygame.draw.rect(screen, (80, 80, 80), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
-        pygame.draw.rect(screen, (0, 255, 0), (hp_bar_x, hp_bar_y, current_width, hp_bar_height))
-
-        screen.blit(DEBUG_FONT.render(f"Speed: {math.sqrt(world_vx ** 2 + world_vy ** 2):.2f}", True, (255, 255, 255)), (10, 10))
-        screen.blit(DEBUG_FONT.render(f"Weapon: gun{current_weapon}", True, (255, 255, 255)), (10, 40))
-        screen.blit(DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255)), (10, 70))
-
     if slide_direction:
         def draw_new_room():
             change_room(next_dir)
@@ -1622,6 +1649,7 @@ while running:
     screen.blit(fps_surface, (10, 100))
 
     draw_minimap(screen, grid, current_room_pos)
+    draw_weapon_ui(screen, weapons, current_weapon_index)
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

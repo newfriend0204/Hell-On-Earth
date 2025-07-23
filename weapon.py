@@ -69,7 +69,7 @@ class Gun1(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun1(
-            name="gun1",
+            name="M1911",
             front_image=weapon_assets["gun1"]["front"],
             topdown_image=weapon_assets["gun1"]["topdown"],
             uses_bullets=True,
@@ -158,7 +158,7 @@ class Gun2(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun2(
-            name="gun2",
+            name="AK47",
             front_image=weapon_assets["gun2"]["front"],
             topdown_image=weapon_assets["gun2"]["topdown"],
             uses_bullets=True,
@@ -246,7 +246,7 @@ class Gun3(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun3(
-            name="gun3",
+            name="Remington 870",
             front_image=weapon_assets["gun3"]["front"],
             topdown_image=weapon_assets["gun3"]["topdown"],
             uses_bullets=True,
@@ -335,7 +335,7 @@ class Gun4(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun4(
-            name="gun4",
+            name="grenade launcher",
             front_image=weapon_assets["gun4"]["front"],
             topdown_image=weapon_assets["gun4"]["topdown"],
             uses_bullets=True,
@@ -416,7 +416,7 @@ class Gun5(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun5(
-            name="gun5",
+            name="minigun",
             front_image=weapon_assets["gun5"]["front"],
             topdown_image=weapon_assets["gun5"]["topdown"],
             uses_bullets=True,
@@ -560,7 +560,7 @@ class Gun6(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun6(
-            name="gun6",
+            name="modified smg",
             front_image=weapon_assets["gun6"]["front"],
             topdown_image=weapon_assets["gun6"]["topdown"],
             uses_bullets=True,
