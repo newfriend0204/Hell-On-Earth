@@ -908,34 +908,16 @@ while running:
                 else:
                     pygame.mouse.set_visible(False)
                     fade_in_after_resume = True
-            elif event.key == pygame.K_1:
-                if current_weapon_index != 0:
+            elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
+                slot = event.key - pygame.K_1  # 0 ~ 3
+                if 0 <= slot < len(weapons) and current_weapon_index != slot:
+                    if hasattr(weapons[current_weapon_index], "on_weapon_switch"):
+                        weapons[current_weapon_index].on_weapon_switch()
                     changing_weapon = True
-                    change_weapon_target = 1
+                    change_weapon_target = slot
                     change_animation_timer = 0.0
                     previous_distance = current_distance
-                    target_distance = weapons[0].distance_from_center
-            elif event.key == pygame.K_2:
-                if current_weapon_index != 1:
-                    changing_weapon = True
-                    change_weapon_target = 2
-                    change_animation_timer = 0.0
-                    previous_distance = current_distance
-                    target_distance = weapons[1].distance_from_center
-            elif event.key == pygame.K_3:
-                if current_weapon_index != 2:
-                    changing_weapon = True
-                    change_weapon_target = 3
-                    change_animation_timer = 0.0
-                    previous_distance = current_distance
-                    target_distance = weapons[2].distance_from_center
-            elif event.key == pygame.K_4:
-                if current_weapon_index != 3:
-                    changing_weapon = True
-                    change_weapon_target = 4
-                    change_animation_timer = 0.0
-                    previous_distance = current_distance
-                    target_distance = weapons[3].distance_from_center
+                    target_distance = weapons[slot].distance_from_center
             elif event.key == pygame.K_q:
                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
                 for enemy in enemies[:]:
@@ -974,9 +956,13 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 mouse_left_button_down = True
+            elif event.button == 3:
+                mouse_right_button_down = True
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:
                 mouse_left_button_down = False
+            elif event.button == 3:
+                mouse_right_button_down = False
 
     if paused:
         renderer.handle_events(events)
@@ -1026,8 +1012,8 @@ while running:
 
         if t >= 1.0:
             changing_weapon = False
-            current_weapon = change_weapon_target
-            current_weapon_index = current_weapon - 1
+            current_weapon_index = change_weapon_target
+            current_weapon = current_weapon_index + 1
             weapon = weapons[current_weapon_index]
             current_distance = weapon.distance_from_center
     else:
@@ -1290,10 +1276,10 @@ while running:
 
     scaled_player_image = pygame.transform.smoothscale(
     original_player_image,
-    (
-        int(original_player_image.get_width() * PLAYER_VIEW_SCALE),
-        int(original_player_image.get_height() * PLAYER_VIEW_SCALE)
-    )
+        (
+            int(original_player_image.get_width() * PLAYER_VIEW_SCALE),
+            int(original_player_image.get_height() * PLAYER_VIEW_SCALE)
+        )
     )
     rotated_player_image = pygame.transform.rotate(scaled_player_image, -angle_degrees + 90)
     rotated_player_rect = rotated_player_image.get_rect(center=player_rect.center)
@@ -1306,7 +1292,7 @@ while running:
 
     if weapon:
         if not changing_weapon:
-            weapon.on_update(mouse_left_button_down)
+            weapon.on_update(mouse_left_button_down, mouse_right_button_down)
             if weapon.last_shot_time == pygame.time.get_ticks():
                 recoil_in_progress = True
                 recoil_offset = 0
@@ -1605,7 +1591,7 @@ while running:
     if weapon:
         render_weapon = weapon
         if changing_weapon and t >= 0.5:
-            render_weapon = weapons[change_weapon_target - 1]
+            render_weapon = weapons[change_weapon_target]
 
         if render_weapon:
             scaled_image = pygame.transform.smoothscale(

@@ -118,7 +118,6 @@ class Grenade:
         self.exploded = False
         self.collider = Collider("circle", center=(self.x, self.y), size=image.get_width() // 2)
 
-        # For explosion visual
         self.explosion_start_time = None
         self.explosion_duration = 0.4
         self.explosion_scale = 1.5
@@ -177,7 +176,6 @@ class Grenade:
             self.explosion_sound.play()
             self.explosion_played = True
 
-        # 이펙트 따로 추가 (config.bullets에)
         config.bullets.append(
             ExplosionEffectPersistent(self.x, self.y, self.explosion_image)
         )
@@ -235,7 +233,7 @@ class ExplosionEffectPersistent:
         self.scale = scale
         self.alpha = 255
         self.finished = False
-        self.drawn_once = False  # 반드시 draw 되기 전까지는 제거하지 않도록
+        self.drawn_once = False
 
     def update(self):
         elapsed = time.time() - self.start_time
