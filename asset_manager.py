@@ -10,10 +10,21 @@ def load_images():
 
     gun1_img = pygame.image.load(path_image("image", "Gun", "Gun1Player.png")).convert_alpha()
     gun1_img = pygame.transform.smoothscale(gun1_img, (30, int(gun1_img.get_height() * (30 / gun1_img.get_width()))))
+
     gun2_img = pygame.image.load(path_image("image", "Gun", "Gun2Player.png")).convert_alpha()
     gun2_img = pygame.transform.smoothscale(gun2_img, (50, int(gun2_img.get_height() * (50 / gun2_img.get_width()))))
+
     gun3_img = pygame.image.load(path_image("image", "Gun", "Gun3Player.png")).convert_alpha()
     gun3_img = pygame.transform.smoothscale(gun3_img, (60, int(gun3_img.get_height() * (60 / gun3_img.get_width()))))
+
+    gun4_img = pygame.image.load(path_image("image", "Gun", "Gun4Player.png")).convert_alpha()
+    gun4_img = pygame.transform.smoothscale(gun4_img, (60, int(gun4_img.get_height() * (60 / gun4_img.get_width()))))
+
+    grenade_img = pygame.image.load(path_image("image", "Gun", "LauncherGrenade1.png")).convert_alpha()
+    grenade_img = pygame.transform.smoothscale(grenade_img, (30, 30))
+
+    explosion_img = pygame.image.load(path_image("image", "Gun", "LauncherGrenade1Explosion.png")).convert_alpha()
+    explosion_img = pygame.transform.smoothscale(explosion_img, (200, 200))
 
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
     desired_width = 60
@@ -86,7 +97,10 @@ def load_images():
         "gun1": gun1_img,
         "gun2": gun2_img,
         "gun3": gun3_img,
+        "gun4": gun4_img,
         "bullet1": bullet1_img,
+        "grenade1": grenade_img,
+        "explosion1": explosion_img,
         "cartridge_case1": cartridge_case_img,
         "enemy_bullet": enemy_bullet_img,
         "enemy1": enemy1_img,
@@ -119,5 +133,13 @@ def load_weapon_assets(images):
             "bullets": [images["bullet1"]],
             "cartridges": [images["cartridge_case1"]],
         },
+        "gun4": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun4.png")).convert_alpha(),
+            "topdown": images["gun4"],
+            "bullets": [images["grenade1"]],
+            "cartridges": [],
+        },
+        
     }
+    weapons["explosion1"] = images["explosion1"]
     return weapons

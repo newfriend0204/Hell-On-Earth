@@ -62,3 +62,5 @@ combat_state = False
 combat_enabled = True
 
 global_enemy_bullets = []
+all_enemies = []
+blood_effects = []

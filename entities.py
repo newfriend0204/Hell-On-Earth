@@ -1,5 +1,6 @@
 import pygame
 import math
+import time
 import random
 from collider import Collider
 from config import PLAYER_VIEW_SCALE
@@ -96,6 +97,161 @@ class Bullet:
         screen_y = self.world_y - world_y
         return (screen_x < -margin or screen_x > screen_width + margin or
                 screen_y < -margin or screen_y > screen_height + margin)
+
+class Grenade:
+    def __init__(self, x, y, vx, vy, image, explosion_radius, max_damage, min_damage, explosion_image, explosion_sound):
+        self.x = x
+        self.y = y
+        self.vx = vx * 8 * config.PLAYER_VIEW_SCALE
+        self.vy = vy * 8 * config.PLAYER_VIEW_SCALE
+        self.image = image
+        self.start_x = x
+        self.start_y = y
+        self.max_distance = 400 * config.PLAYER_VIEW_SCALE
+        self.explosion_radius = explosion_radius
+        self.max_damage = max_damage
+        self.min_damage = min_damage
+        self.explosion_image = explosion_image
+        self.explosion_sound = explosion_sound
+        self.alive = True
+        self.angle_degrees = math.degrees(math.atan2(self.vy, self.vx))
+        self.exploded = False
+        self.collider = Collider("circle", center=(self.x, self.y), size=image.get_width() // 2)
+
+        # For explosion visual
+        self.explosion_start_time = None
+        self.explosion_duration = 0.4
+        self.explosion_scale = 1.5
+        self.explosion_alpha = 255
+        self.explosion_played = False
+
+    def update(self, obstacle_manager=None):
+        if not self.alive and not self.exploded:
+            return
+
+        if not self.exploded:
+            self.x += self.vx
+            self.y += self.vy
+            self.collider.center = (self.x, self.y)
+
+            dx = self.x - self.start_x
+            dy = self.y - self.start_y
+            traveled = math.hypot(dx, dy)
+            if traveled >= self.max_distance:
+                self.explode()
+                return
+
+            if config.combat_state:
+                for enemy in config.all_enemies:
+                    if enemy.alive:
+                        dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+                        if dist < self.collider.size + enemy.radius:
+                            self.explode()
+                            return
+
+            if obstacle_manager:
+                for obs in obstacle_manager.placed_obstacles + obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+                    for c in obs.colliders:
+                        if c.check_collision_circle((self.x, self.y), self.image.get_width() / 2, (obs.world_x, obs.world_y)):
+                            if not getattr(c, "bullet_passable", False):
+                                self.explode()
+                                return
+
+        elif self.exploded:
+            elapsed = time.time() - self.explosion_start_time
+            if elapsed >= self.explosion_duration:
+                self.alive = False
+                return
+            else:
+                ratio = 1 - (elapsed / self.explosion_duration)
+                self.explosion_alpha = int(255 * ratio)
+                self.explosion_scale = 1.5 * ratio
+
+    def explode(self):
+        if self.exploded:
+            return
+        self.exploded = True
+        self.explosion_start_time = time.time()
+
+        if not self.explosion_played:
+            self.explosion_sound.play()
+            self.explosion_played = True
+
+        # 이펙트 따로 추가 (config.bullets에)
+        config.bullets.append(
+            ExplosionEffectPersistent(self.x, self.y, self.explosion_image)
+        )
+
+        if not config.combat_state:
+            return
+
+        for enemy in config.all_enemies[:]:
+            if not getattr(enemy, "alive", True):
+                continue
+            dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+            if dist <= self.explosion_radius:
+                factor = max(0, min(1, 1 - dist / self.explosion_radius))
+                damage = self.min_damage + (self.max_damage - self.min_damage) * factor
+                print(f"[DEBUG] 유탄 폭발 거리 {dist:.1f}, 데미지 {damage:.1f}")
+                enemy.hit(damage, config.blood_effects)
+
+                if not enemy.alive:
+                    if enemy in config.all_enemies:
+                        config.all_enemies.remove(enemy)
+                    config.blood_effects.append(
+                        ScatteredBlood(enemy.world_x, enemy.world_y)
+                    )
+
+    def draw(self, screen, world_x, world_y):
+        if self.alive and not self.exploded:
+            rotated_image = pygame.transform.rotate(self.image, -self.angle_degrees)
+            rect = rotated_image.get_rect(center=(self.x - world_x, self.y - world_y))
+            screen.blit(rotated_image, rect)
+        elif self.exploded:
+            size = int(self.explosion_image.get_width() * self.explosion_scale)
+            image_scaled = pygame.transform.smoothscale(self.explosion_image, (size, size)).copy()
+            image_scaled.set_alpha(self.explosion_alpha)
+            screen.blit(
+                image_scaled,
+                (self.x - size // 2 - world_x, self.y - size // 2 - world_y)
+            )
+
+    def is_offscreen(self, screen_width, screen_height, world_x, world_y):
+        margin = 2000
+        screen_x = self.x - world_x
+        screen_y = self.y - world_y
+        return (
+            screen_x < -margin or screen_x > screen_width + margin or
+            screen_y < -margin or screen_y > screen_height + margin
+        )
+
+class ExplosionEffectPersistent:
+    def __init__(self, x, y, image, duration=0.4, scale=1.5):
+        self.x = x
+        self.y = y
+        self.image = image
+        self.start_time = time.time()
+        self.duration = duration
+        self.scale = scale
+        self.alpha = 255
+        self.finished = False
+        self.drawn_once = False  # 반드시 draw 되기 전까지는 제거하지 않도록
+
+    def update(self):
+        elapsed = time.time() - self.start_time
+        if elapsed >= self.duration:
+            self.finished = True
+        else:
+            ratio = 1 - (elapsed / self.duration)
+            self.alpha = int(255 * ratio)
+            self.scale = 1.5 * ratio
+
+    def draw(self, screen, world_x, world_y):
+        self.drawn_once = True
+        size = int(self.image.get_width() * self.scale)
+        scaled = pygame.transform.smoothscale(self.image, (size, size)).copy()
+        scaled.set_alpha(self.alpha)
+        screen.blit(scaled, (self.x - size // 2 - world_x, self.y - size // 2 - world_y))
 
 class ScatteredBullet:
     def __init__(self, x, y, vx, vy, bullet_image, scale=1.0):

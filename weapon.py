@@ -20,7 +20,7 @@ class WeaponBase:
         left_click_ammo_cost,
         right_click_ammo_cost,
         tier,
-        play_sound_fn,
+        sounds_dict,
         get_ammo_gauge_fn,
         reduce_ammo_fn,
         bullet_has_trail,
@@ -38,7 +38,7 @@ class WeaponBase:
         self.left_click_ammo_cost = left_click_ammo_cost
         self.right_click_ammo_cost = right_click_ammo_cost
         self.tier = tier
-        self.play_sound = play_sound_fn
+        self.sounds = sounds_dict
         self.get_ammo_gauge = get_ammo_gauge_fn
         self.reduce_ammo = reduce_ammo_fn
         self.bullet_has_trail = bullet_has_trail
@@ -79,7 +79,9 @@ class Gun1(WeaponBase):
             left_click_ammo_cost=Gun1.AMMO_COST,
             right_click_ammo_cost=0,
             tier=1,
-            play_sound_fn=lambda name: sounds[name].play(),
+            sounds_dict={
+                "fire": sounds["gun1_fire"],
+            },
             get_ammo_gauge_fn=lambda: ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
@@ -97,7 +99,7 @@ class Gun1(WeaponBase):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
         self.reduce_ammo(self.left_click_ammo_cost)
-        self.play_sound("gun1_fire")
+        self.sounds["fire"].play()
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         player_center_x, player_center_y = self.get_player_world_position()
@@ -150,7 +152,7 @@ class Gun2(WeaponBase):
     AMMO_COST = 7
     DAMAGE = 20
     SPREAD = 10
-    FIRE_DELAY = 200
+    FIRE_DELAY = 150
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
@@ -167,7 +169,9 @@ class Gun2(WeaponBase):
             left_click_ammo_cost=Gun2.AMMO_COST,
             right_click_ammo_cost=0,
             tier=1,
-            play_sound_fn=lambda name: sounds[name].play(),
+            sounds_dict={
+                "fire": sounds["gun2_fire"],
+            },
             get_ammo_gauge_fn=lambda: ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
@@ -185,7 +189,7 @@ class Gun2(WeaponBase):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
         self.reduce_ammo(self.left_click_ammo_cost)
-        self.play_sound("gun2_fire")
+        self.sounds["fire"].play()
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         player_center_x, player_center_y = self.get_player_world_position()
@@ -253,7 +257,9 @@ class Gun3(WeaponBase):
             left_click_ammo_cost=Gun3.AMMO_COST,
             right_click_ammo_cost=0,
             tier=2,
-            play_sound_fn=lambda name: sounds[name].play(),
+            sounds_dict={
+                "fire": sounds["gun3_fire"],
+            },
             get_ammo_gauge_fn=lambda: ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
@@ -271,7 +277,7 @@ class Gun3(WeaponBase):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
         self.reduce_ammo(self.left_click_ammo_cost)
-        self.play_sound("gun3_fire")
+        self.sounds["fire"].play()
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         player_center_x, player_center_y = self.get_player_world_position()
@@ -317,5 +323,89 @@ class Gun3(WeaponBase):
             )
             config.scattered_bullets.append(scatter)
 
+class Gun4(WeaponBase):
+    AMMO_COST = 30
+    DAMAGE_MAX = 80
+    DAMAGE_MIN = 10
+    SPREAD = 0
+    FIRE_DELAY = 1000
+    EXPLOSION_RADIUS = 200
 
-WEAPON_CLASSES = [Gun1, Gun2, Gun3]
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun4(
+            name="gun4",
+            front_image=weapon_assets["gun4"]["front"],
+            topdown_image=weapon_assets["gun4"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun4"]["bullets"],
+            explosion_image=weapon_assets["explosion1"],
+            uses_cartridges=False,
+            cartridge_images=[],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun4.AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=3,
+            sounds_dict={
+                "fire": sounds["gun4_fire"],
+                "explosion": sounds["gun4_explosion"],
+            },
+            get_ammo_gauge_fn=lambda: ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, explosion_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = Gun4.FIRE_DELAY
+        self.recoil_strength = 10
+        self.speed_penalty = 0.15
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 55
+        self.explosion_image = explosion_image
+
+    def on_left_click(self):
+        if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        player_center_x, player_center_y = self.get_player_world_position()
+
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        angle = math.atan2(dy, dx)
+
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+
+        bullet_x = player_center_x + offset_x
+        bullet_y = player_center_y + offset_y
+
+        if self.bullet_images:
+            from entities import Grenade
+
+            grenade = Grenade(
+                x=bullet_x,
+                y=bullet_y,
+                vx=vx,
+                vy=vy,
+                image=self.bullet_images[0],
+                explosion_radius=Gun4.EXPLOSION_RADIUS,
+                max_damage=Gun4.DAMAGE_MAX,
+                min_damage=Gun4.DAMAGE_MIN,
+                explosion_image=self.explosion_image,
+                explosion_sound=self.sounds["explosion"]
+            )
+            config.bullets.append(grenade)
+
+        print(f"[DEBUG] Gun4 유탄 발사 at ({bullet_x:.1f}, {bullet_y:.1f})")
+
+
+WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4]

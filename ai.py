@@ -4,6 +4,9 @@ import random
 from config import *
 import config
 from entities import ScatteredBullet, Bullet
+import config
+
+config.all_enemies = all_enemies
 
 PARTICLE_COUNT = 30
 PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
@@ -141,12 +144,12 @@ class Enemy1:
         self.map_width = map_width
         self.map_height = map_height
 
-    def hit(self, damage, blood_effects):
-        if not self.alive or not config.combat_state:
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
             return
 
         self.hp -= damage
-        print(f"[DEBUG] Enemy HP 감소 → 현재 HP: {self.hp}")
+        #print(f"[DEBUG] Enemy HP 감소 → 현재 HP: {self.hp}")
 
         if self.hp <= 0:
             self.die(blood_effects)

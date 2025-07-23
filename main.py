@@ -5,7 +5,7 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood
+from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
@@ -234,6 +234,7 @@ damage_flash_alpha = 0
 damage_flash_fade_speed = 5
 
 blood_effects = []
+config.blood_effects = blood_effects
 
 kill_count = 0
 
@@ -462,6 +463,7 @@ def change_room(direction):
                 map_height=map_height
             )
         enemies.append(enemy)
+    config.all_enemies = enemies
 
     if len(CURRENT_MAP["enemy_infos"]) == 0:
         config.combat_state = False
@@ -850,6 +852,8 @@ for info in CURRENT_MAP["enemy_infos"]:
         )
 
     enemies.append(enemy)
+config.all_enemies = enemies
+
 if len(enemies) == 0:
     config.combat_enabled = False
     print("[DEBUG] No enemies in map. Combat disabled.")
@@ -925,8 +929,13 @@ while running:
                     change_animation_timer = 0.0
                     previous_distance = current_distance
                     target_distance = weapons[2].distance_from_center
-            # elif event.key == pygame.K_4:
-            #     current_weapon_index = 3
+            elif event.key == pygame.K_4:
+                if current_weapon_index != 3:
+                    changing_weapon = True
+                    change_weapon_target = 4
+                    change_animation_timer = 0.0
+                    previous_distance = current_distance
+                    target_distance = weapons[3].distance_from_center
             elif event.key == pygame.K_q:
                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
                 for enemy in enemies[:]:
@@ -1249,7 +1258,20 @@ while running:
         world_y = test_world_y
     
     for bullet in bullets[:]:
-        bullet.update(obstacle_manager)
+        if isinstance(bullet, ExplosionEffectPersistent):
+            bullet.update()  # 인자 없이
+        else:
+            bullet.update(obstacle_manager)
+
+        # 항상 draw 시도 전까지 제거하지 않음
+        if hasattr(bullet, "finished") and bullet.finished:
+            bullets.remove(bullet)
+            continue
+        elif getattr(bullet, "to_remove", False):
+            if hasattr(bullet, "drawn_once") and not bullet.drawn_once:
+                continue
+            bullets.remove(bullet)
+            continue
 
     half_screen_width = SCREEN_WIDTH // 2
     half_screen_height = SCREEN_HEIGHT // 2
@@ -1287,6 +1309,7 @@ while running:
             weapon.on_update(mouse_left_button_down)
             if weapon.last_shot_time == pygame.time.get_ticks():
                 recoil_in_progress = True
+                recoil_offset = 0
                 recoil_velocity = -weapon.recoil_strength
                 allow_sprint = False
 
@@ -1310,7 +1333,10 @@ while running:
         shake_offset_x = 0
         shake_offset_y = 0
 
-    bullets = [b for b in bullets if not getattr(b, "to_remove", False)]
+    bullets = [
+        b for b in bullets
+        if not getattr(b, "to_remove", False) or (hasattr(b, "drawn_at_least_once") and not b.drawn_at_least_once)
+    ]
     config.bullets = bullets
 
     if config.combat_state and all(not enemy.alive for enemy in enemies):
@@ -1377,7 +1403,10 @@ while running:
         enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
     for bullet in bullets[:]:
-        bullet.update(obstacle_manager)
+        if isinstance(bullet, ExplosionEffectPersistent):
+            bullet.update()  # ✅ 인자 없이 호출
+        else:
+            bullet.update(obstacle_manager)  # 일반 Bullet/Grenade 등은 그대로
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for bullet in config.global_enemy_bullets[:]:
@@ -1453,6 +1482,8 @@ while running:
 
 
     for bullet in bullets[:]:
+        if isinstance(bullet, ExplosionEffectPersistent):
+            continue 
         bullet.update(obstacle_manager)
         if getattr(bullet, "to_remove", False):
             bullet.to_remove = True
