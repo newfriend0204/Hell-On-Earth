@@ -11,6 +11,7 @@ from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
 from weapon import WEAPON_CLASSES
+from ui import draw_tab_menu, handle_tab_click
 from world import (
     World,
     generate_map,
@@ -220,6 +221,8 @@ walk_timer = 0
 walk_delay = 500
 
 paused = False
+tab_menu_selected = 0
+tab_rects = []
 fade_in_after_resume = False
 
 renderer = Renderer3D(screen)
@@ -291,7 +294,7 @@ def init_weapon_ui_cache(weapons):
 
     surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
     surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
-    surface.fill((0, 0, 0, 0))  # 투명 초기화
+    surface.fill((0, 0, 0, 0))
     pygame.draw.rect(surface, (200, 200, 200, slot_alpha), (0, 0, slot_width, slot_height), border_radius=10)
     weapon_ui_cache["slot_surface"] = surface
 
@@ -1016,29 +1019,12 @@ while running:
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
             elif event.key == pygame.K_TAB:
-                fade_out(screen, duration=0.3, step_delay=0.01)
                 paused = not paused
                 if paused:
                     pygame.mouse.set_visible(True)
-                    if current_weapon == 1:
-                        obj_file = "Gun13DObject.obj"
-                        zoom = GUN1_ZOOM_LEVEL
-                    elif current_weapon == 2:
-                        obj_file = "Gun23DObject.obj"
-                        zoom = GUN2_ZOOM_LEVEL
-                    elif current_weapon == 3:
-                        obj_file = "Gun33DObject.obj"
-                        zoom = GUN3_ZOOM_LEVEL
-                    else:
-                        obj_file = "Gun13DObject.obj"
-                        zoom = GUN1_ZOOM_LEVEL
-
-                    renderer.load_new_obj(obj_file, zoom_level=zoom)
-                    renderer.reset_view()
-                    fade_in(screen, duration=0.3, step_delay=0.01)
+                    tab_menu_selected = 0
                 else:
                     pygame.mouse.set_visible(False)
-                    fade_in_after_resume = True
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
                 slot = event.key - pygame.K_1
                 if 0 <= slot < len(weapons) and current_weapon_index != slot:
@@ -1052,12 +1038,12 @@ while running:
                     target_distance = weapons[slot].distance_from_center
             elif event.key == pygame.K_q:
                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
+                cx, cy = current_room_pos
                 for enemy in enemies[:]:
                     if enemy.alive:
                         enemy.hit(9999, blood_effects)  # 강제로 사망시킴
                         enemies.remove(enemy)
                         blood_effects.append(ScatteredBlood(enemy.world_x, enemy.world_y))
-                        cx, cy = current_room_pos
                 room_key = (cx, cy)
 
                 if room_key in visited_f_rooms:
@@ -1088,6 +1074,12 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 mouse_left_button_down = True
+                if paused:
+                    # 여기서만 handle_tab_click 호출 (버그 FIX: 오직 마우스 클릭 시만!)
+                    if hasattr(event, 'pos'):
+                        clicked_index = handle_tab_click(event.pos, tab_rects)
+                        if clicked_index is not None:
+                            tab_menu_selected = clicked_index
             elif event.button == 3:
                 mouse_right_button_down = True
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -1097,8 +1089,11 @@ while running:
                 mouse_right_button_down = False
 
     if paused:
-        renderer.handle_events(events)
-        renderer.render_model(clock)
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((40, 40, 40))
+        screen.blit(overlay, (0, 0))
+        tab_rects = draw_tab_menu(screen, tab_menu_selected, weapons, current_weapon_index)
+        pygame.display.flip()
         clock.tick(60)
         continue
 
@@ -1562,9 +1557,9 @@ while running:
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
     # 빨간색 선 히트박스 보이기
-    # for obs in obstacles_to_check:
-    #     for c in obs.colliders:
-    #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
+    for obs in obstacles_to_check:
+        for c in obs.colliders:
+            c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
     ammo_bar_size = (400, 20)

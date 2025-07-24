@@ -81,7 +81,7 @@ class ObstacleManager:
 
         if "Pond1" in filename:
             rx = w * 0.27
-            ry = h * 0.25
+            ry = h * 0.28
             colliders.append(
                 Collider(
                     shape="ellipse",
@@ -91,7 +91,7 @@ class ObstacleManager:
                 )
             )
         elif "Pond2" in filename:
-            rx = w * 0.27
+            rx = w * 0.32
             ry = h * 0.25
             colliders.append(
                 Collider(
@@ -102,8 +102,8 @@ class ObstacleManager:
                 )
             )
         elif "Rock1" in filename:
-            rx = w * 0.27
-            ry = h * 0.3
+            rx = w * 0.35
+            ry = h * 0.4
             colliders.append(
                 Collider(
                     shape="ellipse",
