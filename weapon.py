@@ -4,7 +4,6 @@ import math
 from entities import Bullet, ScatteredBullet
 import config
 
-
 class WeaponBase:
     def __init__(
         self,
@@ -335,7 +334,7 @@ class Gun4(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun4(
-            name="grenade launcher",
+            name="유탄 발사기",
             front_image=weapon_assets["gun4"]["front"],
             topdown_image=weapon_assets["gun4"]["topdown"],
             uses_bullets=True,
@@ -416,7 +415,7 @@ class Gun5(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun5(
-            name="minigun",
+            name="미니건",
             front_image=weapon_assets["gun5"]["front"],
             topdown_image=weapon_assets["gun5"]["topdown"],
             uses_bullets=True,
@@ -560,7 +559,7 @@ class Gun6(WeaponBase):
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun6(
-            name="modified smg",
+            name="개조된 기관단총",
             front_image=weapon_assets["gun6"]["front"],
             topdown_image=weapon_assets["gun6"]["topdown"],
             uses_bullets=True,

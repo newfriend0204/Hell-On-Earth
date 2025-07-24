@@ -35,6 +35,8 @@ pygame.font.init()
 pygame.mixer.init()
 
 DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
+KOREAN_FONT_PATH = "Asset/Font/DungGeunMo.ttf"
+KOREAN_FONT_18 = pygame.font.Font(KOREAN_FONT_PATH, 18)
 
 pygame.mouse.set_visible(False)
 
@@ -229,6 +231,7 @@ player_radius = int(30 * PLAYER_VIEW_SCALE)
 
 player_hp = 300
 player_hp_max = 300
+last_hp_visual = player_hp * 1.0
 
 damage_flash_alpha = 0
 damage_flash_fade_speed = 5
@@ -260,6 +263,7 @@ def consume_ammo(cost):
 
 current_weapon_index = 0
 ammo_gauge = 100
+last_ammo_visual = ammo_gauge * 1.0
 
 config.world_x = world_x
 config.world_y = world_y
@@ -286,7 +290,9 @@ def init_weapon_ui_cache(weapons):
     slot_alpha = 180
 
     surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
-    surface.fill((200, 200, 200, slot_alpha))
+    surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
+    surface.fill((0, 0, 0, 0))  # 투명 초기화
+    pygame.draw.rect(surface, (200, 200, 200, slot_alpha), (0, 0, slot_width, slot_height), border_radius=10)
     weapon_ui_cache["slot_surface"] = surface
 
     font = pygame.font.SysFont('arial', 18)
@@ -714,7 +720,13 @@ def draw_minimap(screen, grid, current_room_pos):
         (total_width + background_margin * 2, total_height + background_margin * 2),
         pygame.SRCALPHA
     )
-    background_surface.fill((100, 100, 100, 200))
+    background_surface.fill((0, 0, 0, 0))
+    pygame.draw.rect(
+        background_surface,
+        (100, 100, 100, 200),
+        background_surface.get_rect(),
+        border_radius=12
+    )
     screen.blit(background_surface, (start_x - background_margin, start_y - background_margin))
 
     connectable_states = {1, 3, 5, 6}
@@ -791,7 +803,7 @@ def draw_weapon_ui(screen, weapons, current_weapon_index):
     slot_width = 92
     slot_height = 54
     padding = 8
-    offset_y_selected = -5
+    offset_y_selected = -10
     screen_width, screen_height = screen.get_size()
     total_width = 4 * slot_width + 3 * padding
     start_x = screen_width - total_width - 20
@@ -804,11 +816,30 @@ def draw_weapon_ui(screen, weapons, current_weapon_index):
     mouse_pos = pygame.mouse.get_pos()
     tooltip_weapon_name = None
 
+    if changing_weapon:
+        t = min(change_animation_timer / change_animation_time, 1.0)
+        eased_t = 1 - (1 - t) ** 2
+    else:
+        t = 1.0
+        eased_t = 1.0
+
     for i in range(4):
         x = start_x + i * (slot_width + padding)
-        y = y_base
-        if i == current_weapon_index:
-            y += offset_y_selected
+
+        if changing_weapon:
+            if i == current_weapon_index:
+                y_offset = int(offset_y_selected * (1 - t))
+            elif i == change_weapon_target:
+                y_offset = int(offset_y_selected * eased_t)
+            else:
+                y_offset = 0
+        else:
+            if i == current_weapon_index:
+                y_offset = offset_y_selected
+            else:
+                y_offset = 0
+
+        y = y_base + y_offset
 
         rect = pygame.Rect(x, y, slot_width, slot_height)
         screen.blit(slot_surface, (x, y))
@@ -830,25 +861,83 @@ def draw_weapon_ui(screen, weapons, current_weapon_index):
             screen.blit(scaled_img, img_rect)
 
             if rect.collidepoint(mouse_pos):
-                tooltip_weapon_name = weapon.name  # 무기 이름 표시용
+                tooltip_weapon_name = weapon.name
 
-        # 숫자 (1~4)
         screen.blit(numbers[i], (x + 5, y + slot_height - numbers[i].get_height() - 5))
 
-        # 선택된 슬롯 테두리
-        if i == current_weapon_index:
-            pygame.draw.rect(screen, (255, 255, 255), (x, y, slot_width, slot_height), 2)
+        should_draw_border = False
+        if changing_weapon:
+            if i == change_weapon_target:
+                should_draw_border = True
+        else:
+            if i == current_weapon_index:
+                should_draw_border = True
 
-    # 마우스 오버 툴팁 표시
+        if should_draw_border:
+            tier_colors = {
+                1: (255, 255, 255),
+                2: (0, 255, 0),
+                3: (0, 128, 255),
+                4: (160, 32, 240),
+                5: (255, 255, 0),
+            }
+            tier = getattr(weapons[i], "tier", 1)
+            border_color = tier_colors.get(tier, (255, 255, 255))
+            pygame.draw.rect(screen, border_color, (x, y, slot_width, slot_height), 4, border_radius=10)
+
     if tooltip_weapon_name and not config.combat_state:
-        tooltip_font = pygame.font.SysFont("arial", 18)
+        tooltip_font = KOREAN_FONT_18
         tooltip_surface = tooltip_font.render(tooltip_weapon_name, True, (255, 255, 255))
         tooltip_bg = pygame.Surface((tooltip_surface.get_width() + 10, tooltip_surface.get_height() + 6), pygame.SRCALPHA)
-        tooltip_bg.fill((0, 0, 0))  # 반투명 검은 배경
+        tooltip_bg.fill((0, 0, 0))
         tooltip_x = mouse_pos[0] + 10
         tooltip_y = mouse_pos[1] - tooltip_surface.get_height() - 14
         screen.blit(tooltip_bg, (tooltip_x, tooltip_y))
         screen.blit(tooltip_surface, (tooltip_x + 5, tooltip_y + 3))
+
+def draw_hp_bar_remodeled(surface, current_hp, max_hp, pos, size, last_hp_drawn):
+    x, y = pos
+    width, height = size
+    border_radius = height // 3
+
+    bg_surface = pygame.Surface((width + 6, height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, width + 6, height + 4), border_radius=border_radius + 2)
+    surface.blit(bg_surface, (x - 3, y - 2))
+
+    smoothing_speed = 0.5
+    interpolated_hp = last_hp_drawn + (current_hp - last_hp_drawn) * smoothing_speed
+
+    ratio = max(0.0, interpolated_hp / max_hp)
+    if ratio > 0.5:
+        color = (0, 180, 0)
+    elif ratio > 0.25:
+        color = (200, 200, 0)
+    else:
+        color = (180, 0, 0)
+
+    filled_width = int(width * ratio)
+    pygame.draw.rect(surface, color, (x, y, filled_width, height), border_radius=border_radius)
+
+    return interpolated_hp
+
+def draw_ammo_bar_remodeled(surface, current_ammo, max_ammo, pos, size, last_ammo_drawn):
+    x, y = pos
+    width, height = size
+    border_radius = height // 3
+
+    bg_surface = pygame.Surface((width + 6, height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, width + 6, height + 4), border_radius=border_radius + 2)
+    surface.blit(bg_surface, (x - 3, y - 2))
+
+    smoothing_speed = 0.5
+    interpolated_ammo = last_ammo_drawn + (current_ammo - last_ammo_drawn) * smoothing_speed
+
+    ratio = max(0, interpolated_ammo / max_ammo)
+    filled_width = int(width * ratio)
+    bar_color = (255, 150, 0)
+    pygame.draw.rect(surface, bar_color, (x, y, filled_width, height), border_radius=border_radius)
+
+    return interpolated_ammo
 
 enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
@@ -951,8 +1040,9 @@ while running:
                     pygame.mouse.set_visible(False)
                     fade_in_after_resume = True
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
-                slot = event.key - pygame.K_1  # 0 ~ 3
+                slot = event.key - pygame.K_1
                 if 0 <= slot < len(weapons) and current_weapon_index != slot:
+                    sounds["swap_gun"].play()
                     if hasattr(weapons[current_weapon_index], "on_weapon_switch"):
                         weapons[current_weapon_index].on_weapon_switch()
                     changing_weapon = True
@@ -1287,11 +1377,10 @@ while running:
     
     for bullet in bullets[:]:
         if isinstance(bullet, ExplosionEffectPersistent):
-            bullet.update()  # 인자 없이
+            bullet.update()
         else:
             bullet.update(obstacle_manager)
 
-        # 항상 draw 시도 전까지 제거하지 않음
         if hasattr(bullet, "finished") and bullet.finished:
             bullets.remove(bullet)
             continue
@@ -1432,9 +1521,9 @@ while running:
 
     for bullet in bullets[:]:
         if isinstance(bullet, ExplosionEffectPersistent):
-            bullet.update()  # ✅ 인자 없이 호출
+            bullet.update()
         else:
-            bullet.update(obstacle_manager)  # 일반 Bullet/Grenade 등은 그대로
+            bullet.update(obstacle_manager)
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for bullet in config.global_enemy_bullets[:]:
@@ -1477,17 +1566,13 @@ while running:
     #     for c in obs.colliders:
     #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
-    hp_bar_width = 300
-    hp_bar_height = 30
-    display_width, display_height = screen.get_size()
-    hp_bar_x = display_width // 2 - hp_bar_width // 2
-    hp_bar_y = display_height - 60
-    hp_ratio = max(0, player_hp / player_hp_max)
-    current_width = int(hp_bar_width * hp_ratio)
-    pygame.draw.rect(screen, (80, 80, 80), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
-    pygame.draw.rect(screen, (0, 255, 0), (hp_bar_x, hp_bar_y, current_width, hp_bar_height))
-    hp_text = DEBUG_FONT.render(f"HP: {player_hp}", True, (255, 255, 255))
-    screen.blit(hp_text, (hp_bar_x + hp_bar_width + 10, hp_bar_y))
+    ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
+    ammo_bar_size = (400, 20)
+    last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, 100, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
+    hp_bar_pos = (80, SCREEN_HEIGHT - 50)
+    hp_bar_size = (400, 20)
+    last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)
+
     display_w, display_h = screen.get_size()
 
     if damage_flash_alpha > 0:

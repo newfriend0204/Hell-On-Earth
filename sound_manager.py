@@ -15,6 +15,9 @@ def load_sounds():
 
     room_move_sound = pygame.mixer.Sound(path_sound("Sound", "RoomMove.mp3"))
 
+    swap_gun_sound = pygame.mixer.Sound(path_sound("Sound", "SwapGun.mp3"))
+    swap_gun_sound.set_volume(0.8)
+
     weapon_sounds = {
         "gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun1Fire.wav")),
         "gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun2Fire.wav")),
@@ -53,5 +56,6 @@ def load_sounds():
         "walk": walk_sound,
         "enemy_die": enemy_die_sound,
         "room_move": room_move_sound,
+        "swap_gun": swap_gun_sound,
         **weapon_sounds
     }
