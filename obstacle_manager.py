@@ -124,7 +124,7 @@ class ObstacleManager:
                 )
             )
         elif "Rock3" in filename:
-            rx = w * 0.45
+            rx = w * 0.34
             ry = h * 0.35
             colliders.append(
                 Collider(

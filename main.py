@@ -11,7 +11,7 @@ from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
 from weapon import WEAPON_CLASSES
-from ui import draw_tab_menu, handle_tab_click
+from ui import draw_weapon_detail_ui, handle_tab_click
 from world import (
     World,
     generate_map,
@@ -36,8 +36,10 @@ pygame.font.init()
 pygame.mixer.init()
 
 DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
-KOREAN_FONT_PATH = "Asset/Font/DungGeunMo.ttf"
-KOREAN_FONT_18 = pygame.font.Font(KOREAN_FONT_PATH, 18)
+BASE_DIR = os.path.dirname(__file__)
+ASSET_DIR = os.path.join(BASE_DIR, "Asset")
+FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Regular.ttf")
+KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 
 pygame.mouse.set_visible(False)
 
@@ -224,6 +226,7 @@ paused = False
 tab_menu_selected = 0
 tab_rects = []
 fade_in_after_resume = False
+selected_tab = 1
 
 renderer = Renderer3D(screen)
 
@@ -1092,7 +1095,8 @@ while running:
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((40, 40, 40))
         screen.blit(overlay, (0, 0))
-        tab_rects = draw_tab_menu(screen, tab_menu_selected, weapons, current_weapon_index)
+        if selected_tab != 0:
+            tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons)
         pygame.display.flip()
         clock.tick(60)
         continue
