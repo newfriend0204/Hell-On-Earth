@@ -11,7 +11,7 @@ from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import Enemy1, Enemy2
 from weapon import WEAPON_CLASSES
-from ui import draw_weapon_detail_ui, handle_tab_click
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab
 from world import (
     World,
     generate_map,
@@ -227,6 +227,7 @@ tab_menu_selected = 0
 tab_rects = []
 fade_in_after_resume = False
 selected_tab = 1
+weapon_tab_open = True
 
 renderer = Renderer3D(screen)
 
@@ -1026,6 +1027,7 @@ while running:
                 if paused:
                     pygame.mouse.set_visible(True)
                     tab_menu_selected = 0
+                    selected_tab = 0
                 else:
                     pygame.mouse.set_visible(False)
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
@@ -1078,11 +1080,10 @@ while running:
             if event.button == 1:
                 mouse_left_button_down = True
                 if paused:
-                    # 여기서만 handle_tab_click 호출 (버그 FIX: 오직 마우스 클릭 시만!)
                     if hasattr(event, 'pos'):
-                        clicked_index = handle_tab_click(event.pos, tab_rects)
-                        if clicked_index is not None:
-                            tab_menu_selected = clicked_index
+                        clicked_tab = handle_tab_click(pygame.mouse.get_pos(), ui_tab_rects, sounds)
+                        if clicked_tab is not None and clicked_tab != selected_tab:
+                            selected_tab = clicked_tab
             elif event.button == 3:
                 mouse_right_button_down = True
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -1092,11 +1093,10 @@ while running:
                 mouse_right_button_down = False
 
     if paused:
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((40, 40, 40))
-        screen.blit(overlay, (0, 0))
         if selected_tab != 0:
-            tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons)
+            ui_tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons, sounds)
+        else:
+            ui_tab_rects = draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, 100, selected_tab, sounds)
         pygame.display.flip()
         clock.tick(60)
         continue
