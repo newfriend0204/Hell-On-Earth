@@ -339,7 +339,7 @@ class Gun4(WeaponBase):
             topdown_image=weapon_assets["gun4"]["topdown"],
             uses_bullets=True,
             bullet_images=weapon_assets["gun4"]["bullets"],
-            explosion_image=weapon_assets["explosion1"],
+            explosion_image=weapon_assets["gun4"]["explosion"],
             uses_cartridges=False,
             cartridge_images=[],
             can_left_click=True,
@@ -694,4 +694,4 @@ class Gun6(WeaponBase):
         )
         config.bullets.append(grenade)
 
-WEAPON_CLASSES = [Gun3, Gun6, Gun1, Gun2]
+WEAPON_CLASSES = [Gun3, Gun6, Gun4, Gun5]

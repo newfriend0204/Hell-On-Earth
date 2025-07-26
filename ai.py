@@ -3,105 +3,66 @@ import math
 import random
 from config import *
 import config
-from entities import ScatteredBullet, Bullet
-import config
 
-config.all_enemies = all_enemies
+from entities import ScatteredBullet, Bullet, ParticleBlood
 
-PARTICLE_COUNT = 30
-PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
-PARTICLE_SPEED_MIN = 4
-PARTICLE_SPEED_MAX = 12
-PARTICLE_LIFETIME = 2000
-PARTICLE_FADE_TIME = 500
+ENEMY_CLASSES = []
 
-class ParticleBlood:
-    def __init__(self, x, y, scale=1.0):
-        self.particles = []
-        self.spawn_time = pygame.time.get_ticks()
+class EnemyMeta(type):
+    def __init__(cls, name, bases, clsdict):
+        if name not in ("AIBase", "EnemyBase"):
+            ENEMY_CLASSES.append(cls)
+        super().__init__(name, bases, clsdict)
 
-        for i in range(PARTICLE_COUNT):
-            angle = i * (2 * math.pi / PARTICLE_COUNT)
-            speed = random.uniform(PARTICLE_SPEED_MIN, PARTICLE_SPEED_MAX)
-            vx = math.cos(angle) * speed
-            vy = math.sin(angle) * speed
-
-            self.particles.append({
-                "pos": [x, y],
-                "vel": [vx, vy],
-                "size": int(PARTICLE_SIZE * scale),
-                "alpha": 255
-            })
-
-        self.alpha = 255
-
-    def update(self):
-        elapsed = pygame.time.get_ticks() - self.spawn_time
-
-        for p in self.particles:
-            p["pos"][0] += p["vel"][0]
-            p["pos"][1] += p["vel"][1]
-            p["vel"][0] *= 0.9
-            p["vel"][1] *= 0.9
-
-        if elapsed > PARTICLE_LIFETIME:
-            fade_elapsed = elapsed - PARTICLE_LIFETIME
-            if fade_elapsed < PARTICLE_FADE_TIME:
-                self.alpha = int(255 * (1 - fade_elapsed / PARTICLE_FADE_TIME))
-            else:
-                self.alpha = 0
-
-    def draw(self, surface, world_x, world_y):
-        for p in self.particles:
-            pos = p["pos"]
-            size = p["size"]
-            alpha = min(p["alpha"], self.alpha)
-
-            rect = pygame.Rect(
-                pos[0] - size / 2 - world_x,
-                pos[1] - size / 2 - world_y,
-                size,
-                size
-            )
-            color = (255, 0, 0, alpha)
-
-            s = pygame.Surface((size, size), pygame.SRCALPHA)
-            s.fill(color)
-            surface.blit(s, rect.topleft)
-
-class Enemy1:
-    def __init__(
-        self,
-        world_x,
-        world_y,
-        image,
-        gun_image,
-        bullet_image,
-        sounds,
-        get_player_center_world_fn,
-        obstacle_manager,
-        check_circle_collision_fn,
-        check_ellipse_circle_collision_fn,
-        player_bullet_image,
-        cartridge_image,
-        map_width,
-        map_height,
-        kill_callback=None,
-    ):
+class AIBase(metaclass=EnemyMeta):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height):
         self.world_x = world_x
         self.world_y = world_y
-        self.image_original = image
-        self.gun_image_original = pygame.transform.flip(gun_image, True, False)
-        self.bullet_image = bullet_image
+        self.images = images
         self.sounds = sounds
-        self.hp = 100
-        self.player_bullet_image = player_bullet_image
-        self.kill_callback = kill_callback
-        self.cartridge_image = cartridge_image
+        self.map_width = map_width
+        self.map_height = map_height
 
-        self.obstacle_manager = obstacle_manager
-        self.check_circle_collision = check_circle_collision_fn
-        self.check_ellipse_circle_collision = check_ellipse_circle_collision_fn
+        self.alive = True
+        self.scattered_bullets = []
+        self.hp = 100
+        self.radius = 30 * PLAYER_VIEW_SCALE
+        self.kill_callback = None
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+        self.hp -= damage
+        if self.hp <= 0:
+            self.die(blood_effects)
+
+    def die(self, blood_effects):
+        self.hp = 0
+        self.alive = False
+        if hasattr(self.sounds, "__getitem__") and "enemy_die" in self.sounds:
+            self.sounds["enemy_die"].play()
+        if blood_effects is not None:
+            blood = ParticleBlood(self.world_x, self.world_y, scale=PLAYER_VIEW_SCALE)
+            blood_effects.append(blood)
+        if self.kill_callback:
+            self.kill_callback()
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        pass
+
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        pass
+
+class Enemy1(AIBase):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
+        super().__init__(world_x, world_y, images, sounds, map_width, map_height)
+        self.image_original = images["enemy1"]
+        self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
+        self.bullet_image = images["enemy_bullet"]
+        self.cartridge_image = images["cartridge_case1"]
+        self.player_bullet_image = images["bullet1"]
+
+        self.kill_callback = kill_callback
 
         self.rect = self.image_original.get_rect(center=(0, 0))
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7
@@ -121,8 +82,6 @@ class Enemy1:
 
         self.radius = 30 * PLAYER_VIEW_SCALE
 
-        self.scattered_bullets = []
-
         self.fire_sound = self.sounds["gun1_fire_enemy"]
 
         self.recoil_offset = 0
@@ -131,63 +90,25 @@ class Enemy1:
 
         self.current_distance = 45 * PLAYER_VIEW_SCALE
         self.recoil_strength = 6
-        self.get_player_center_world_fn = get_player_center_world_fn
 
         self.last_pos = (self.world_x, self.world_y)
         self.stuck_timer = 0
         self.goal_pos = None
         self.stuck_count = 0
 
-        self.alive = True
         self.blood_effect = None
-
-        self.map_width = map_width
-        self.map_height = map_height
-
-    def hit(self, damage, blood_effects, force=False):
-        if not self.alive or (not config.combat_state and not force):
-            return
-
-        self.hp -= damage
-        #print(f"[DEBUG] Enemy HP 감소 → 현재 HP: {self.hp}")
-
-        if self.hp <= 0:
-            self.die(blood_effects)
-
-    def die(self, blood_effects):
-        print("[DEBUG] Enemy 사망!")
-        if self.kill_callback:
-            self.kill_callback()
-        self.hp = 0
-        self.alive = False
-        self.sounds["enemy_die"].play()
-        blood_x = self.world_x
-        blood_y = self.world_y
-        blood = ParticleBlood(blood_x, blood_y, scale=PLAYER_VIEW_SCALE)
-        blood_effects.append(blood)
-
-    def _revert_movement(self):
-        self.world_x -= self.velocity_x
-        self.world_y -= self.velocity_y
-        self.velocity_x = 0
-        self.velocity_y = 0
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive or not config.combat_state:
             return
         
-        dist = math.hypot(
-        self.world_x - self.last_pos[0],
-        self.world_y - self.last_pos[1]
-        )
-
-        player_world_pos = self.get_player_center_world_fn(world_x, world_y)
+        dist = math.hypot(self.world_x - self.last_pos[0], self.world_y - self.last_pos[1])
+        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
         dx = player_world_pos[0] - self.world_x
         dy = player_world_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
 
         self.direction_angle = math.atan2(dy, dx)
-
         near_threshold = 150 * PLAYER_VIEW_SCALE
         far_threshold = 500 * PLAYER_VIEW_SCALE
 
@@ -224,8 +145,7 @@ class Enemy1:
                 self.velocity_y = 0
 
         penetration_total = [0.0, 0.0]
-
-        for obs in self.obstacle_manager.static_obstacles + self.obstacle_manager.combat_obstacles:
+        for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
             for c in obs.colliders:
                 penetration = c.compute_penetration_circle(
                     (self.world_x, self.world_y),
@@ -304,7 +224,7 @@ class Enemy1:
             test_y = self.world_y + math.sin(angle) * 50
             collided = False
 
-            for obs in self.obstacle_manager.static_obstacles + self.obstacle_manager.combat_obstacles:
+            for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
                 for c in obs.colliders:
                     collider_world_center = (
                         obs.world_x + c.center[0],
@@ -312,7 +232,7 @@ class Enemy1:
                     )
                     if c.shape == "circle":
                         collider_radius = float(c.size)
-                        if self.check_circle_collision(
+                        if config.check_circle_collision(
                             (test_x, test_y),
                             self.radius,
                             collider_world_center,
@@ -322,7 +242,7 @@ class Enemy1:
                             break
                     elif c.shape == "ellipse":
                         rx, ry = c.size
-                        if self.check_ellipse_circle_collision(
+                        if config.check_ellipse_circle_collision(
                             (test_x, test_y),
                             self.radius,
                             collider_world_center,
@@ -334,7 +254,7 @@ class Enemy1:
                     elif c.shape == "rectangle":
                         w, h = c.size
                         collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                        if self.check_circle_collision(
+                        if config.check_circle_collision(
                             (test_x, test_y),
                             self.radius,
                             collider_world_center,
@@ -401,11 +321,8 @@ class Enemy1:
         if not self.alive:
             return
 
-        screen_x = self.world_x - world_x
-        screen_y = self.world_y - world_y
-
-        screen_x += shake_offset_x
-        screen_y += shake_offset_y
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
 
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
@@ -417,7 +334,7 @@ class Enemy1:
         screen.blit(rotated_gun, gun_rect)
 
         scaled_img = pygame.transform.smoothscale(
-        self.image_original,
+            self.image_original,
             (
                 int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
@@ -430,41 +347,10 @@ class Enemy1:
         screen.blit(rotated_img, rect)
 
 class Enemy2(Enemy1):
-    def __init__(
-        self,
-        world_x,
-        world_y,
-        image,
-        gun_image,
-        bullet_image,
-        sounds,
-        get_player_center_world_fn,
-        obstacle_manager,
-        check_circle_collision_fn,
-        check_ellipse_circle_collision_fn,
-        player_bullet_image,
-        cartridge_image,
-        map_width,
-        map_height,
-        kill_callback=None,
-    ):
-        super().__init__(
-            world_x,
-            world_y,
-            image,
-            gun_image,
-            bullet_image,
-            sounds,
-            get_player_center_world_fn,
-            obstacle_manager,
-            check_circle_collision_fn,
-            check_ellipse_circle_collision_fn,
-            player_bullet_image,
-            cartridge_image,
-            map_width,
-            map_height,
-            kill_callback,
-        )
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
+        super().__init__(world_x, world_y, images, sounds, map_width, map_height, kill_callback)
+        self.image_original = images["enemy2"]
+        self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
         self.hp = 150
         self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
@@ -483,14 +369,11 @@ class Enemy2(Enemy1):
         self.far_shot_check_timer = random.randint(4000, 8000)
         self.fixed_far_shot_angle = None
 
-        self.map_height = map_height
-        self.map_width = map_width
-
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive:
             return
 
-        player_world_pos = self.get_player_center_world_fn(world_x, world_y)
+        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
         dx = player_world_pos[0] - self.world_x
         dy = player_world_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
@@ -591,33 +474,19 @@ class Enemy2(Enemy1):
         if not self.alive:
             return
 
-        screen_x = self.world_x - world_x
-        screen_y = self.world_y - world_y
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
 
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
             if elapsed < 1500:
-                player_pos = self.get_player_center_world_fn(world_x, world_y)
-                player_screen_x = player_pos[0] - world_x
-                player_screen_y = player_pos[1] - world_y
-
-                line_thickness = max(1, int(2 * PLAYER_VIEW_SCALE))
-                pygame.draw.line(
-                    screen,
-                    (255, 0, 0),
-                    (screen_x + shake_offset_x, screen_y + shake_offset_y),
-                    (player_screen_x + shake_offset_x, player_screen_y + shake_offset_y),
-                    line_thickness
-                )
+                player_pos = (world_x + 0, world_y + 0)
+                pass
 
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
 
-        if isinstance(self, Enemy2):
-            desired_width = 50
-        else:
-            desired_width = 30
-
+        desired_width = 50
         original_width = self.gun_image_original.get_width()
         original_height = self.gun_image_original.get_height()
         scale_factor = desired_width / original_width
@@ -634,7 +503,7 @@ class Enemy2(Enemy1):
         screen.blit(rotated_gun, gun_rect)
 
         scaled_img = pygame.transform.smoothscale(
-        self.image_original,
+            self.image_original,
             (
                 int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE)

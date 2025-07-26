@@ -9,7 +9,7 @@ from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPer
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
-from ai import Enemy1, Enemy2
+from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES
 from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab
 from world import (
@@ -389,6 +389,7 @@ def change_room(direction):
 
     obstacle_manager.static_obstacles.clear()
     obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
+    config.obstacle_manager = obstacle_manager
 
     new_world = World(
         background_image=background_image,
@@ -465,45 +466,21 @@ def change_room(direction):
     for info in CURRENT_MAP["enemy_infos"]:
         ex = info["x"] * PLAYER_VIEW_SCALE
         ey = info["y"] * PLAYER_VIEW_SCALE
-        enemy_type = info["enemy_type"]
-
-        if enemy_type == "enemy2":
-            enemy = Enemy2(
-                world_x=ex,
-                world_y=ey,
-                image=images["enemy2"],
-                gun_image=images["gun2"],
-                bullet_image=images["enemy_bullet"],
-                sounds=sounds,
-                get_player_center_world_fn=get_player_center_world,
-                obstacle_manager=obstacle_manager,
-                check_circle_collision_fn=check_circle_collision,
-                check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-                player_bullet_image=images["bullet1"],
-                cartridge_image=images["cartridge_case1"],
-                kill_callback=increment_kill_count,
-                map_width=map_width,
-                map_height=map_height
-            )
-        else:
-            enemy = Enemy1(
-                world_x=ex,
-                world_y=ey,
-                image=images["enemy1"],
-                gun_image=images["gun1"],
-                bullet_image=images["enemy_bullet"],
-                sounds=sounds,
-                get_player_center_world_fn=get_player_center_world,
-                obstacle_manager=obstacle_manager,
-                check_circle_collision_fn=check_circle_collision,
-                check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-                player_bullet_image=images["bullet1"],
-                cartridge_image=images["cartridge_case1"],
-                kill_callback=increment_kill_count,
-                map_width=map_width,
-                map_height=map_height
-            )
-        enemies.append(enemy)
+        enemy_type = info["enemy_type"].lower()
+        for cls in ENEMY_CLASSES:
+            if cls.__name__.lower() == enemy_type:
+                enemy = cls(
+                    world_x=ex,
+                    world_y=ey,
+                    images=images,
+                    sounds=sounds,
+                    map_width=map_width,
+                    map_height=map_height,
+                    kill_callback=increment_kill_count
+                )
+                enemies.append(enemy)
+                break
+    
     config.all_enemies = enemies
 
     if len(CURRENT_MAP["enemy_infos"]) == 0:
@@ -950,47 +927,20 @@ enemies = []
 for info in CURRENT_MAP["enemy_infos"]:
     ex = info["x"] * PLAYER_VIEW_SCALE
     ey = info["y"] * PLAYER_VIEW_SCALE
-    enemy_type = info["enemy_type"]
-
-    if enemy_type == "enemy2":
-        enemy = Enemy2(
-            world_x=ex,
-            world_y=ey,
-            image=images["enemy2"],
-            gun_image=images["gun2"],
-            bullet_image=images["enemy_bullet"],
-            sounds=sounds,
-            get_player_center_world_fn=get_player_center_world,
-            obstacle_manager=obstacle_manager,
-            check_circle_collision_fn=check_circle_collision,
-            check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-            player_bullet_image=images["bullet1"],
-            cartridge_image=images["cartridge_case1"],
-            kill_callback=increment_kill_count,
-            map_width=map_width,
-            map_height=map_height,
-        )
-    else:
-        enemy = Enemy1(
-            world_x=ex,
-            world_y=ey,
-            image=images["enemy1"],
-            gun_image=images["gun1"],
-            bullet_image=images["enemy_bullet"],
-            sounds=sounds,
-            get_player_center_world_fn=get_player_center_world,
-            obstacle_manager=obstacle_manager,
-            check_circle_collision_fn=check_circle_collision,
-            check_ellipse_circle_collision_fn=check_ellipse_circle_collision,
-            player_bullet_image=images["bullet1"],
-            cartridge_image=images["cartridge_case1"],
-            kill_callback=increment_kill_count,
-            map_width=map_width,
-            map_height=map_height,
-        )
-
-    enemies.append(enemy)
-config.all_enemies = enemies
+    enemy_type = info["enemy_type"].lower()
+    for cls in ENEMY_CLASSES:
+        if cls.__name__.lower() == enemy_type:
+            enemy = cls(
+                world_x=ex,
+                world_y=ey,
+                images=images,
+                sounds=sounds,
+                map_width=map_width,
+                map_height=map_height,
+                kill_callback=increment_kill_count
+            )
+            enemies.append(enemy)
+            break
 
 if len(enemies) == 0:
     config.combat_enabled = False
@@ -1117,15 +1067,17 @@ while running:
     current_weapon_instance = weapon
     
     #적 바보 만들기
+    player_pos = get_player_world_position()
     for enemy in enemies:
         if config.combat_state:
             enemy.update(
-                dt=delta_time,
+                delta_time,
                 world_x=world_x,
                 world_y=world_y,
                 player_rect=player_rect,
                 enemies=enemies
             )
+    config.all_enemies = enemies
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -1561,9 +1513,9 @@ while running:
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
     # 빨간색 선 히트박스 보이기
-    for obs in obstacles_to_check:
-        for c in obs.colliders:
-            c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
+    # for obs in obstacles_to_check:
+    #     for c in obs.colliders:
+    #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
     ammo_bar_size = (400, 20)

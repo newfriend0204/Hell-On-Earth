@@ -6,6 +6,67 @@ from collider import Collider
 from config import PLAYER_VIEW_SCALE
 import config
 
+PARTICLE_COUNT = 30
+PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
+PARTICLE_SPEED_MIN = 4
+PARTICLE_SPEED_MAX = 12
+PARTICLE_LIFETIME = 2000
+PARTICLE_FADE_TIME = 500
+
+class ParticleBlood:
+    def __init__(self, x, y, scale=1.0):
+        self.particles = []
+        self.spawn_time = pygame.time.get_ticks()
+
+        for i in range(PARTICLE_COUNT):
+            angle = i * (2 * math.pi / PARTICLE_COUNT)
+            speed = random.uniform(PARTICLE_SPEED_MIN, PARTICLE_SPEED_MAX)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+
+            self.particles.append({
+                "pos": [x, y],
+                "vel": [vx, vy],
+                "size": int(PARTICLE_SIZE * scale),
+                "alpha": 255
+            })
+
+        self.alpha = 255
+
+    def update(self):
+        elapsed = pygame.time.get_ticks() - self.spawn_time
+
+        for p in self.particles:
+            p["pos"][0] += p["vel"][0]
+            p["pos"][1] += p["vel"][1]
+            p["vel"][0] *= 0.9
+            p["vel"][1] *= 0.9
+
+        if elapsed > PARTICLE_LIFETIME:
+            fade_elapsed = elapsed - PARTICLE_LIFETIME
+            if fade_elapsed < PARTICLE_FADE_TIME:
+                self.alpha = int(255 * (1 - fade_elapsed / PARTICLE_FADE_TIME))
+            else:
+                self.alpha = 0
+
+    def draw(self, surface, world_x, world_y):
+        for p in self.particles:
+            pos = p["pos"]
+            size = p["size"]
+            alpha = min(p["alpha"], self.alpha)
+
+            rect = pygame.Rect(
+                pos[0] - size / 2 - world_x,
+                pos[1] - size / 2 - world_y,
+                size,
+                size
+            )
+            color = (255, 0, 0, alpha)
+
+            s = pygame.Surface((size, size), pygame.SRCALPHA)
+            s.fill(color)
+            surface.blit(s, rect.topleft)
+
 class Bullet:
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
                  spread_angle_degrees, bullet_image, speed=30, max_distance=500, damage=10):
@@ -356,7 +417,6 @@ class ScatteredBlood:
                 surface.fill((255, 0, 0, self.alpha))
                 screen.blit(surface, rect)
 
-
 class Obstacle:
     def __init__(
         self,
@@ -390,7 +450,6 @@ class Obstacle:
 
         if self.is_covering and self.cover_collider:
             transparent_needed = False
-
             if player_center:
                 if self.cover_collider.check_collision_circle(
                     player_center,
@@ -398,17 +457,6 @@ class Obstacle:
                     (self.world_x, self.world_y)
                 ):
                     transparent_needed = True
-
-            if enemies:
-                for enemy in enemies:
-                    if self.cover_collider.check_collision_circle(
-                        (enemy.world_x, enemy.world_y),
-                        enemy.radius,
-                        (self.world_x, self.world_y)
-                    ):
-                        transparent_needed = True
-                        break
-
             if transparent_needed:
                 self.transparent = True
                 img_to_draw.set_alpha(self.transparent_alpha)
