@@ -44,6 +44,7 @@ class WeaponBase:
         self.last_shot_time = 0
         self.fire_delay = 300
         self.get_player_world_position = get_player_world_position_fn
+        self.shake_strength = 10
 
     def on_left_click(self):
         pass
@@ -95,6 +96,7 @@ class Gun1(WeaponBase):
         self.recoil_strength = 7
         self.speed_penalty = 0
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 45
+        self.shake_strength = 10
 
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
@@ -184,6 +186,7 @@ class Gun2(WeaponBase):
         self.recoil_strength = 8
         self.speed_penalty = 0.10
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+        self.shake_strength = 15
 
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
@@ -272,6 +275,7 @@ class Gun3(WeaponBase):
         self.recoil_strength = 9
         self.speed_penalty = 0.10
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 35
+        self.shake_strength = 20
 
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
@@ -364,6 +368,7 @@ class Gun4(WeaponBase):
         self.speed_penalty = 0.15
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 55
         self.explosion_image = explosion_image
+        self.shake_strength = 15
 
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
@@ -449,6 +454,7 @@ class Gun5(WeaponBase):
         self.base_speed_penalty = 0.10
         self.firing_speed_penalty = 0.30
         self.speed_penalty = self.base_speed_penalty
+        self.shake_strength = 13
 
     def on_update(self, mouse_left_down, mouse_right_down):
         now = pygame.time.get_ticks()
@@ -594,6 +600,7 @@ class Gun6(WeaponBase):
         self.recoil_strength = 7
         self.speed_penalty = 0.15
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 48
+        self.shake_strength = 10
 
     def on_update(self, mouse_left_down, mouse_right_down):
         now = pygame.time.get_ticks()

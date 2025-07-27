@@ -15,7 +15,10 @@ class EnemyMeta(type):
         super().__init__(name, bases, clsdict)
 
 class AIBase(metaclass=EnemyMeta):
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height):
+    def __init__(
+        self, world_x, world_y, images, sounds, map_width, map_height,
+        speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.18, alert_duration=1000,
+    ):
         self.world_x = world_x
         self.world_y = world_y
         self.images = images
@@ -26,8 +29,43 @@ class AIBase(metaclass=EnemyMeta):
         self.alive = True
         self.scattered_bullets = []
         self.hp = 100
-        self.radius = 30 * PLAYER_VIEW_SCALE
+        self.radius = radius * PLAYER_VIEW_SCALE
         self.kill_callback = None
+
+        self.speed = speed
+        self.near_threshold = near_threshold * PLAYER_VIEW_SCALE
+        self.far_threshold = far_threshold * PLAYER_VIEW_SCALE
+        self.push_strength = push_strength
+        self.ALERT_DURATION = alert_duration
+
+        # 이동 및 상태 변수
+        self.direction_angle = random.uniform(0, 2 * math.pi)
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self.goal_pos = None
+        self.stuck_timer = 0
+        self.last_pos = (self.world_x, self.world_y)
+        self.move_timer = 0
+        self.move_delay = random.randint(600, 1200)
+        self.stuck_count = 0
+
+        # 전투 상태
+        self.aware_of_player = False
+        self.shoot_delay_min = 1200
+        self.shoot_delay_max = 1500
+        self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+        self.shoot_timer = None
+        self.show_alert = False
+
+        # 외형 관련
+        self.rect = images.get("enemy1", pygame.Surface((60,60))).get_rect(center=(0,0))
+
+        # 반동 및 총 거리
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+        self.recoil_strength = 6
+        self.recoil_offset = 0
+        self.recoil_velocity = 0
+        self.recoil_in_progress = False
 
     def hit(self, damage, blood_effects, force=False):
         if not self.alive or (not config.combat_state and not force):
@@ -47,94 +85,19 @@ class AIBase(metaclass=EnemyMeta):
         if self.kill_callback:
             self.kill_callback()
 
-    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        pass
-
-    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
-        pass
-
-class Enemy1(AIBase):
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
-        super().__init__(world_x, world_y, images, sounds, map_width, map_height)
-        self.image_original = images["enemy1"]
-        self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
-        self.bullet_image = images["enemy_bullet"]
-        self.cartridge_image = images["cartridge_case1"]
-        self.player_bullet_image = images["bullet1"]
-
-        self.kill_callback = kill_callback
-
-        self.rect = self.image_original.get_rect(center=(0, 0))
-        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7
-
-        self.direction_angle = random.uniform(0, 2 * math.pi)
-        self.velocity_x = 0.0
-        self.velocity_y = 0.0
-
-        self.move_timer = 0
-        self.move_delay = random.randint(600, 1200)
-
-        self.shoot_delay_min = 1200
-        self.shoot_delay_max = 1500
-        self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
-        self.shoot_timer = None
-        self.aware_of_player = False
-
-        self.radius = 30 * PLAYER_VIEW_SCALE
-
-        self.fire_sound = self.sounds["gun1_fire_enemy"]
-
-        self.recoil_offset = 0
-        self.recoil_velocity = 0
-        self.recoil_in_progress = False
-
-        self.current_distance = 45 * PLAYER_VIEW_SCALE
-        self.recoil_strength = 6
-
-        self.last_pos = (self.world_x, self.world_y)
-        self.stuck_timer = 0
-        self.goal_pos = None
-        self.stuck_count = 0
-
-        self.blood_effect = None
-
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive or not config.combat_state:
             return
-        
+
+        self.update_goal(world_x, world_y, player_rect, enemies)
+
         dist = math.hypot(self.world_x - self.last_pos[0], self.world_y - self.last_pos[1])
-        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
-        dx = player_world_pos[0] - self.world_x
-        dy = player_world_pos[1] - self.world_y
-        dist_to_player = math.hypot(dx, dy)
 
-        self.direction_angle = math.atan2(dy, dx)
-        near_threshold = 150 * PLAYER_VIEW_SCALE
-        far_threshold = 500 * PLAYER_VIEW_SCALE
-
-        if dist_to_player > far_threshold:
-            self.goal_pos = player_world_pos
-        elif dist_to_player < near_threshold:
-            angle = self.direction_angle + math.pi
-            self.goal_pos = (
-                self.world_x + math.cos(angle) * 200,
-                self.world_y + math.sin(angle) * 200
-            )
-        else:
-            if self.goal_pos is None or self.move_timer <= 0:
-                angle = random.uniform(0, 2 * math.pi)
-                dist = random.randint(50, 150)
-                self.goal_pos = (
-                    self.world_x + math.cos(angle) * dist,
-                    self.world_y + math.sin(angle) * dist
-                )
-                self.move_timer = random.randint(500, 1000)
-
+        # 이동 처리
         if self.goal_pos:
             goal_dx = self.goal_pos[0] - self.world_x
             goal_dy = self.goal_pos[1] - self.world_y
             goal_dist = math.hypot(goal_dx, goal_dy)
-
             if goal_dist > 5:
                 goal_angle = math.atan2(goal_dy, goal_dx)
                 self.velocity_x = math.cos(goal_angle) * self.speed
@@ -145,6 +108,7 @@ class Enemy1(AIBase):
                 self.velocity_y = 0
 
         penetration_total = [0.0, 0.0]
+        # 장애물 충돌/밀어내기
         for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
             for c in obs.colliders:
                 penetration = c.compute_penetration_circle(
@@ -156,8 +120,9 @@ class Enemy1(AIBase):
                     penetration_total[0] += penetration[0]
                     penetration_total[1] += penetration[1]
 
+        # 적과 적끼리 밀어내기
         for other in enemies:
-            if other == self:
+            if other == self or not other.alive:
                 continue
             dx = self.world_x - other.world_x
             dy = self.world_y - other.world_y
@@ -166,12 +131,29 @@ class Enemy1(AIBase):
             if dist_sq < r_sum * r_sum:
                 dist = math.sqrt(dist_sq) if dist_sq > 0 else 0.0001
                 penetration = r_sum - dist
-                penetration_total[0] += (dx / dist) * penetration
-                penetration_total[1] += (dy / dist) * penetration
+                penetration_total[0] += (dx / dist) * penetration * self.push_strength
+                penetration_total[1] += (dy / dist) * penetration * self.push_strength
 
+        # 충돌시, 경로를 바꿔본다
         if math.hypot(*penetration_total) > 0.001:
             self.world_x += penetration_total[0]
             self.world_y += penetration_total[1]
+            # 우회 목표 재설정
+            if self.goal_pos is not None:
+                angle = math.atan2(self.goal_pos[1] - self.world_y, self.goal_pos[0] - self.world_x)
+                angle_options = [
+                    angle + math.radians(60),
+                    angle - math.radians(60),
+                    angle + math.radians(120),
+                    angle - math.radians(120),
+                ]
+                random.shuffle(angle_options)
+                for try_angle in angle_options:
+                    test_x = self.world_x + math.cos(try_angle) * 100
+                    test_y = self.world_y + math.sin(try_angle) * 100
+                    if 0 <= test_x <= self.map_width and 0 <= test_y <= self.map_height:
+                        self.goal_pos = (test_x, test_y)
+                        break
         else:
             self.world_x += self.velocity_x
             self.world_y += self.velocity_y
@@ -192,12 +174,9 @@ class Enemy1(AIBase):
             self._escape_stuck()
             self.stuck_count = 0
 
-        if not self.aware_of_player and dist_to_player < far_threshold:
-            self.aware_of_player = True
-            self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
-            self.shoot_timer = self.shoot_delay
-
+        # 경고 표시, 사격 처리
         if self.aware_of_player and self.shoot_timer is not None:
+            self._update_alert(self.shoot_timer)
             self.shoot_timer -= dt
             if self.shoot_timer <= 0:
                 self.shoot()
@@ -209,6 +188,10 @@ class Enemy1(AIBase):
             if s.alpha <= 0:
                 self.scattered_bullets.remove(s)
 
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 하위 클래스에서 "어떻게 목표를 정할지"만 오버라이드
+        pass
+
     def _escape_stuck(self):
         angles = [
             self.direction_angle + math.pi,
@@ -218,12 +201,10 @@ class Enemy1(AIBase):
             self.direction_angle - math.radians(90),
         ]
         random.shuffle(angles)
-
         for angle in angles:
             test_x = self.world_x + math.cos(angle) * 50
             test_y = self.world_y + math.sin(angle) * 50
             collided = False
-
             for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
                 for c in obs.colliders:
                     collider_world_center = (
@@ -264,18 +245,95 @@ class Enemy1(AIBase):
                             break
                 if collided:
                     break
-
             if not collided:
                 self.goal_pos = (test_x, test_y)
                 return
-
         self.goal_pos = None
         self.velocity_x = 0
         self.velocity_y = 0
 
+    def _update_alert(self, time_until_attack):
+        if time_until_attack is not None and time_until_attack <= self.ALERT_DURATION:
+            self.show_alert = True
+        else:
+            self.show_alert = False
+
+    def draw_alert(self, screen, screen_x, screen_y):
+        if self.show_alert:
+            ey = screen_y - self.rect.height // 2 + 5
+            ex = screen_x
+            line_rect = pygame.Rect(ex - 3, ey - 12, 6, 16)
+            pygame.draw.rect(screen, (255, 0, 0), line_rect)
+            dot_rect = pygame.Rect(ex - 3, ey + 6, 6, 6)
+            pygame.draw.ellipse(screen, (255, 0, 0), dot_rect)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        # 하위 클래스에서 오버라이드
+        pass
+
+    def shoot(self):
+        # 하위 클래스에서 오버라이드
+        pass
+
+class Enemy1(AIBase):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7,
+            near_threshold=150,
+            far_threshold=500,
+            radius=30,
+            push_strength=0.18,
+            alert_duration=1000,
+        )
+        self.image_original = images["enemy1"]
+        self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
+        self.bullet_image = images["enemy_bullet"]
+        self.cartridge_image = images["cartridge_case1"]
+        self.player_bullet_image = images["bullet1"]
+        self.kill_callback = kill_callback
+        self.fire_sound = self.sounds["gun1_fire_enemy"]
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+        self.recoil_strength = 6
+        self.recoil_offset = 0
+        self.recoil_velocity = 0
+        self.recoil_in_progress = False
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
+        dx = player_world_pos[0] - self.world_x
+        dy = player_world_pos[1] - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        near = self.near_threshold
+        far = self.far_threshold
+
+        if dist_to_player > far:
+            self.goal_pos = player_world_pos
+        elif dist_to_player < near:
+            angle = self.direction_angle + math.pi
+            self.goal_pos = (
+                self.world_x + math.cos(angle) * 200,
+                self.world_y + math.sin(angle) * 200
+            )
+        else:
+            if self.goal_pos is None or self.move_timer <= 0:
+                angle = random.uniform(0, 2 * math.pi)
+                dist = random.randint(50, 150)
+                self.goal_pos = (
+                    self.world_x + math.cos(angle) * dist,
+                    self.world_y + math.sin(angle) * dist
+                )
+                self.move_timer = random.randint(500, 1000)
+
+        # 최초 탐지시 전투/사격 시작
+        if not self.aware_of_player and dist_to_player < far:
+            self.aware_of_player = True
+            self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+            self.shoot_timer = self.shoot_delay
+
     def shoot(self):
         self.fire_sound.play()
-
         self.recoil_offset = 0
         self.recoil_velocity = -self.recoil_strength
         self.recoil_in_progress = True
@@ -302,17 +360,15 @@ class Enemy1(AIBase):
             speed=10 * PLAYER_VIEW_SCALE,
             max_distance=2000 * PLAYER_VIEW_SCALE
         )
-
         config.global_enemy_bullets.append(new_bullet)
 
+        # 탄피 이펙트
         eject_angle = self.direction_angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
         vx = math.cos(eject_angle) * eject_speed
         vy = math.sin(eject_angle) * eject_speed
-
         scatter_x = bullet_world_x
         scatter_y = bullet_world_y
-
         self.scattered_bullets.append(
             ScatteredBullet(scatter_x, scatter_y, vx, vy, self.cartridge_image)
         )
@@ -320,19 +376,16 @@ class Enemy1(AIBase):
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
         if not self.alive:
             return
-
         screen_x = self.world_x - world_x + shake_offset_x
         screen_y = self.world_y - world_y + shake_offset_y
-
+        self.draw_alert(screen, screen_x, screen_y)
         gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
         gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
         rotated_gun = pygame.transform.rotate(
             self.gun_image_original, -math.degrees(self.direction_angle) - 90
         )
-
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
         screen.blit(rotated_gun, gun_rect)
-
         scaled_img = pygame.transform.smoothscale(
             self.image_original,
             (
@@ -346,9 +399,11 @@ class Enemy1(AIBase):
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
-class Enemy2(Enemy1):
+class Enemy2(Enemy1, AIBase):
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
-        super().__init__(world_x, world_y, images, sounds, map_width, map_height, kill_callback)
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height, kill_callback
+        )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
         self.hp = 150
@@ -356,12 +411,15 @@ class Enemy2(Enemy1):
         self.fire_sound = self.sounds["gun2_fire_enemy"]
         self.current_distance = 50 * PLAYER_VIEW_SCALE
         self.recoil_strength = 8
-
+        self.recoil_offset = 0
+        self.recoil_velocity = 0
+        self.recoil_in_progress = False
         self.shoot_delay_min = 1250
         self.shoot_delay_max = 2000
         self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
         self.shoot_timer = None
 
+        # 특수 패턴
         self.is_preparing_far_shot = False
         self.prepare_start_time = 0
         self.far_shot_step = 0
@@ -369,27 +427,23 @@ class Enemy2(Enemy1):
         self.far_shot_check_timer = random.randint(4000, 8000)
         self.fixed_far_shot_angle = None
 
-    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
-        if not self.alive:
-            return
-
+    def update_goal(self, world_x, world_y, player_rect, enemies):
         player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
         dx = player_world_pos[0] - self.world_x
         dy = player_world_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        near = 200 * PLAYER_VIEW_SCALE
+        far = 700 * PLAYER_VIEW_SCALE
 
-        near_threshold = 200 * PLAYER_VIEW_SCALE
-        far_threshold = 700 * PLAYER_VIEW_SCALE
-
+        # 특수 원거리 공격 준비
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
-
             if elapsed < 1500:
                 self.direction_angle = math.atan2(dy, dx)
             else:
                 if self.fixed_far_shot_angle is None:
                     self.fixed_far_shot_angle = self.direction_angle
-
                 now = pygame.time.get_ticks()
                 if self.far_shot_step < 3:
                     if now >= self.far_shot_timer:
@@ -407,7 +461,7 @@ class Enemy2(Enemy1):
                     self.far_shot_check_timer = random.randint(4000, 8000)
             return
 
-        self.far_shot_check_timer -= dt
+        self.far_shot_check_timer -= pygame.time.get_ticks() % 16  # 대략 16ms 프레임 보정
         if self.far_shot_check_timer <= 0:
             if random.random() < 0.5:
                 self.is_preparing_far_shot = True
@@ -418,15 +472,33 @@ class Enemy2(Enemy1):
             else:
                 self.far_shot_check_timer = random.randint(4000, 8000)
 
-        if near_threshold < dist_to_player <= far_threshold:
-            pass
+        # 일반 Enemy1과 비슷하게 목표 설정
+        if dist_to_player > far:
+            self.goal_pos = player_world_pos
+        elif dist_to_player < near:
+            angle = self.direction_angle + math.pi
+            self.goal_pos = (
+                self.world_x + math.cos(angle) * 200,
+                self.world_y + math.sin(angle) * 200
+            )
+        else:
+            if self.goal_pos is None or self.move_timer <= 0:
+                angle = random.uniform(0, 2 * math.pi)
+                dist = random.randint(50, 150)
+                self.goal_pos = (
+                    self.world_x + math.cos(angle) * dist,
+                    self.world_y + math.sin(angle) * dist
+                )
+                self.move_timer = random.randint(500, 1000)
 
-        self.direction_angle = math.atan2(dy, dx)
-        super().update(dt, world_x, world_y, player_rect, enemies)
+        # 전투 개시/사격 준비
+        if not self.aware_of_player and dist_to_player < far:
+            self.aware_of_player = True
+            self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
+            self.shoot_timer = self.shoot_delay
 
     def shoot(self, spread_angle=20, fixed_angle=None, bullet_speed=None):
         self.fire_sound.play()
-
         self.recoil_offset = 0
         self.recoil_velocity = -self.recoil_strength
         self.recoil_in_progress = True
@@ -455,62 +527,17 @@ class Enemy2(Enemy1):
             speed=(bullet_speed if bullet_speed is not None else 10 * PLAYER_VIEW_SCALE),
             max_distance=2000 * PLAYER_VIEW_SCALE
         )
-
         config.global_enemy_bullets.append(new_bullet)
 
+        # 탄피 이펙트
         eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
         vx = math.cos(eject_angle) * eject_speed
         vy = math.sin(eject_angle) * eject_speed
-
         scatter_x = bullet_world_x
         scatter_y = bullet_world_y
-
         self.scattered_bullets.append(
             ScatteredBullet(scatter_x, scatter_y, vx, vy, self.cartridge_image)
         )
 
-    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        if not self.alive:
-            return
-
-        screen_x = self.world_x - world_x + shake_offset_x
-        screen_y = self.world_y - world_y + shake_offset_y
-
-        if self.is_preparing_far_shot:
-            elapsed = pygame.time.get_ticks() - self.prepare_start_time
-            if elapsed < 1500:
-                player_pos = (world_x + 0, world_y + 0)
-                pass
-
-        gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
-        gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
-
-        desired_width = 50
-        original_width = self.gun_image_original.get_width()
-        original_height = self.gun_image_original.get_height()
-        scale_factor = desired_width / original_width
-        scaled_gun = pygame.transform.smoothscale(
-            self.gun_image_original,
-            (desired_width, int(original_height * scale_factor))
-        )
-
-        rotated_gun = pygame.transform.rotate(
-            scaled_gun, -math.degrees(self.direction_angle) - 90
-        )
-
-        gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
-        screen.blit(rotated_gun, gun_rect)
-
-        scaled_img = pygame.transform.smoothscale(
-            self.image_original,
-            (
-                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
-                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
-            )
-        )
-        rotated_img = pygame.transform.rotate(
-            scaled_img, -math.degrees(self.direction_angle) + 90
-        )
-        rect = rotated_img.get_rect(center=(screen_x, screen_y))
-        screen.blit(rotated_img, rect)
+    # draw는 Enemy1과 동일

@@ -450,6 +450,7 @@ class Obstacle:
 
         if self.is_covering and self.cover_collider:
             transparent_needed = False
+
             if player_center:
                 if self.cover_collider.check_collision_circle(
                     player_center,
@@ -457,6 +458,18 @@ class Obstacle:
                     (self.world_x, self.world_y)
                 ):
                     transparent_needed = True
+
+            if enemies:
+                for enemy in enemies:
+                    enemy_center = (enemy.world_x, enemy.world_y)
+                    if self.cover_collider.check_collision_circle(
+                        enemy_center,
+                        enemy.radius if hasattr(enemy, "radius") else 30,
+                        (self.world_x, self.world_y)
+                    ):
+                        transparent_needed = True
+                        break
+
             if transparent_needed:
                 self.transparent = True
                 img_to_draw.set_alpha(self.transparent_alpha)

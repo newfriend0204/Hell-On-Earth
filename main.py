@@ -1380,6 +1380,7 @@ while running:
                 recoil_offset = 0
                 recoil_velocity = -weapon.recoil_strength
                 allow_sprint = False
+                shake_timer = int(weapon.shake_strength)
 
     recoil_velocity += 1.5
     recoil_offset += recoil_velocity
