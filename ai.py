@@ -3,8 +3,8 @@ import math
 import random
 from config import *
 import config
-
-from entities import ScatteredBullet, Bullet, ParticleBlood
+import asset_manager
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem
 
 ENEMY_CLASSES = []
 
@@ -27,6 +27,7 @@ class AIBase(metaclass=EnemyMeta):
         self.map_height = map_height
 
         self.alive = True
+        self._already_dropped = False
         self.scattered_bullets = []
         self.hp = 100
         self.radius = radius * PLAYER_VIEW_SCALE
@@ -38,7 +39,6 @@ class AIBase(metaclass=EnemyMeta):
         self.push_strength = push_strength
         self.ALERT_DURATION = alert_duration
 
-        # 이동 및 상태 변수
         self.direction_angle = random.uniform(0, 2 * math.pi)
         self.velocity_x = 0.0
         self.velocity_y = 0.0
@@ -49,7 +49,6 @@ class AIBase(metaclass=EnemyMeta):
         self.move_delay = random.randint(600, 1200)
         self.stuck_count = 0
 
-        # 전투 상태
         self.aware_of_player = False
         self.shoot_delay_min = 1200
         self.shoot_delay_max = 1500
@@ -57,10 +56,8 @@ class AIBase(metaclass=EnemyMeta):
         self.shoot_timer = None
         self.show_alert = False
 
-        # 외형 관련
         self.rect = images.get("enemy1", pygame.Surface((60,60))).get_rect(center=(0,0))
 
-        # 반동 및 총 거리
         self.current_distance = 45 * PLAYER_VIEW_SCALE
         self.recoil_strength = 6
         self.recoil_offset = 0
@@ -75,6 +72,9 @@ class AIBase(metaclass=EnemyMeta):
             self.die(blood_effects)
 
     def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        self._already_dropped = True
         self.hp = 0
         self.alive = False
         if hasattr(self.sounds, "__getitem__") and "enemy_die" in self.sounds:
@@ -85,6 +85,15 @@ class AIBase(metaclass=EnemyMeta):
         if self.kill_callback:
             self.kill_callback()
 
+    def spawn_dropped_items(self, health_count, ammo_count):
+        get_player_pos = lambda: (config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery)
+        for _ in range(health_count):
+            item = DroppedItem(self.world_x, self.world_y, config.images["health_up"], "health", 10, get_player_pos)
+            config.dropped_items.append(item)
+        for _ in range(ammo_count):
+            item = DroppedItem(self.world_x, self.world_y, config.images["ammo_gauge_up"], "ammo", 20, get_player_pos)
+            config.dropped_items.append(item)
+
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive or not config.combat_state:
             return
@@ -93,7 +102,6 @@ class AIBase(metaclass=EnemyMeta):
 
         dist = math.hypot(self.world_x - self.last_pos[0], self.world_y - self.last_pos[1])
 
-        # 이동 처리
         if self.goal_pos:
             goal_dx = self.goal_pos[0] - self.world_x
             goal_dy = self.goal_pos[1] - self.world_y
@@ -108,7 +116,6 @@ class AIBase(metaclass=EnemyMeta):
                 self.velocity_y = 0
 
         penetration_total = [0.0, 0.0]
-        # 장애물 충돌/밀어내기
         for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
             for c in obs.colliders:
                 penetration = c.compute_penetration_circle(
@@ -120,7 +127,6 @@ class AIBase(metaclass=EnemyMeta):
                     penetration_total[0] += penetration[0]
                     penetration_total[1] += penetration[1]
 
-        # 적과 적끼리 밀어내기
         for other in enemies:
             if other == self or not other.alive:
                 continue
@@ -134,11 +140,9 @@ class AIBase(metaclass=EnemyMeta):
                 penetration_total[0] += (dx / dist) * penetration * self.push_strength
                 penetration_total[1] += (dy / dist) * penetration * self.push_strength
 
-        # 충돌시, 경로를 바꿔본다
         if math.hypot(*penetration_total) > 0.001:
             self.world_x += penetration_total[0]
             self.world_y += penetration_total[1]
-            # 우회 목표 재설정
             if self.goal_pos is not None:
                 angle = math.atan2(self.goal_pos[1] - self.world_y, self.goal_pos[0] - self.world_x)
                 angle_options = [
@@ -174,7 +178,6 @@ class AIBase(metaclass=EnemyMeta):
             self._escape_stuck()
             self.stuck_count = 0
 
-        # 경고 표시, 사격 처리
         if self.aware_of_player and self.shoot_timer is not None:
             self._update_alert(self.shoot_timer)
             self.shoot_timer -= dt
@@ -189,7 +192,6 @@ class AIBase(metaclass=EnemyMeta):
                 self.scattered_bullets.remove(s)
 
     def update_goal(self, world_x, world_y, player_rect, enemies):
-        # 하위 클래스에서 "어떻게 목표를 정할지"만 오버라이드
         pass
 
     def _escape_stuck(self):
@@ -268,11 +270,9 @@ class AIBase(metaclass=EnemyMeta):
             pygame.draw.ellipse(screen, (255, 0, 0), dot_rect)
 
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        # 하위 클래스에서 오버라이드
         pass
 
     def shoot(self):
-        # 하위 클래스에서 오버라이드
         pass
 
 class Enemy1(AIBase):
@@ -326,11 +326,16 @@ class Enemy1(AIBase):
                 )
                 self.move_timer = random.randint(500, 1000)
 
-        # 최초 탐지시 전투/사격 시작
         if not self.aware_of_player and dist_to_player < far:
             self.aware_of_player = True
             self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
             self.shoot_timer = self.shoot_delay
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 4)
 
     def shoot(self):
         self.fire_sound.play()
@@ -362,7 +367,6 @@ class Enemy1(AIBase):
         )
         config.global_enemy_bullets.append(new_bullet)
 
-        # 탄피 이펙트
         eject_angle = self.direction_angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
         vx = math.cos(eject_angle) * eject_speed
@@ -399,15 +403,24 @@ class Enemy1(AIBase):
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
-class Enemy2(Enemy1, AIBase):
+class Enemy2(AIBase):
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
         super().__init__(
-            world_x, world_y, images, sounds, map_width, map_height, kill_callback
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5,
+            near_threshold=200,
+            far_threshold=700,
+            radius=30,
+            push_strength=0.18,
+            alert_duration=1000,
         )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
+        self.bullet_image = images["enemy_bullet"]
+        self.cartridge_image = images["cartridge_case1"]
+        self.player_bullet_image = images["bullet1"]
+        self.kill_callback = kill_callback
         self.hp = 150
-        self.speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5
         self.fire_sound = self.sounds["gun2_fire_enemy"]
         self.current_distance = 50 * PLAYER_VIEW_SCALE
         self.recoil_strength = 8
@@ -419,7 +432,6 @@ class Enemy2(Enemy1, AIBase):
         self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
         self.shoot_timer = None
 
-        # 특수 패턴
         self.is_preparing_far_shot = False
         self.prepare_start_time = 0
         self.far_shot_step = 0
@@ -436,7 +448,6 @@ class Enemy2(Enemy1, AIBase):
         near = 200 * PLAYER_VIEW_SCALE
         far = 700 * PLAYER_VIEW_SCALE
 
-        # 특수 원거리 공격 준비
         if self.is_preparing_far_shot:
             elapsed = pygame.time.get_ticks() - self.prepare_start_time
             if elapsed < 1500:
@@ -461,7 +472,7 @@ class Enemy2(Enemy1, AIBase):
                     self.far_shot_check_timer = random.randint(4000, 8000)
             return
 
-        self.far_shot_check_timer -= pygame.time.get_ticks() % 16  # 대략 16ms 프레임 보정
+        self.far_shot_check_timer -= pygame.time.get_ticks() % 16
         if self.far_shot_check_timer <= 0:
             if random.random() < 0.5:
                 self.is_preparing_far_shot = True
@@ -472,7 +483,6 @@ class Enemy2(Enemy1, AIBase):
             else:
                 self.far_shot_check_timer = random.randint(4000, 8000)
 
-        # 일반 Enemy1과 비슷하게 목표 설정
         if dist_to_player > far:
             self.goal_pos = player_world_pos
         elif dist_to_player < near:
@@ -491,11 +501,16 @@ class Enemy2(Enemy1, AIBase):
                 )
                 self.move_timer = random.randint(500, 1000)
 
-        # 전투 개시/사격 준비
         if not self.aware_of_player and dist_to_player < far:
             self.aware_of_player = True
             self.shoot_delay = random.randint(self.shoot_delay_min, self.shoot_delay_max)
             self.shoot_timer = self.shoot_delay
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
 
     def shoot(self, spread_angle=20, fixed_angle=None, bullet_speed=None):
         self.fire_sound.play()
@@ -529,7 +544,6 @@ class Enemy2(Enemy1, AIBase):
         )
         config.global_enemy_bullets.append(new_bullet)
 
-        # 탄피 이펙트
         eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
         eject_speed = 1
         vx = math.cos(eject_angle) * eject_speed
@@ -540,4 +554,28 @@ class Enemy2(Enemy1, AIBase):
             ScatteredBullet(scatter_x, scatter_y, vx, vy, self.cartridge_image)
         )
 
-    # draw는 Enemy1과 동일
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+        self.draw_alert(screen, screen_x, screen_y)
+        gun_pos_x = screen_x + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
+        gun_pos_y = screen_y + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
+        rotated_gun = pygame.transform.rotate(
+            self.gun_image_original, -math.degrees(self.direction_angle) - 90
+        )
+        gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
+        screen.blit(rotated_gun, gun_rect)
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)

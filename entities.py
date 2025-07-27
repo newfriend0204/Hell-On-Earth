@@ -67,6 +67,121 @@ class ParticleBlood:
             s.fill(color)
             surface.blit(s, rect.topleft)
 
+class DroppedItem:
+    SPREAD_FRICTION = 0.88
+    SPREAD_DURATION = 0.17
+    TRAIL_KEEP_MS = 100
+    TRAIL_SPACING = 2
+
+    def __init__(self, x, y, image, item_type, value, get_player_pos_fn):
+        self.x, self.y = x, y
+        self.image = pygame.transform.smoothscale(image, (16, 16))
+        self.item_type = item_type
+        self.value = value
+        self.get_player_pos = get_player_pos_fn
+
+        self.state = "spread"
+        self.spawn_time = pygame.time.get_ticks()
+        self.idle_time = None
+
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(11, 17)
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed
+
+        self.magnet_start_time = None
+        self.magnet_origin = None
+        self.magnet_target = None
+        self.magnet_start_dist = None
+
+        self.trail = []
+        self.trail_color = self.get_image_average_color(self.image)
+
+    def get_image_average_color(self, img):
+        arr = pygame.surfarray.pixels3d(img)
+        mask = pygame.surfarray.pixels_alpha(img)
+        valid = (mask > 0)
+        if valid.sum() == 0:
+            return (255,255,255)
+        color = arr[valid].mean(axis=0)
+        return tuple(int(c) for c in color)
+
+    def update(self):
+        now = pygame.time.get_ticks()
+        px, py = self.get_player_pos()
+
+        if not self.trail or (abs(self.x-self.trail[-1][0]) > self.TRAIL_SPACING or abs(self.y-self.trail[-1][1]) > self.TRAIL_SPACING):
+            self.trail.append((self.x, self.y, now))
+        while self.trail and (now - self.trail[0][2]) > self.TRAIL_KEEP_MS:
+            self.trail.pop(0)
+
+        if self.state == "spread":
+            t = (now - self.spawn_time) / 1000
+            if t < self.SPREAD_DURATION:
+                self.x += self.vx
+                self.y += self.vy
+                self.vx *= self.SPREAD_FRICTION
+                self.vy *= self.SPREAD_FRICTION
+            else:
+                self.state = "idle"
+                self.idle_time = now
+                self.vx = 0
+                self.vy = 0
+
+        elif self.state == "idle":
+            dist = math.hypot(self.x - px, self.y - py)
+            if dist < 90:
+                self.state = "magnet"
+                self.magnet_start_time = now
+                self.magnet_origin = (self.x, self.y)
+                self.magnet_target = (px, py)
+                self.magnet_start_dist = dist
+
+        elif self.state == "magnet":
+            elapsed = (now - self.magnet_start_time) / 1000.0
+            t = min(elapsed / 0.11, 1.0)
+            tx, ty = self.get_player_pos()
+            self.magnet_target = (tx, ty)
+            ox, oy = self.magnet_origin
+            dx = tx - ox
+            dy = ty - oy
+
+            def ease_out_back(t, s=1.5):
+                return 1 + s * (t-1)**3 + s * (t-1)**2 + (t-1)
+            overshoot = 0.13
+            if t < 1.0:
+                curve_t = ease_out_back(t)
+                if curve_t < 0: curve_t = 0
+                if curve_t > 1 + overshoot: curve_t = 1 + overshoot
+                self.x = ox + dx * curve_t
+                self.y = oy + dy * curve_t
+            else:
+                self.x = tx
+                self.y = ty
+
+    def is_close_to_player(self):
+        px, py = self.get_player_pos()
+        return math.hypot(self.x - px, self.y - py) < 30
+
+    def draw(self, screen, world_x, world_y):
+        n = len(self.trail)
+        if n > 1:
+            for i in range(n - 1):
+                (tx, ty, t0) = self.trail[i]
+                (tx2, ty2, t1) = self.trail[i + 1]
+                dt = pygame.time.get_ticks() - t0
+                alpha = int(160 * (1 - dt / self.TRAIL_KEEP_MS))
+                color = self.trail_color + (alpha,)
+                width = 6 * (i / n) + 2
+                pygame.draw.line(
+                    screen, color,
+                    (tx - world_x, ty - world_y),
+                    (tx2 - world_x, ty2 - world_y),
+                    int(width)
+                )
+        rect = self.image.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(self.image, rect)
+
 class Bullet:
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
                  spread_angle_degrees, bullet_image, speed=30, max_distance=500, damage=10):

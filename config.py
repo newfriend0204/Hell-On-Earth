@@ -60,7 +60,9 @@ OBJ_PATHS = {
 
 combat_state = False
 combat_enabled = True
+images = None
 
 global_enemy_bullets = []
 all_enemies = []
 blood_effects = []
+dropped_items = []

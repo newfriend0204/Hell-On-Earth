@@ -49,6 +49,8 @@ pygame.display.set_caption("Hell On Earth")
 
 images = load_images()
 sounds = load_sounds()
+config.images = images
+config.dropped_items = []
 weapon_assets = load_weapon_assets(images)
 
 original_player_image = images["player"]
@@ -272,9 +274,6 @@ current_weapon_index = 0
 ammo_gauge = 100
 last_ammo_visual = ammo_gauge * 1.0
 
-config.world_x = world_x
-config.world_y = world_y
-config.player_rect = player_rect
 config.bullets = bullets
 config.scattered_bullets = scattered_bullets
 config.PLAYER_VIEW_SCALE = PLAYER_VIEW_SCALE  
@@ -457,6 +456,7 @@ def change_room(direction):
     bullets.clear()
     scattered_bullets.clear()
     blood_effects.clear()
+    config.dropped_items.clear()
     config.global_enemy_bullets.clear()
     for enemy in enemies:
         if hasattr(enemy, "scattered_bullets"):
@@ -998,7 +998,6 @@ while running:
                     if enemy.alive:
                         enemy.hit(9999, blood_effects)  # 강제로 사망시킴
                         enemies.remove(enemy)
-                        blood_effects.append(ScatteredBlood(enemy.world_x, enemy.world_y))
                 room_key = (cx, cy)
 
                 if room_key in visited_f_rooms:
@@ -1356,6 +1355,10 @@ while running:
     angle_radians = math.atan2(dy, dx)
     angle_degrees = math.degrees(angle_radians)
 
+    config.world_x = world_x
+    config.world_y = world_y
+    config.player_rect = player_rect
+
     scaled_player_image = pygame.transform.smoothscale(
     original_player_image,
         (
@@ -1465,6 +1468,16 @@ while running:
 
     for blood in blood_effects:
         blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    for item in config.dropped_items[:]:
+        item.update()
+        item.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+        if item.state == "magnet" and item.is_close_to_player():
+            if item.item_type == "health":
+                player_hp = min(player_hp_max, player_hp + item.value)
+            elif item.item_type == "ammo":
+                ammo_gauge = min(100, ammo_gauge + item.value)
+            config.dropped_items.remove(item)
 
     obstacle_manager.draw_non_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
@@ -1591,9 +1604,6 @@ while running:
                     enemy.hit(damage, blood_effects)
                     if not enemy.alive:
                         enemies.remove(enemy)
-                        blood_effects.append(
-                            ScatteredBlood(enemy.world_x, enemy.world_y)
-                        )
                     bullet.to_remove = True
                     hit = True
                     break
