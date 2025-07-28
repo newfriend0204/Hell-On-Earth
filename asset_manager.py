@@ -26,6 +26,15 @@ def load_images():
     gun6_img = pygame.image.load(path_image("image", "Gun", "Gun6Player.png")).convert_alpha()
     gun6_img = pygame.transform.smoothscale(gun6_img, (55, int(gun6_img.get_height() * (55 / gun6_img.get_width()))))
 
+    gun7_img = pygame.image.load(path_image("image", "Gun", "Gun7Player.png")).convert_alpha()
+    gun7_img = pygame.transform.smoothscale(gun7_img, (80, int(gun7_img.get_height() * (80 / gun7_img.get_width()))))
+
+    gun8_img = pygame.image.load(path_image("image", "Gun", "Gun8Player.png")).convert_alpha()
+    gun8_img = pygame.transform.smoothscale(gun8_img, (50, int(gun8_img.get_height() * (50 / gun8_img.get_width()))))
+
+    warhead_img = pygame.image.load(path_image("image", "Gun", "Warhead1.png")).convert_alpha()
+    warhead_img = pygame.transform.smoothscale(warhead_img, (40, 40))
+
     grenade_img = pygame.image.load(path_image("image", "Gun", "LauncherGrenade1.png")).convert_alpha()
     grenade_img = pygame.transform.smoothscale(grenade_img, (30, 30))
 
@@ -111,8 +120,11 @@ def load_images():
         "gun4": gun4_img,
         "gun5": gun5_img,
         "gun6": gun6_img,
+        "gun7": gun7_img,
+        "gun8": gun8_img,
         "bullet1": bullet1_img,
         "grenade1": grenade_img,
+        "warhead1": warhead_img,
         "explosion1": explosion_img,
         "cartridge_case1": cartridge_case_img,
         "enemy_bullet": enemy_bullet_img,
@@ -171,6 +183,20 @@ def load_weapon_assets(images):
             "bullets": [images["bullet1"]],
             "cartridges": [images["cartridge_case1"]],
             "grenade": images["grenade1"],
+            "explosion": images["explosion1"],
+        },
+        "gun7": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun7.png")).convert_alpha(),
+            "topdown": images["gun7"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun8": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun8.png")).convert_alpha(),
+            "topdown": images["gun8"],
+            "bullets": [images["warhead1"]],
+            "cartridges": [],
+            "grenade": images["warhead1"],
             "explosion": images["explosion1"],
         },
     }

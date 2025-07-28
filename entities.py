@@ -73,7 +73,7 @@ class DroppedItem:
     TRAIL_KEEP_MS = 100
     TRAIL_SPACING = 2
 
-    def __init__(self, x, y, image, item_type, value, get_player_pos_fn):
+    def __init__(self, x, y, image, item_type, value, get_player_pos_fn, color=None):
         self.x, self.y = x, y
         self.image = pygame.transform.smoothscale(image, (16, 16))
         self.item_type = item_type
@@ -95,7 +95,13 @@ class DroppedItem:
         self.magnet_start_dist = None
 
         self.trail = []
-        self.trail_color = self.get_image_average_color(self.image)
+        self.trail_color = color
+        if color is not None:
+            if not isinstance(color, (tuple, list)) or len(color) not in (3, 4):
+                color = (255, 255, 255)
+                self.trail_color = color
+        else:
+            self.trail_color = self.get_image_average_color(self.image)
 
     def get_image_average_color(self, img):
         arr = pygame.surfarray.pixels3d(img)
@@ -171,7 +177,7 @@ class DroppedItem:
                 (tx2, ty2, t1) = self.trail[i + 1]
                 dt = pygame.time.get_ticks() - t0
                 alpha = int(160 * (1 - dt / self.TRAIL_KEEP_MS))
-                color = self.trail_color + (alpha,)
+                color = self.trail_color if isinstance(self.trail_color, (tuple, list)) and len(self.trail_color) in (3, 4) else (255,255,255) + (alpha,)
                 width = 6 * (i / n) + 2
                 pygame.draw.line(
                     screen, color,

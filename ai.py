@@ -64,6 +64,18 @@ class AIBase(metaclass=EnemyMeta):
         self.recoil_velocity = 0
         self.recoil_in_progress = False
 
+    def check_collision_circle(self, circle_center_world, circle_radius):
+        all_obs = self.static_obstacles + self.combat_obstacles
+        for obs in all_obs:
+            for collider in obs.colliders:
+                        collider_world_center = (
+                            obs.world_x + collider.center[0],
+                            obs.world_y + collider.center[1]
+                        )
+                        if collider.check_collision_circle(circle_center_world, circle_radius, (obs.world_x, obs.world_y)):
+                            return True
+        return False
+
     def hit(self, damage, blood_effects, force=False):
         if not self.alive or (not config.combat_state and not force):
             return
@@ -87,11 +99,13 @@ class AIBase(metaclass=EnemyMeta):
 
     def spawn_dropped_items(self, health_count, ammo_count):
         get_player_pos = lambda: (config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery)
+        AMMO_COLOR = (255, 191, 193)
+        HEALTH_COLOR = (181, 255, 146)
         for _ in range(health_count):
-            item = DroppedItem(self.world_x, self.world_y, config.images["health_up"], "health", 10, get_player_pos)
+            item = DroppedItem(self.world_x, self.world_y, config.images["health_up"], "health", 10, get_player_pos, color=HEALTH_COLOR)
             config.dropped_items.append(item)
         for _ in range(ammo_count):
-            item = DroppedItem(self.world_x, self.world_y, config.images["ammo_gauge_up"], "ammo", 20, get_player_pos)
+            item = DroppedItem(self.world_x, self.world_y, config.images["ammo_gauge_up"], "ammo", 20, get_player_pos, color=AMMO_COLOR)
             config.dropped_items.append(item)
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
@@ -215,7 +229,7 @@ class AIBase(metaclass=EnemyMeta):
                     )
                     if c.shape == "circle":
                         collider_radius = float(c.size)
-                        if config.check_circle_collision(
+                        if self.check_circle_collision(
                             (test_x, test_y),
                             self.radius,
                             collider_world_center,
@@ -237,7 +251,7 @@ class AIBase(metaclass=EnemyMeta):
                     elif c.shape == "rectangle":
                         w, h = c.size
                         collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                        if config.check_circle_collision(
+                        if self.check_circle_collision(
                             (test_x, test_y),
                             self.radius,
                             collider_world_center,
