@@ -405,6 +405,117 @@ class Grenade:
             screen_y < -margin or screen_y > screen_height + margin
         )
 
+class PressureBullet:
+    def __init__(self, x, y, vx, vy, image, explosion_radius, damage, knockback_distance, explosion_sound):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.image = image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.explosion_radius = explosion_radius
+        self.damage = damage
+        self.knockback_distance = knockback_distance
+        self.explosion_sound = explosion_sound
+
+        self.speed = 10 * config.PLAYER_VIEW_SCALE
+        self.max_distance = 1000 * config.PLAYER_VIEW_SCALE
+        self.travelled_distance = 0
+
+        self.to_remove = False
+        self.trail_enabled = True
+
+        from collider import Collider
+        radius = max(self.image.get_width(), self.image.get_height()) // 2
+        self.collider = Collider(
+            shape="circle",
+            center=(self.rect.width / 2, self.rect.height / 2),
+            size=radius,
+            bullet_passable=True
+        )
+
+    def update(self, obstacle_manager):
+        self.x += self.vx * self.speed
+        self.y += self.vy * self.speed
+        self.travelled_distance += math.hypot(self.vx * self.speed, self.vy * self.speed)
+        self.rect.center = (self.x, self.y)
+
+        for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+            for collider in obs.colliders:
+                if getattr(collider, "bullet_passable", False):
+                    continue
+                if collider.check_collision_circle((self.x, self.y), self.rect.width / 2, (obs.world_x, obs.world_y)):
+                    self.explode()
+                    return
+
+        if self.travelled_distance >= self.max_distance:
+            self.explode()
+            return
+
+        for enemy in config.all_enemies:
+            if not enemy.alive:
+                continue
+            dx = enemy.world_x - self.x
+            dy = enemy.world_y - self.y
+            dist = math.hypot(dx, dy)
+            if dist <= enemy.radius:
+                self.explode()
+                return
+
+    def explode(self):
+        if self.explosion_sound:
+            self.explosion_sound.play()
+
+        for enemy in list(config.all_enemies):
+            if not enemy.alive:
+                continue
+
+            dx = enemy.world_x - self.x
+            dy = enemy.world_y - self.y
+            dist = math.hypot(dx, dy)
+
+            if dist <= self.explosion_radius:
+                enemy.hit(self.damage, config.blood_effects)
+
+                if enemy.hp <= 0:
+                    enemy.alive = False
+                    enemy.radius = 0
+                    if hasattr(enemy, "colliders"):
+                        enemy.colliders = []
+                    if enemy in config.all_enemies:
+                        config.all_enemies.remove(enemy)
+                    continue
+
+                if config.combat_state:
+                    if dist > 0:
+                        nx = dx / dist
+                        ny = dy / dist
+                    else:
+                        nx, ny = 0, 0
+
+                    enemy.knockback_velocity_x = nx * (self.knockback_distance / 10)
+                    enemy.knockback_velocity_y = ny * (self.knockback_distance / 10)
+                    enemy.knockback_steps = 10
+
+        self.to_remove = True
+
+    def draw(self, screen, world_offset_x, world_offset_y):
+        screen.blit(
+            self.image,
+            (self.x - world_offset_x - self.image.get_width() / 2,
+             self.y - world_offset_y - self.image.get_height() / 2)
+        )
+
+    def is_offscreen(self, screen_width, screen_height, world_x, world_y):
+        screen_x = self.x - world_x
+        screen_y = self.y - world_y
+        return (
+            screen_x < -self.image.get_width() or
+            screen_x > screen_width + self.image.get_width() or
+            screen_y < -self.image.get_height() or
+            screen_y > screen_height + self.image.get_height()
+        )
+
 class ExplosionEffectPersistent:
     def __init__(self, x, y, image, duration=0.4, scale=1.5):
         self.x = x
@@ -417,14 +528,30 @@ class ExplosionEffectPersistent:
         self.finished = False
         self.drawn_once = False
 
+        self._pause_total = 0.0
+        self._pause_start = None
+
+    def pause(self):
+        if self._pause_start is None:
+            self._pause_start = time.time()
+
+    def resume(self):
+        self._pause_start = None
+        self.finished = True
+
     def update(self):
-        elapsed = time.time() - self.start_time
+        if self._pause_start is not None:
+            return
+
+        elapsed = (time.time() - self.start_time) - self._pause_total
+
         if elapsed >= self.duration:
             self.finished = True
-        else:
-            ratio = 1 - (elapsed / self.duration)
-            self.alpha = int(255 * ratio)
-            self.scale = 1.5 * ratio
+            return
+
+        ratio = 1 - (elapsed / self.duration)
+        self.alpha = int(255 * ratio)
+        self.scale = 1.5 * ratio
 
     def draw(self, screen, world_x, world_y):
         self.drawn_once = True

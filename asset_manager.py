@@ -32,6 +32,9 @@ def load_images():
     gun8_img = pygame.image.load(path_image("image", "Gun", "Gun8Player.png")).convert_alpha()
     gun8_img = pygame.transform.smoothscale(gun8_img, (50, int(gun8_img.get_height() * (50 / gun8_img.get_width()))))
 
+    gun9_img = pygame.image.load(path_image("image", "Gun", "Gun9Player.png")).convert_alpha()
+    gun9_img = pygame.transform.smoothscale(gun9_img, (50, int(gun9_img.get_height() * (50 / gun9_img.get_width()))))
+
     warhead_img = pygame.image.load(path_image("image", "Gun", "Warhead1.png")).convert_alpha()
     warhead_img = pygame.transform.smoothscale(warhead_img, (40, 40))
 
@@ -42,13 +45,21 @@ def load_images():
     explosion_img = pygame.transform.smoothscale(explosion_img, (200, 200))
 
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
-    desired_width = 60
-    scale_factor = desired_width / bullet1_img.get_width()
+    bullet2_img = pygame.image.load(path_image("image", "Gun", "Bullet2.png")).convert_alpha()
+    scale_factor = 60 / bullet1_img.get_width()
     bullet1_img = pygame.transform.smoothscale(
         bullet1_img,
         (
             int(bullet1_img.get_width() * scale_factor),
             int(bullet1_img.get_height() * scale_factor)
+        )
+    )
+    scale_factor = 40 / bullet2_img.get_width()
+    bullet2_img = pygame.transform.smoothscale(
+        bullet2_img,
+        (
+            int(bullet2_img.get_width() * scale_factor),
+            int(bullet2_img.get_height() * scale_factor)
         )
     )
 
@@ -122,7 +133,9 @@ def load_images():
         "gun6": gun6_img,
         "gun7": gun7_img,
         "gun8": gun8_img,
+        "gun9": gun9_img,
         "bullet1": bullet1_img,
+        "bullet2": bullet2_img,
         "grenade1": grenade_img,
         "warhead1": warhead_img,
         "explosion1": explosion_img,
@@ -198,6 +211,15 @@ def load_weapon_assets(images):
             "cartridges": [],
             "grenade": images["warhead1"],
             "explosion": images["explosion1"],
+        },
+        "gun9": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun9.png")).convert_alpha(),
+            "topdown": images["gun9"],
+            "bullets": [
+                [images["bullet1"]],
+                [images["bullet2"]]
+            ],
+            "cartridges": [images["cartridge_case1"]],
         },
     }
     return weapons

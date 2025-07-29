@@ -64,17 +64,44 @@ class AIBase(metaclass=EnemyMeta):
         self.recoil_velocity = 0
         self.recoil_in_progress = False
 
-    def check_collision_circle(self, circle_center_world, circle_radius):
-        all_obs = self.static_obstacles + self.combat_obstacles
-        for obs in all_obs:
-            for collider in obs.colliders:
-                        collider_world_center = (
-                            obs.world_x + collider.center[0],
-                            obs.world_y + collider.center[1]
-                        )
-                        if collider.check_collision_circle(circle_center_world, circle_radius, (obs.world_x, obs.world_y)):
-                            return True
-        return False
+    def check_collision_circle(self, center1, radius1, center2, radius2):
+        try:
+            radius1 = float(radius1)
+            radius2 = float(radius2)
+        except (ValueError, TypeError):
+            return False
+
+        if radius1 <= 0 or radius2 <= 0:
+            return False
+
+        dx = center1[0] - center2[0]
+        dy = center1[1] - center2[1]
+        dist_sq = dx * dx + dy * dy
+        r_sum = radius1 + radius2
+        return dist_sq <= r_sum * r_sum
+
+
+    def check_ellipse_circle_collision(self, circle_center, circle_radius, ellipse_center, rx, ry):
+        try:
+            rx = float(rx)
+            ry = float(ry)
+            circle_radius = float(circle_radius)
+        except (ValueError, TypeError):
+            return False
+
+        if rx <= 0 or ry <= 0 or circle_radius <= 0:
+            return False
+
+        dx = circle_center[0] - ellipse_center[0]
+        dy = circle_center[1] - ellipse_center[1]
+
+        try:
+            test = (dx ** 2) / ((rx + circle_radius) ** 2) + \
+                (dy ** 2) / ((ry + circle_radius) ** 2)
+        except ZeroDivisionError:
+            return False
+
+        return test <= 1.0
 
     def hit(self, damage, blood_effects, force=False):
         if not self.alive or (not config.combat_state and not force):
@@ -205,6 +232,11 @@ class AIBase(metaclass=EnemyMeta):
             if s.alpha <= 0:
                 self.scattered_bullets.remove(s)
 
+        if hasattr(self, "knockback_steps") and self.knockback_steps > 0:
+            self.world_x += getattr(self, "knockback_velocity_x", 0)
+            self.world_y += getattr(self, "knockback_velocity_y", 0)
+            self.knockback_steps -= 1
+
     def update_goal(self, world_x, world_y, player_rect, enemies):
         pass
 
@@ -217,53 +249,57 @@ class AIBase(metaclass=EnemyMeta):
             self.direction_angle - math.radians(90),
         ]
         random.shuffle(angles)
+
         for angle in angles:
             test_x = self.world_x + math.cos(angle) * 50
             test_y = self.world_y + math.sin(angle) * 50
+
+            if not (0 <= test_x <= self.map_width and 0 <= test_y <= self.map_height):
+                continue
+
             collided = False
             for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
                 for c in obs.colliders:
                     collider_world_center = (
-                        obs.world_x + c.center[0],
-                        obs.world_y + c.center[1]
+                        obs.world_x + getattr(c, "center", (0, 0))[0],
+                        obs.world_y + getattr(c, "center", (0, 0))[1]
                     )
-                    if c.shape == "circle":
-                        collider_radius = float(c.size)
-                        if self.check_circle_collision(
-                            (test_x, test_y),
-                            self.radius,
-                            collider_world_center,
-                            collider_radius
-                        ):
+
+                    if getattr(c, "shape", None) == "circle":
+                        try:
+                            collider_radius = float(c.size)
+                        except (ValueError, TypeError):
+                            continue
+                        if self.check_collision_circle((test_x, test_y), self.radius, collider_world_center, collider_radius):
                             collided = True
                             break
-                    elif c.shape == "ellipse":
-                        rx, ry = c.size
-                        if config.check_ellipse_circle_collision(
-                            (test_x, test_y),
-                            self.radius,
-                            collider_world_center,
-                            rx,
-                            ry
-                        ):
+
+                    elif getattr(c, "shape", None) == "ellipse":
+                        try:
+                            rx, ry = c.size
+                        except (ValueError, TypeError):
+                            continue
+                        if self.check_ellipse_circle_collision((test_x, test_y), self.radius, collider_world_center, rx, ry):
                             collided = True
                             break
-                    elif c.shape == "rectangle":
-                        w, h = c.size
-                        collider_radius = math.sqrt((w/2)**2 + (h/2)**2)
-                        if self.check_circle_collision(
-                            (test_x, test_y),
-                            self.radius,
-                            collider_world_center,
-                            collider_radius
-                        ):
+
+                    elif getattr(c, "shape", None) == "rectangle":
+                        try:
+                            w, h = c.size
+                        except (ValueError, TypeError):
+                            continue
+                        collider_radius = math.sqrt((w / 2) ** 2 + (h / 2) ** 2)
+                        if self.check_collision_circle((test_x, test_y), self.radius, collider_world_center, collider_radius):
                             collided = True
                             break
+
                 if collided:
                     break
+
             if not collided:
                 self.goal_pos = (test_x, test_y)
                 return
+
         self.goal_pos = None
         self.velocity_x = 0
         self.velocity_y = 0

@@ -513,7 +513,6 @@ def check_ellipse_circle_collision(circle_center, circle_radius, ellipse_center,
            (dy ** 2) / ((ry + circle_radius) ** 2)
     return test <= 1.0
 
-
 def get_player_center_world(world_x, world_y):
     return (
         world_x + player_rect.centerx,
@@ -978,8 +977,18 @@ while running:
                     pygame.mouse.set_visible(True)
                     tab_menu_selected = 0
                     selected_tab = 0
+                    bullets[:] = [b for b in bullets if not isinstance(b, ExplosionEffectPersistent)]
+                    screen.fill((0, 0, 0))
+                    world.draw_full(
+                        screen, world_x, world_y, shake_offset_x, shake_offset_y,
+                        combat_walls_info, obstacle_manager, expansion
+                    )
+                    pygame.display.flip()
                 else:
                     pygame.mouse.set_visible(False)
+                    for bullet in bullets:
+                        if isinstance(bullet, ExplosionEffectPersistent):
+                            bullet.resume()
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
                 slot = event.key - pygame.K_1
                 if 0 <= slot < len(weapons) and current_weapon_index != slot:
@@ -1042,6 +1051,18 @@ while running:
                 mouse_right_button_down = False
 
     if paused:
+        screen.fill((0, 0, 0))
+        world.draw_full(
+            screen, world_x, world_y, shake_offset_x, shake_offset_y,
+            combat_walls_info, obstacle_manager, expansion
+        )
+
+        for bullet in bullets[:]:
+            if isinstance(bullet, ExplosionEffectPersistent):
+                if bullet.finished:
+                    bullets.remove(bullet)
+                continue
+
         if selected_tab != 0:
             ui_tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons, sounds)
         else:
@@ -1487,8 +1508,14 @@ while running:
     for bullet in bullets[:]:
         if isinstance(bullet, ExplosionEffectPersistent):
             bullet.update()
+            if bullet.finished:
+                bullets.remove(bullet)
+                continue
         else:
             bullet.update(obstacle_manager)
+            if getattr(bullet, "to_remove", False):
+                bullets.remove(bullet)
+                continue
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for bullet in config.global_enemy_bullets[:]:
@@ -1519,7 +1546,7 @@ while running:
             continue
 
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
-
+    
     player_center_world = (
         world_x + player_rect.centerx,
         world_y + player_rect.centery
