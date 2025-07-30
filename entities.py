@@ -14,7 +14,9 @@ PARTICLE_LIFETIME = 2000
 PARTICLE_FADE_TIME = 500
 
 class ParticleBlood:
+    # 피가 튀는 파티클 이펙트
     def __init__(self, x, y, scale=1.0):
+        # 파티클 초기 생성
         self.particles = []
         self.spawn_time = pygame.time.get_ticks()
 
@@ -34,6 +36,7 @@ class ParticleBlood:
         self.alpha = 255
 
     def update(self):
+        # 파티클 이동 및 알파값 감소 처리
         elapsed = pygame.time.get_ticks() - self.spawn_time
 
         for p in self.particles:
@@ -50,6 +53,7 @@ class ParticleBlood:
                 self.alpha = 0
 
     def draw(self, surface, world_x, world_y):
+        # 화면에 파티클 그리기
         for p in self.particles:
             pos = p["pos"]
             size = p["size"]
@@ -68,6 +72,7 @@ class ParticleBlood:
             surface.blit(s, rect.topleft)
 
 class DroppedItem:
+    # 플레이어가 획득할 수 있는 드롭 아이템
     SPREAD_FRICTION = 0.88
     SPREAD_DURATION = 0.17
     TRAIL_KEEP_MS = 100
@@ -113,6 +118,7 @@ class DroppedItem:
         return tuple(int(c) for c in color)
 
     def update(self):
+        # 상태별 이동 처리 (spread, idle, magnet)
         now = pygame.time.get_ticks()
         px, py = self.get_player_pos()
 
@@ -166,10 +172,12 @@ class DroppedItem:
                 self.y = ty
 
     def is_close_to_player(self):
+        # 플레이어 근처인지 확인
         px, py = self.get_player_pos()
         return math.hypot(self.x - px, self.y - py) < 30
 
     def draw(self, screen, world_x, world_y):
+        # 아이템 및 궤적(trail) 그리기
         n = len(self.trail)
         if n > 1:
             for i in range(n - 1):
@@ -189,8 +197,10 @@ class DroppedItem:
         screen.blit(self.image, rect)
 
 class Bullet:
+    # 직선으로 날아가는 기본 탄환
     def __init__(self, world_x, world_y, target_world_x, target_world_y,
                  spread_angle_degrees, bullet_image, speed=30, max_distance=500, damage=10):
+        # 탄환 초기 위치, 속도, 충돌체 설정
         self.original_image = bullet_image
         self.world_x = world_x
         self.world_y = world_y
@@ -219,6 +229,7 @@ class Bullet:
         )
 
     def update(self, obstacle_manager):
+        # 탄환 이동 및 충돌 처리
         self.world_x += self.vx
         self.world_y += self.vy
         self.collider.center = (self.world_x, self.world_y)
@@ -251,6 +262,7 @@ class Bullet:
                         return
 
     def draw(self, screen, world_x, world_y):
+        # 탄환 궤적 및 본체 그리기
         if self.trail_enabled:
             for pos in self.trail:
                 screen_x = pos[0] - world_x
@@ -281,6 +293,7 @@ class Bullet:
                 screen_y < -margin or screen_y > screen_height + margin)
 
 class Grenade:
+    # 발사 후 일정 거리 또는 충돌 시 폭발하는 유탄/로켓
     def __init__(self, x, y, vx, vy, image, explosion_radius, max_damage, min_damage, explosion_image, explosion_sound):
         self.x = x
         self.y = y
@@ -307,6 +320,7 @@ class Grenade:
         self.explosion_played = False
 
     def update(self, obstacle_manager=None):
+        # 비행 중 이동, 충돌 시 폭발 처리
         if not self.alive and not self.exploded:
             return
 
@@ -349,6 +363,7 @@ class Grenade:
                 self.explosion_scale = 1.5 * ratio
 
     def explode(self):
+        # 폭발 처리, 피해 적용
         if self.exploded:
             return
         self.exploded = True
@@ -383,6 +398,7 @@ class Grenade:
                     )
 
     def draw(self, screen, world_x, world_y):
+        # 비행 중 유탄 또는 폭발 이펙트 그리기
         if self.alive and not self.exploded:
             rotated_image = pygame.transform.rotate(self.image, -self.angle_degrees)
             rect = rotated_image.get_rect(center=(self.x - world_x, self.y - world_y))
@@ -406,6 +422,7 @@ class Grenade:
         )
 
 class PressureBullet:
+    # 폭발과 넉백 효과를 주는 특수 탄환
     def __init__(self, x, y, vx, vy, image, explosion_radius, damage, knockback_distance, explosion_sound):
         self.x = x
         self.y = y
@@ -435,6 +452,7 @@ class PressureBullet:
         )
 
     def update(self, obstacle_manager):
+        # 탄환 이동 및 충돌 시 폭발
         self.x += self.vx * self.speed
         self.y += self.vy * self.speed
         self.travelled_distance += math.hypot(self.vx * self.speed, self.vy * self.speed)
@@ -463,6 +481,7 @@ class PressureBullet:
                 return
 
     def explode(self):
+        # 폭발 처리 및 넉백 적용
         if self.explosion_sound:
             self.explosion_sound.play()
 
@@ -517,6 +536,7 @@ class PressureBullet:
         )
 
 class ExplosionEffectPersistent:
+    # 일정 시간 지속되는 폭발 시각 효과
     def __init__(self, x, y, image, duration=0.4, scale=1.5):
         self.x = x
         self.y = y
@@ -540,6 +560,7 @@ class ExplosionEffectPersistent:
         self.finished = True
 
     def update(self):
+        # 크기, 투명도 업데이트
         if self._pause_start is not None:
             return
 
@@ -554,6 +575,7 @@ class ExplosionEffectPersistent:
         self.scale = 1.5 * ratio
 
     def draw(self, screen, world_x, world_y):
+        # 폭발 이미지를 화면에 그림
         self.drawn_once = True
         size = int(self.image.get_width() * self.scale)
         scaled = pygame.transform.smoothscale(self.image, (size, size)).copy()
@@ -561,6 +583,7 @@ class ExplosionEffectPersistent:
         screen.blit(scaled, (self.x - size // 2 - world_x, self.y - size // 2 - world_y))
 
 class ScatteredBullet:
+    # 발사 시 배출되는 탄피/파편 이펙트
     def __init__(self, x, y, vx, vy, bullet_image, scale=1.0):
         self.image_original = pygame.transform.scale(
             bullet_image,
@@ -590,6 +613,7 @@ class ScatteredBullet:
         return config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
 
     def update(self):
+        # 이동, 회전, 알파값 업데이트
         self.pos[0] += self.vx
         self.pos[1] += self.vy
         self.vx *= self.friction
@@ -613,6 +637,7 @@ class ScatteredBullet:
                 self.alpha = 0
 
     def draw(self, screen, world_x, world_y):
+        # 탄피/파편을 화면에 그림
         if self.alpha > 0:
             screen_x = self.pos[0] - world_x
             screen_y = self.pos[1] - world_y
@@ -621,6 +646,7 @@ class ScatteredBullet:
 
 
 class ScatteredBlood:
+    # 적 피가 사방으로 튀는 이펙트
     def __init__(self, x, y, num_particles=20):
         self.particles = []
         for _ in range(num_particles):
@@ -640,6 +666,7 @@ class ScatteredBlood:
         self.alpha = 255
 
     def update(self):
+        # 파편 이동 및 알파값 감소
         for p in self.particles:
             p["pos"][0] += p["vx"]
             p["pos"][1] += p["vy"]
@@ -655,6 +682,7 @@ class ScatteredBlood:
                 self.alpha = 0
 
     def draw(self, screen, world_x, world_y):
+        # 피 파편 그리기
         if self.alpha > 0:
             for p in self.particles:
                 screen_x = p["pos"][0] - world_x
@@ -666,6 +694,7 @@ class ScatteredBlood:
                 screen.blit(surface, rect)
 
 class Obstacle:
+    # 맵 상의 장애물(나무, 바위 등)
     def __init__(
         self,
         image,
@@ -691,6 +720,7 @@ class Obstacle:
         self.transparent = False
 
     def draw(self, screen, world_offset_x, world_offset_y, player_center=None, enemies=None):
+        # 투명 처리 여부 계산 후 이미지 그리기
         screen_x = self.world_x - world_offset_x
         screen_y = self.world_y - world_offset_y
 

@@ -8,6 +8,7 @@ import os
 class ObstacleManager:
     def __init__(self, obstacle_images, obstacle_masks, map_width, map_height,
                  min_scale=1.3, max_scale=2.0, num_obstacles_range=(1, 1)):
+        # 장애물 관리 클래스 초기화
         self.obstacle_images = obstacle_images
         self.obstacle_masks = obstacle_masks
         self.map_width = map_width
@@ -21,6 +22,7 @@ class ObstacleManager:
         self.combat_obstacles = []
 
     def generate_obstacles_from_map(self, map_definition):
+        # 맵 정의에 따라 장애물 생성
         self.placed_obstacles = []
 
         for obs_def in map_definition["obstacles"]:
@@ -40,6 +42,7 @@ class ObstacleManager:
             colliders = self._create_colliders_for_image(filename, new_width, new_height)
 
             if "Tree1" in filename or "Tree2" in filename:
+                # 나무일 경우 덮개(cover) 충돌체 추가
                 cover_collider = Collider(
                     shape="ellipse",
                     center=(new_width / 2, new_height / 2),
@@ -49,6 +52,7 @@ class ObstacleManager:
                 trunk_image = self.obstacle_images.get("TreeStump.png")
 
                 if trunk_image:
+                    # 나무 밑둥 이미지 크기 조정
                     trunk_scale = 0.35
                     trunk_width = int(new_width * trunk_scale)
                     trunk_height = int(new_height * trunk_scale)
@@ -66,6 +70,7 @@ class ObstacleManager:
                     trunk_image=trunk_image
                 )
             else:
+                # 일반 장애물 생성
                 obstacle = Obstacle(
                     scaled_image,
                     x,
@@ -77,6 +82,7 @@ class ObstacleManager:
             self.static_obstacles.append(obstacle)
 
     def _create_colliders_for_image(self, filename, w, h):
+        # 장애물 종류에 따라 충돌체 생성
         colliders = []
 
         if "Pond1" in filename:
@@ -178,22 +184,26 @@ class ObstacleManager:
         return colliders
     
     def draw_non_trees(self, screen, world_offset_x, world_offset_y):
+        # 나무가 아닌 장애물 그리기
         for obs in self.static_obstacles + self.combat_obstacles:
             if not obs.is_covering:
                 obs.draw(screen, world_offset_x, world_offset_y)
 
     def draw_trees(self, screen, world_offset_x, world_offset_y, player_center, enemies):
+        # 나무(덮개형) 장애물 그리기
         for obs in self.static_obstacles + self.combat_obstacles:
             if obs.is_covering:
                 obs.draw(screen, world_offset_x, world_offset_y, player_center, enemies)
 
     def draw(self, screen, world_offset_x, world_offset_y):
+        # 모든 장애물과 충돌체 디버그 표시
         for obs in self.static_obstacles + self.combat_obstacles:
             obs.draw(screen, world_offset_x, world_offset_y)
             for c in obs.colliders:
                 c.draw(screen, world_offset_x, world_offset_y, (obs.world_x, obs.world_y))
 
     def check_collision_circle(self, circle_center_world, circle_radius):
+        # 원형 충돌체가 장애물과 충돌했는지 체크
         all_obs = self.static_obstacles + self.combat_obstacles
         for obs in all_obs:
             for collider in obs.colliders:

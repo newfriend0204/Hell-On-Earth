@@ -3,10 +3,12 @@ import os
 from config import ASSET_DIR, GUN1_VOLUME, GUN2_VOLUME, GUN3_VOLUME
 
 def load_sounds():
+    # 게임에서 사용할 모든 사운드 로드 및 볼륨 설정
     path_sound = lambda *paths: os.path.join(ASSET_DIR, *paths)
 
+    # 믹서 채널 수 설정
     pygame.mixer.set_num_channels(16)
-
+    
     walk_sound = pygame.mixer.Sound(path_sound("Sound", "ForestWalk.mp3"))
     walk_sound.set_volume(0.3)
 
@@ -17,7 +19,6 @@ def load_sounds():
 
     swap_gun_sound = pygame.mixer.Sound(path_sound("Sound", "SwapGun.mp3"))
     swap_gun_sound.set_volume(0.8)
-
 
     button_click = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonClick.wav"))
     button_click.set_volume(0.8)
@@ -69,6 +70,7 @@ def load_sounds():
     weapon_sounds["gun3_fire_enemy"].set_volume(0.25)
 
     return {
+        # 모든 사운드 딕셔너리 반환
         "walk": walk_sound,
         "enemy_die": enemy_die_sound,
         "room_move": room_move_sound,

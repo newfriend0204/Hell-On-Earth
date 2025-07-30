@@ -29,6 +29,7 @@ CURRENT_MAP = MAPS[0]
 grid = generate_map()
 print_grid(grid)
 
+# 맵 상태 초기화
 initialize_room_states(grid)
 
 pygame.init()
@@ -61,6 +62,7 @@ background_image = images["background"]
 background_rect = background_image.get_rect()
 
 obstacle_manager = ObstacleManager(
+    # 장애물 관리자 초기화
     obstacle_images=images["obstacles"],
     obstacle_masks=images["obstacle_masks"],
     map_width=BG_WIDTH,
@@ -72,6 +74,7 @@ obstacle_manager = ObstacleManager(
 obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
 
 s_pos = None
+# 시작 위치(S) 찾기
 for y, row in enumerate(grid):
     for x, cell in enumerate(row):
         if cell == 'S':
@@ -114,6 +117,7 @@ hole_height = 300 * PLAYER_VIEW_SCALE
 wall_thickness = 10 * PLAYER_VIEW_SCALE
 
 world = World(
+    # 월드(맵) 객체 생성
     background_image=background_image,
     crop_rect=CURRENT_MAP.get("crop_rect"),
     PLAYER_VIEW_SCALE=PLAYER_VIEW_SCALE,
@@ -141,6 +145,7 @@ world.left_wall_width = left_wall_width
 world.top_wall_height = top_wall_height
 
 if CURRENT_MAP is MAPS[0]:
+    # 시작 맵이면 중앙 스폰
     player_world_x, player_world_y = world.get_spawn_point(
         direction=None,
         is_start_map=True
@@ -156,6 +161,7 @@ world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
 
 walls = world.generate_walls(
+    # 기본 벽 생성
     map_width=map_width,
     map_height=map_height,
     wall_thickness=wall_thickness,
@@ -285,6 +291,7 @@ weapon_ui_cache = {
 }
 
 def damage_player(amount):
+    # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
     player_hp = max(0, player_hp - amount)
 
@@ -300,6 +307,7 @@ def get_player_world_position():
     )
 
 def init_weapon_ui_cache(weapons):
+    # 무기 UI 슬롯 이미지 캐싱
     slot_width = 92
     slot_height = 54
     slot_alpha = 180
@@ -329,6 +337,7 @@ weapons = [
 init_weapon_ui_cache(weapons)
 
 def change_room(direction):
+    # 방 전환 처리
     global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
     global effective_bg_width, effective_bg_height
 
@@ -348,6 +357,7 @@ def change_room(direction):
     spawn_direction = SPAWN_FROM_OPPOSITE[direction]
 
     if new_room_type == 'N':
+        # 빈 방이면 이동 불가
         print("[DEBUG] 이동 불가: 빈 방")
         changing_room = False
         return
@@ -364,6 +374,7 @@ def change_room(direction):
     obstacle_manager.combat_obstacles.clear()
 
     if new_room_type == 'F':
+        # 전투방 진입 처리
         room_key = (new_x, new_y)
         if room_key not in visited_f_rooms:
             fight_map_index = random.randint(0, len(FIGHT_MAPS) - 1)
@@ -384,6 +395,7 @@ def change_room(direction):
             config.combat_state = False
             config.combat_enabled = False
     else:
+        # 일반 방 진입
         CURRENT_MAP = MAPS[0]
 
     current_room_pos = [new_x, new_y]
@@ -473,6 +485,7 @@ def change_room(direction):
 
     enemies = []
     for info in CURRENT_MAP["enemy_infos"]:
+        # 적 스폰
         ex = info["x"] * PLAYER_VIEW_SCALE
         ey = info["y"] * PLAYER_VIEW_SCALE
         enemy_type = info["enemy_type"].lower()
@@ -506,6 +519,7 @@ def change_room(direction):
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
 def increment_kill_count():
+    # 처치 수 증가
     global kill_count
     kill_count += 1
 
@@ -631,6 +645,7 @@ def make_soft_curtain(width, height, horizontal=True, direction="right"):
     return overlay
 
 def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="right", duration=0.5, fps=60):
+    # 커튼 효과 방 전환
     width, height = screen.get_size()
     frames = int(duration * fps // 2)
     clock = pygame.time.Clock()
@@ -695,6 +710,7 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
         clock.tick(fps)
 
 def draw_minimap(screen, grid, current_room_pos):
+    # 미니맵 그리기
     mini_tile = 14
     tile_gap = 3
     padding = 10
@@ -793,6 +809,7 @@ def draw_minimap(screen, grid, current_room_pos):
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
 
 def draw_weapon_ui(screen, weapons, current_weapon_index):
+    # 무기 UI 그리기
     slot_width = 92
     slot_height = 54
     padding = 8
@@ -959,10 +976,12 @@ else:
     print(f"[DEBUG] Enemies in map: {len(enemies)}. Combat enabled.")
 
 while running:
+    # 게임 루프 시작
     current_time = pygame.time.get_ticks()
     events = pygame.event.get()
 
     for event in events:
+        # 이벤트 처리
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.USEREVENT + 1:
@@ -1061,6 +1080,7 @@ while running:
                 mouse_right_button_down = False
 
     if paused:
+        # 일시정지 상태일 때 UI 처리
         screen.fill((0, 0, 0))
         world.draw_full(
             screen, world_x, world_y, shake_offset_x, shake_offset_y,
@@ -1176,6 +1196,7 @@ while running:
     player_center_world_y = world_y + player_rect.centery
 
     if config.combat_enabled and not config.combat_state:
+        # 전투 시작 조건 체크
         if (0 <= player_center_world_x <= effective_bg_width and
             0 <= player_center_world_y <= effective_bg_height):
             config.combat_state = True
@@ -1275,6 +1296,7 @@ while running:
         obstacles_to_check = obstacle_manager.static_obstacles
 
     for obs in obstacles_to_check:
+        # 플레이어-장애물 충돌 처리
         for c in obs.colliders:
             penetration = c.compute_penetration_circle(
                 (player_center_world_x, player_center_world_y),
@@ -1357,6 +1379,7 @@ while running:
         world_y = test_world_y
     
     for bullet in bullets[:]:
+        # 플레이어 발사체 업데이트
         if isinstance(bullet, ExplosionEffectPersistent):
             bullet.update()
         else:
@@ -1443,6 +1466,7 @@ while running:
     config.bullets = bullets
 
     if config.combat_state and all(not enemy.alive for enemy in enemies):
+        # 전투 종료 처리
         cx, cy = current_room_pos
         room_key = (cx, cy)
 
@@ -1478,6 +1502,7 @@ while running:
     )
 
     for scatter in scattered_bullets[:]:
+        # 탄피 이펙트 업데이트
         scatter.update()
         if scatter.alpha <= 0:
             scattered_bullets.remove(scatter)
@@ -1493,6 +1518,7 @@ while running:
                 scatter.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for blood in blood_effects[:]:
+        # 피 이펙트 업데이트
         blood.update()
         if blood.alpha <= 0:
             blood_effects.remove(blood)
@@ -1501,6 +1527,7 @@ while running:
         blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for item in config.dropped_items[:]:
+        # 드롭 아이템 처리
         item.update()
         item.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
         if item.state == "magnet" and item.is_close_to_player():
@@ -1516,6 +1543,7 @@ while running:
         enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
     for bullet in bullets[:]:
+        # 플레이어 발사체 적 충돌 처리
         if isinstance(bullet, ExplosionEffectPersistent):
             bullet.update()
             if bullet.finished:
@@ -1529,6 +1557,7 @@ while running:
         bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for bullet in config.global_enemy_bullets[:]:
+        # 적 발사체 업데이트 및 플레이어 충돌 체크
         bullet.update(obstacle_manager)
 
         if check_circle_collision(
@@ -1654,6 +1683,7 @@ while running:
             continue
     
     if not changing_room:
+        # 방 전환 위치 체크
         slide_direction = None
         if world_x <= -half_screen_width - expansion:
             slide_direction = "right"
@@ -1692,6 +1722,7 @@ while running:
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 
     if slide_direction:
+        # 방 전환 실행
         def draw_new_room():
             change_room(next_dir)
             render_game_frame()

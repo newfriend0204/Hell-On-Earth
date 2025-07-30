@@ -20,6 +20,7 @@ NUM_TABS = len(TAB_NAMES)
 
 gun_ids = ["gun3", "gun6", "gun1", "gun2"]
 weapon_stats = {
+    # 무기별 스탯 및 설명, 사용법
     "gun1": {"name": "M1911", "power": 30, "spread": 10, "cost": 10, "rank": "1", "desc": "NF 코퍼레이션이 지급하는 기본 권총입니다. 모든 경비들이 차고다닙니다.", "usage": "좌클릭\n단발사격\n\n우클릭\n없음."},
     "gun2": {"name": "AK47", "power": 20, "spread": 15, "cost": 7, "rank": "1", "desc": "NF 코퍼레이션이 군인들에게 지급하는 기본 소총입니다.", "usage": "좌클릭\n연사\n\n우클릭\n없음."},
     "gun3": {"name": "Remington 870", "power": 10, "spread": 35, "cost": 15, "rank": "2", "desc": "사거리가 다른 샷건들보단 짧지만, 강력한 위력을 자랑합니다.", "usage": "좌클릭\n15발 동시 사격\n\n우클릭\n없음."},
@@ -44,6 +45,7 @@ for i, name in enumerate(TAB_NAMES):
 hovered_states = [False] * NUM_TABS
 
 def draw_tabs(screen, selected_tab, sounds):
+    # 상단 탭 UI 그리기
     screen_width = screen.get_width()
     base_x = (screen_width - (TAB_SIZE[0] * NUM_TABS + TAB_SPACING * (NUM_TABS - 1))) // 2
     tab_rects = []
@@ -69,12 +71,14 @@ def draw_tabs(screen, selected_tab, sounds):
     return tab_rects
 
 def draw_glow_box(screen, x, y, w, h):
+    # 빛나는 박스(테두리) 그리기
     s = pygame.Surface((w, h), pygame.SRCALPHA)
     s.fill((0, 0, 0, 150))
     pygame.draw.rect(s, (0, 255, 0), s.get_rect(), width=1, border_radius=14)
     screen.blit(s, (x, y))
 
 def draw_text_box(screen, x, y, w, h, title, body, title_font, body_font):
+    # 제목과 본문이 있는 텍스트 박스 그리기
     draw_glow_box(screen, x, y, w, h)
     title_surf = title_font.render(title, True, (120, 255, 120))
     screen.blit(title_surf, (x + 18, y + 20))
@@ -97,6 +101,7 @@ def draw_text_box(screen, x, y, w, h, title, body, title_font, body_font):
         screen.blit(surf, (x + 18, y + 70 + i * 28))
 
 def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
+    # 무기 상세 정보 UI 그리기
     screen.blit(pygame.transform.smoothscale(background_img, screen.get_size()), (0, 0))
     tab_rects = draw_tabs(screen, selected_tab, sounds)
     if selected_tab == 0:
@@ -116,6 +121,7 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
     quad_width = (screen_width - margin_x * 3) // 2
     quad_height = (screen_height - margin_y * 3) // 2
 
+    # 무기 전방 이미지 스케일 조정
     img = weapon.front_image
     iw, ih = img.get_size()
     scale = min(quad_width / iw, quad_height / ih, 2.0)
@@ -133,6 +139,7 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
     pygame.draw.line(screen, (100, 255, 100), (stat_x + 8, stat_y + 46), (stat_x + quad_width - 8, stat_y + 46), 2)
 
     icon_texts = [
+        # 아이콘과 스탯 텍스트 목록
         (power_icon, f"공격력: {stat['power']}"),
         (spread_icon, f"탄퍼짐: {stat['spread']}"),
         (cost_icon, f"소모량: {stat['cost']}"),
@@ -145,12 +152,14 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
         screen.blit(txt, (stat_x + 50, y + 3))
         y += 40
 
+    # 무기 설명 박스
     desc_x = margin_x * 2 + quad_width
     desc_y = margin_y
     draw_text_box(screen, desc_x, desc_y, quad_width, quad_height,
                   "무기 설명", stat["desc"],
                   title_font=KOREAN_FONT_BOLD_28, body_font=KOREAN_FONT_18)
 
+    # 무기 사용법 박스
     usage_x = margin_x * 2 + quad_width
     usage_y = margin_y * 2 + quad_height
     draw_text_box(screen, usage_x, usage_y, quad_width, quad_height,
@@ -160,6 +169,7 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
     return tab_rects
 
 def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, max_ammo, selected_tab, sounds):
+    # '내 상태' 탭 UI 그리기
     screen_width, screen_height = screen.get_size()
 
     screen.blit(pygame.transform.smoothscale(background_img, screen.get_size()), (0, 0))
@@ -180,6 +190,7 @@ def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, max_ammo, sele
 
     info_desc = "자신의 슈트 상태와 능력치를 확인할 수 있습니다.\n\n체력과 탄약 게이지를 확인하고, 무기 평가 항목을 볼 수 있습니다.\n\n이곳은 자동 줄바꿈이 적용됩니다."
     def draw_multiline(surface, text, font, color, pos, max_width, line_height):
+        # 문자열을 자동 줄바꿈하여 여러 줄로 그리기
         x, y = pos
         lines = []
         for paragraph in text.split("\n"):
@@ -267,6 +278,7 @@ def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, max_ammo, sele
     return tab_rects
 
 def handle_tab_click(pos, tab_rects, sounds):
+    # 탭 클릭 시 사운드 재생 및 선택 반환
     for i, rect in enumerate(tab_rects):
         if rect.collidepoint(pos):
             sounds["button_click"].play()

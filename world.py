@@ -6,13 +6,19 @@ from entities import Obstacle
 from collider import Collider
 import random
 
+#맵의 가로/세로 타일 개수
 WIDTH, HEIGHT = 8, 8
+# 전투방(F) 최소 / 최대 개수
 MIN_F_ROOMS = 8
 MAX_F_ROOMS = 8
 
+# 각 방의 상태를 저장하는 2차원 리스트
+# 0: 빈 방(N), 1: 시작(S), 2: 미발견 끝방(E), 3: 발견된 끝방(E)
+# 4: 미발견 전투방(F), 5: 발견된 전투방(F), 6: 클리어된 전투방
 room_states = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
 
 def initialize_room_states(grid):
+    # 생성된 맵의 문자(S, E, F, N)를 숫자 상태로 변환하여 room_states에 저장
     for y in range(HEIGHT):
         for x in range(WIDTH):
             cell = grid[y][x]
@@ -26,10 +32,12 @@ def initialize_room_states(grid):
                 room_states[y][x] = 4
 
 def update_room_state_after_combat(y, x):
+    # 전투 종료 후 해당 좌표의 전투방 상태를 '클리어'로 변경
     if room_states[y][x] in (4, 5):
         room_states[y][x] = 6 
 
 def reveal_neighbors(x, y, grid):
+    # 현재 방의 상하좌우 인접방을 '발견' 상태로 변경
     for nx, ny in neighbors(x, y):
         if grid[ny][nx] == 'E' and room_states[ny][nx] == 2:
             room_states[ny][nx] = 3
@@ -37,12 +45,15 @@ def reveal_neighbors(x, y, grid):
             room_states[ny][nx] = 5
 
 def manhattan(p1, p2):
+    # 맨해튼 거리 계산 (대각선 무시, x+y 차이의 절댓값 합)
     return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
 
 def get_map_dimensions():
+    # 맵의 가로, 세로 크기를 반환
     return WIDTH, HEIGHT
 
 def count_direction_changes(path):
+    # 경로에서 방향이 몇 번 바뀌는지 계산
     changes = 0
     if len(path) < 2:
         return 0
@@ -57,6 +68,8 @@ def count_direction_changes(path):
     return changes
 
 def find_path(start, end):
+    # 시작 지점에서 끝 지점까지 단순 경로 생성
+    # 상하좌우로 한 칸씩 이동, 랜덤 우선순위 적용
     path = []
     x, y = start
     while (x, y) != end:
@@ -74,14 +87,18 @@ def find_path(start, end):
     return path
 
 def neighbors(x, y):
+    # 상하좌우 인접 좌표 목록 반환
     offsets = [(-1,0),(1,0),(0,-1),(0,1)]
     return [(x+dx, y+dy) for dx, dy in offsets
             if 0 <= x+dx < WIDTH and 0 <= y+dy < HEIGHT]
 
 def count_adjacent_fight(grid, ex, ey):
+    # 특정 좌표 주변에 전투방이 몇 개 있는지 계산
     return sum(1 for nx, ny in neighbors(ex, ey) if grid[ny][nx] == 'F')
 
 def expand_f_rooms(grid, f_positions, ex, ey, target_count):
+    # 전투방(F) 개수를 목표치까지 확장하는 로직
+    # E 방 주변은 전투방이 1개 이하가 되도록 제약
     attempts = 0
     while len(f_positions) < target_count and attempts < 1000:
         added = False
@@ -104,12 +121,16 @@ def expand_f_rooms(grid, f_positions, ex, ey, target_count):
         attempts += 1
 
 def generate_map():
+    # 전체 맵을 무작위로 생성하는 메인 함수
+    # 1. S, E 위치 선택 (거리 제한 있음)
+    # 2. S-E 경로 생성
+    # 3. 경로에 전투방(F) 배치
+    # 4. 목표 개수까지 전투방 확장
+    # 5. 연결성 검사 후 성공 시 반환
     while True:
         grid = [['N']*WIDTH for _ in range(HEIGHT)]
-
         sx, sy = random.randint(2, 5), random.randint(2, 5)
 
-        # E 방은 외곽 제외, S와 거리 1~6
         tries = 0
         while True:
             ex, ey = random.randint(1, WIDTH-2), random.randint(1, HEIGHT-2)
@@ -136,9 +157,8 @@ def generate_map():
         expand_f_rooms(grid, f_positions, ex, ey, MIN_F_ROOMS)
 
         if len(f_positions) < MIN_F_ROOMS:
-            continue  # 확장 실패 → 새 맵 시도
+            continue
 
-        # 연결성 확인
         visited = set()
         stack = [(sx, sy)]
         while stack:
@@ -155,6 +175,7 @@ def generate_map():
         return grid
 
 def print_grid(grid):
+    # 맵을 콘솔에 시각적으로 출력 (디버그용)
     SYMBOLS = {
         'N': '⬛',
         'S': '⬜',
@@ -165,6 +186,7 @@ def print_grid(grid):
         print("".join(SYMBOLS.get(cell, ' ') for cell in row))
 
 class World:
+    # 게임 월드(맵) 관련 기능과 벽, 스폰포인트, 그리기 기능을 담당하는 클래스
     def __init__(
         self,
         background_image,
@@ -196,6 +218,7 @@ class World:
         self.vertical_tunnel_surface = self.create_vertical_tunnel()
 
     def create_crop_surface(self, crop_rect):
+        # 맵 배경 이미지를 crop_rect 비율에 맞춰 잘라내거나 반복 타일링
         if crop_rect:
             x_ratio = crop_rect.get("x_ratio", 1.0)
             y_ratio = crop_rect.get("y_ratio", 1.0)
@@ -227,6 +250,7 @@ class World:
             return scaled, scaled.get_width(), scaled.get_height()
 
     def create_horizontal_tunnel(self):
+        # 가로 방향 터널 이미지 생성 (왼쪽-오른쪽 연결 통로)
         tile_width = self.background_image.get_width()
         tunnel_surface = pygame.Surface((self.tunnel_length, self.hole_height), pygame.SRCALPHA)
 
@@ -240,6 +264,7 @@ class World:
         return tunnel_surface
 
     def create_vertical_tunnel(self):
+        # 세로 방향 터널 이미지 생성 (위-아래 연결 통로)
         tile_height = self.background_image.get_height()
         tunnel_surface = pygame.Surface((self.hole_width, self.tunnel_length), pygame.SRCALPHA)
 
@@ -253,6 +278,7 @@ class World:
         return tunnel_surface
 
     def draw(self, screen, world_x, world_y, shake_offset_x, shake_offset_y):
+        # 맵의 기본 배경과 터널을 화면에 그린다
         center_x = (self.tunnel_length // 2) - (self.hole_width // 2)
         center_y = (self.tunnel_length // 2) - (self.hole_height // 2)
 
@@ -278,12 +304,14 @@ class World:
         )
 
     def get_initial_position(self):
+        # 플레이어 초기 카메라 위치를 반환
         return (
             (self.crop_surface.get_width() // 2) - (SCREEN_WIDTH // 2),
             (self.crop_surface.get_height() // 2) - (SCREEN_HEIGHT // 2)
         )
     
     def get_spawn_point(self, direction, margin=0, is_start_map=False):
+        # 방 입장 시 플레이어 스폰 위치 계산
         if is_start_map or direction is None:
             return (self.effective_bg_width / 2, self.effective_bg_height / 2)
 
@@ -312,6 +340,8 @@ class World:
                     north_hole_open, south_hole_open,
                     west_hole_open, east_hole_open,
                     expansion, invisible_wall_filename="invisible_wall", extra_wall_size=2000):
+        # 맵 경계와 통로 막힘 여부에 따라 벽 오브젝트 생성
+        # invisible_wall_filename은 충돌만 있고 보이지 않는 벽
 
         walls = []
         extra_wall_size *= self.PLAYER_VIEW_SCALE
@@ -416,6 +446,7 @@ class World:
         return walls
 
     def draw_wall_barriers(self, screen, world_x, world_y, combat_walls_info):
+            # 전투 중 통로를 막는 벽(이미지)을 애니메이션으로 이동시켜 그림
             if not config.combat_state and not combat_walls_info:
                 return
 
@@ -446,6 +477,7 @@ class World:
                 combat_walls_info.remove(info)
 
     def draw_invisible_walls(self, screen, world_x, world_y, obstacle_manager):
+        # 디버그용: invisible_wall 오브젝트를 검정색으로 화면에 표시
         black_color = (0, 0, 0)
 
         for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
@@ -465,6 +497,7 @@ class World:
 
     def draw_full(self, screen, world_x, world_y, shake_offset_x, shake_offset_y,
                 combat_walls_info, obstacle_manager, expansion):
+        # draw() + 전투벽 + 투명벽을 모두 그리는 함수
         self.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
 
         clip_rect = pygame.Rect(
@@ -488,6 +521,7 @@ class World:
         hole_height,
         wall_thickness=10 * PLAYER_VIEW_SCALE
     ):
+        # 전투 시작 시 플레이어 이동을 막는 얇은 충돌 벽 생성
         thin = wall_thickness
         effective_width = self.effective_bg_width
         effective_height = self.effective_bg_height

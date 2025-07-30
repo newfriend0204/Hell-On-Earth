@@ -3,11 +3,14 @@ import os
 from config import *
 
 def load_images():
+    # 게임에서 사용하는 모든 이미지 로드 및 크기 조정
     path_image = lambda *paths: os.path.join(ASSET_DIR, *paths)
 
+    # 플레이어 이미지 로드 및 크기 조정
     player_img = pygame.image.load(path_image("image", "character", "MainCharacter.png")).convert_alpha()
     player_img = pygame.transform.smoothscale(player_img, (90, 90))
 
+    # 무기별 상단(Top-down) 이미지 로드 및 스케일
     gun1_img = pygame.image.load(path_image("image", "Gun", "Gun1Player.png")).convert_alpha()
     gun1_img = pygame.transform.smoothscale(gun1_img, (30, int(gun1_img.get_height() * (30 / gun1_img.get_width()))))
 
@@ -44,6 +47,7 @@ def load_images():
     explosion_img = pygame.image.load(path_image("image", "Gun", "LauncherGrenade1Explosion.png")).convert_alpha()
     explosion_img = pygame.transform.smoothscale(explosion_img, (200, 200))
 
+    # 탄환 이미지 크기 조정
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
     bullet2_img = pygame.image.load(path_image("image", "Gun", "Bullet2.png")).convert_alpha()
     scale_factor = 60 / bullet1_img.get_width()
@@ -63,6 +67,7 @@ def load_images():
         )
     )
 
+    # 적 탄환 색상 변경(빨간색)
     enemy_bullet_img = bullet1_img.copy()
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
@@ -99,6 +104,7 @@ def load_images():
         "TreeStump.png": (1024, 1024),
     }
 
+    # 장애물 이미지 및 마스크 로드
     obstacle_dir = path_image("Image", "Obstacle")
     obstacle_images = {}
     obstacle_masks = {}
@@ -112,6 +118,7 @@ def load_images():
                 obstacle_images[filename] = image
                 obstacle_masks[filename] = pygame.mask.from_surface(image)
 
+    # 적 캐릭터 이미지 로드
     enemy1_img = pygame.image.load(path_image("image", "character", "Enemy1.png")).convert_alpha()
     enemy1_img = pygame.transform.smoothscale(enemy1_img, (90, 90))
 
@@ -127,6 +134,7 @@ def load_images():
     health_up_img = pygame.transform.smoothscale(health_up_img, (16, 16))
 
     return {
+        # 로드된 모든 이미지를 딕셔너리로 반환
         "player": player_img,
         "gun1": gun1_img,
         "gun2": gun2_img,
@@ -158,6 +166,7 @@ def load_images():
     }
 
 def load_weapon_assets(images):
+    # 무기별 전방(Front) 이미지, 상단(Top-down) 이미지, 탄환, 탄피, 폭발 이미지 설정
     weapons = {
         "gun1": {
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun1.png")).convert_alpha(),

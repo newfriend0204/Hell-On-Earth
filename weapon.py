@@ -5,6 +5,8 @@ from entities import Bullet, ScatteredBullet, ExplosionEffectPersistent
 import config
 
 class WeaponBase:
+    # 모든 무기 클래스의 공통 부모 클래스
+    # 발사 속도, 탄약 소모, 반동, 스프레드, 발사 사운드, 탄피 배출 등 기본 기능 제공
     def __init__(
         self,
         name,
@@ -47,12 +49,16 @@ class WeaponBase:
         self.shake_strength = 10
 
     def on_left_click(self):
+        # 좌클릭 발사 동작 (하위 클래스에서 구현)
         pass
 
     def on_right_click(self):
+        # 우클릭 발사 동작 (하위 클래스에서 구현)
         pass
-
+    
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 매 프레임마다 발사 입력을 처리하는 메서드
+        # 발사 지연 시간(fire_delay)을 확인한 뒤 발사 동작 실행
         if self.can_left_click and mouse_left_down and pygame.time.get_ticks() - self.last_shot_time >= self.fire_delay:
             self.on_left_click()
             self.last_shot_time = pygame.time.get_ticks()
@@ -99,8 +105,11 @@ class Gun1(WeaponBase):
         self.shake_strength = 10
 
     def on_left_click(self):
+        # 탄약 부족 시 발사 불가
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
+        
+        # 탄약 차감 및 발사음 재생
         self.reduce_ammo(self.left_click_ammo_cost)
         self.sounds["fire"].play()
 
@@ -122,6 +131,7 @@ class Gun1(WeaponBase):
         bullet_y = player_center_y + offset_y
 
         if self.bullet_images:
+            # 총알 생성 및 config.bullets에 추가
             bullet = Bullet(
                 bullet_x,
                 bullet_y,
@@ -137,6 +147,7 @@ class Gun1(WeaponBase):
             config.bullets.append(bullet)
 
         if self.uses_cartridges and self.cartridge_images:
+            # 탄피 배출 효과 생성
             eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
             vx = math.cos(eject_angle) * 1.2
             vy = math.sin(eject_angle) * 1.2
@@ -191,6 +202,8 @@ class Gun2(WeaponBase):
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
+        
+        # 탄약 차감 및 발사음
         self.reduce_ammo(self.left_click_ammo_cost)
         self.sounds["fire"].play()
 
@@ -280,6 +293,8 @@ class Gun3(WeaponBase):
     def on_left_click(self):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
+        
+        # 탄약 차감 및 발사음
         self.reduce_ammo(self.left_click_ammo_cost)
         self.sounds["fire"].play()
 
@@ -288,6 +303,7 @@ class Gun3(WeaponBase):
         angle = math.atan2(mouse_y - config.player_rect.centery, mouse_x - config.player_rect.centerx)
 
         for _ in range(self.NUM_BULLETS):
+            # 각 총알마다 랜덤 각도로 퍼지게 발사
             spread = math.radians(random.uniform(-self.SPREAD_DEGREES, self.SPREAD_DEGREES))
             dx = math.cos(angle + spread)
             dy = math.sin(angle + spread)
@@ -313,6 +329,7 @@ class Gun3(WeaponBase):
                 config.bullets.append(bullet)
 
         if self.uses_cartridges and self.cartridge_images:
+            # 샷건 탄피 배출 (크기 확대)
             eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
             vx = math.cos(eject_angle) * 1.2
             vy = math.sin(eject_angle) * 1.2
@@ -374,6 +391,7 @@ class Gun4(WeaponBase):
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
 
+        # 탄약 차감, 발사음 재생
         self.reduce_ammo(self.left_click_ammo_cost)
         self.sounds["fire"].play()
 
@@ -394,6 +412,7 @@ class Gun4(WeaponBase):
         bullet_y = player_center_y + offset_y
 
         if self.bullet_images:
+            # Grenade(유탄) 객체 생성 및 config.bullets에 추가
             from entities import Grenade
 
             grenade = Grenade(
@@ -457,6 +476,7 @@ class Gun5(WeaponBase):
         self.shake_strength = 13
 
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 미니건 상태 머신 (idle, preheat, firing, cooldown)
         now = pygame.time.get_ticks()
 
         if self.state == "idle":
@@ -495,6 +515,7 @@ class Gun5(WeaponBase):
                 self.state = "idle"
 
     def fire_bullet(self):
+        # 미니건 탄환 생성 및 발사 사운드 재생
         mouse_x, mouse_y = pygame.mouse.get_pos()
         player_x, player_y = self.get_player_world_position()
 
@@ -542,6 +563,7 @@ class Gun5(WeaponBase):
             channel.play(self.sounds["fire"])
 
     def on_weapon_switch(self):
+        # 무기 변경 시 모든 사운드 정지, 상태 idle로 초기화
         if self.state == "preheat":
             self.sounds["preheat"].stop()
         elif self.state == "firing":
@@ -603,6 +625,7 @@ class Gun6(WeaponBase):
         self.shake_strength = 10
 
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 좌클릭과 우클릭 각각의 쿨타임 관리
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
@@ -614,6 +637,7 @@ class Gun6(WeaponBase):
             self.last_right_click_time = now
 
     def on_left_click(self):
+        # 소총 탄환 발사, 탄피 배출
         if self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
 
@@ -664,6 +688,7 @@ class Gun6(WeaponBase):
             config.scattered_bullets.append(scatter)
 
     def on_right_click(self):
+        # 유탄 발사
         if self.get_ammo_gauge() < self.right_click_ammo_cost:
             return
 
@@ -746,6 +771,7 @@ class Gun7(WeaponBase):
         self.shake_strength = 12
 
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 좌/우클릭 각각 쿨타임 체크 후 발사 처리
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
@@ -757,6 +783,7 @@ class Gun7(WeaponBase):
             self.last_right_click_time = now
 
     def on_left_click(self):
+        # 소총 탄환 발사, 탄피 배출
         if self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
 
@@ -809,6 +836,7 @@ class Gun7(WeaponBase):
             config.scattered_bullets.append(scatter)
 
     def on_right_click(self):
+        # 산탄 발사, 탄피 배출
         if self.get_ammo_gauge() < self.right_click_ammo_cost:
             return
 
@@ -906,11 +934,13 @@ class Gun8(WeaponBase):
         self.shake_strength = 20
 
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 좌클릭 쿨타임 체크 후 발사
         if self.can_left_click and mouse_left_down and pygame.time.get_ticks() - self.last_shot_time >= self.fire_delay:
             self.on_left_click()
             self.last_shot_time = pygame.time.get_ticks()
 
     def on_left_click(self):
+        # 로켓 발사
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
 
@@ -934,6 +964,7 @@ class Gun8(WeaponBase):
         bullet_y = player_center_y + offset_y
 
         if self.bullet_images:
+            # Grenade 객체로 로켓 생성
             from entities import Grenade
             grenade = Grenade(
                 x=bullet_x,
@@ -999,6 +1030,7 @@ class Gun9(WeaponBase):
         self.shake_strength = 14
 
     def on_update(self, mouse_left_down, mouse_right_down):
+        # 좌/우클릭 각각 쿨타임 체크 후 발사 처리
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
@@ -1010,6 +1042,7 @@ class Gun9(WeaponBase):
             self.last_right_click_time = now
 
     def on_left_click(self):
+        # 소총 탄환 발사, 탄피 배출
         if self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
 
@@ -1061,6 +1094,7 @@ class Gun9(WeaponBase):
             config.scattered_bullets.append(scatter)
 
     def on_right_click(self):
+        # 기압탄 발사
         if self.get_ammo_gauge() < self.right_click_ammo_cost:
             return
 

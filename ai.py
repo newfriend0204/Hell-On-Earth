@@ -20,6 +20,7 @@ class AIBase(metaclass=EnemyMeta):
         speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.18, alert_duration=1000,
         damage_player_fn=None
     ):
+        # 기본 AI 속성 초기화
         self.world_x = world_x
         self.world_y = world_y
         self.images = images
@@ -67,6 +68,7 @@ class AIBase(metaclass=EnemyMeta):
         self.recoil_in_progress = False
 
     def check_collision_circle(self, center1, radius1, center2, radius2):
+        # 원-원 충돌 체크
         try:
             radius1 = float(radius1)
             radius2 = float(radius2)
@@ -84,6 +86,7 @@ class AIBase(metaclass=EnemyMeta):
 
 
     def check_ellipse_circle_collision(self, circle_center, circle_radius, ellipse_center, rx, ry):
+        # 타원-원 충돌 체크
         try:
             rx = float(rx)
             ry = float(ry)
@@ -106,6 +109,7 @@ class AIBase(metaclass=EnemyMeta):
         return test <= 1.0
 
     def hit(self, damage, blood_effects, force=False):
+        # 피격 처리
         if not self.alive or (not config.combat_state and not force):
             return
         self.hp -= damage
@@ -113,6 +117,7 @@ class AIBase(metaclass=EnemyMeta):
             self.die(blood_effects)
 
     def die(self, blood_effects):
+        # 사망 처리
         if self._already_dropped:
             return
         self._already_dropped = True
@@ -127,6 +132,7 @@ class AIBase(metaclass=EnemyMeta):
             self.kill_callback()
 
     def spawn_dropped_items(self, health_count, ammo_count):
+        # 아이템 드랍 생성
         get_player_pos = lambda: (config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery)
         AMMO_COLOR = (255, 191, 193)
         HEALTH_COLOR = (181, 255, 146)
@@ -138,6 +144,7 @@ class AIBase(metaclass=EnemyMeta):
             config.dropped_items.append(item)
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        # 매 프레임마다 이동, 충돌, 공격 처리
         if not self.alive or not config.combat_state:
             return
         
@@ -148,6 +155,7 @@ class AIBase(metaclass=EnemyMeta):
 
         dist = math.hypot(self.world_x - self.last_pos[0], self.world_y - self.last_pos[1])
 
+        # 목표 위치로 이동 벡터 계산
         if self.goal_pos:
             goal_dx = self.goal_pos[0] - self.world_x
             goal_dy = self.goal_pos[1] - self.world_y
@@ -163,6 +171,7 @@ class AIBase(metaclass=EnemyMeta):
 
         penetration_total = [0.0, 0.0]
         for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
+            # 장애물 충돌 보정
             for c in obs.colliders:
                 penetration = c.compute_penetration_circle(
                     (self.world_x, self.world_y),
@@ -174,6 +183,7 @@ class AIBase(metaclass=EnemyMeta):
                     penetration_total[1] += penetration[1]
 
         for other in enemies:
+            # 다른 적과 충돌 시 밀어내기
             if other == self or not other.alive:
                 continue
             dx = self.world_x - other.world_x
@@ -187,6 +197,7 @@ class AIBase(metaclass=EnemyMeta):
                 penetration_total[1] += (dy / dist) * penetration * self.push_strength
 
         if math.hypot(*penetration_total) > 0.001:
+            # 충돌 회피를 위한 목표 재설정
             self.world_x += penetration_total[0]
             self.world_y += penetration_total[1]
             if self.goal_pos is not None:
@@ -205,12 +216,14 @@ class AIBase(metaclass=EnemyMeta):
                         self.goal_pos = (test_x, test_y)
                         break
         else:
+            # 목표를 향해 이동
             self.world_x += self.velocity_x
             self.world_y += self.velocity_y
 
         self.world_x = max(0, min(self.world_x, self.map_width))
         self.world_y = max(0, min(self.world_y, self.map_height))
 
+        # 일정 시간 멈추면 탈출 시도
         if dist < 1.0 or (abs(self.velocity_x) < 0.01 and abs(self.velocity_y) < 0.01):
             self.stuck_timer += dt
             if self.stuck_timer > 1000:
@@ -224,6 +237,7 @@ class AIBase(metaclass=EnemyMeta):
             self._escape_stuck()
             self.stuck_count = 0
 
+        # 발사 타이머 갱신
         if self.aware_of_player and self.shoot_timer is not None:
             self._update_alert(self.shoot_timer)
             self.shoot_timer -= dt
@@ -233,11 +247,13 @@ class AIBase(metaclass=EnemyMeta):
                 self.shoot_timer = self.shoot_delay
 
         for s in self.scattered_bullets[:]:
+            # 탄피 등 파편 업데이트
             s.update()
             if s.alpha <= 0:
                 self.scattered_bullets.remove(s)
 
         if hasattr(self, "knockback_steps") and self.knockback_steps > 0:
+            # 넉백 적용
             self.world_x += getattr(self, "knockback_velocity_x", 0)
             self.world_y += getattr(self, "knockback_velocity_y", 0)
             self.knockback_steps -= 1
@@ -246,6 +262,7 @@ class AIBase(metaclass=EnemyMeta):
         pass
 
     def _escape_stuck(self):
+        # 장애물에 끼였을 때 이동 방향 변경
         angles = [
             self.direction_angle + math.pi,
             self.direction_angle + math.pi + math.radians(45),
@@ -310,6 +327,7 @@ class AIBase(metaclass=EnemyMeta):
         self.velocity_y = 0
 
     def _update_alert(self, time_until_attack):
+        # 경고 아이콘 표시 여부 갱신
         if time_until_attack is not None and time_until_attack <= self.ALERT_DURATION:
             self.show_alert = True
         else:
@@ -332,6 +350,7 @@ class AIBase(metaclass=EnemyMeta):
 
 class Enemy1(AIBase):
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
+        # 플레이어와의 거리 기반 목표 위치 설정
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7,
@@ -394,6 +413,7 @@ class Enemy1(AIBase):
         self.spawn_dropped_items(3, 4)
 
     def shoot(self):
+        # 권총 발사, 탄피 배출
         self.fire_sound.play()
         self.recoil_offset = 0
         self.recoil_velocity = -self.recoil_strength
@@ -462,6 +482,7 @@ class Enemy1(AIBase):
 
 class Enemy2(AIBase):
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
+        # 플레이어와의 거리 기반 목표 위치 및 원거리 공격 준비
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5,
@@ -571,6 +592,7 @@ class Enemy2(AIBase):
         self.spawn_dropped_items(4, 5)
 
     def shoot(self, spread_angle=20, fixed_angle=None, bullet_speed=None):
+        # 소총 발사, 탄피 배출
         self.fire_sound.play()
         self.recoil_offset = 0
         self.recoil_velocity = -self.recoil_strength
@@ -694,6 +716,7 @@ class Enemy3(AIBase):
         self.close_attack_angle = 0
 
     def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 돌진, 근접 공격, 회피 패턴 처리
         player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
         dx = player_world_pos[0] - self.world_x
         dy = player_world_pos[1] - self.world_y
@@ -786,6 +809,7 @@ class Enemy3(AIBase):
                 self.end_dash()
 
     def end_dash(self):
+        # 돌진 종료 및 쿨타임 설정
         self.state = "normal"
         self.dash_cooldown_timer = random.randint(self.COOLDOWN_MIN, self.COOLDOWN_MAX)
 
