@@ -18,6 +18,7 @@ class AIBase(metaclass=EnemyMeta):
     def __init__(
         self, world_x, world_y, images, sounds, map_width, map_height,
         speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.18, alert_duration=1000,
+        damage_player_fn=None
     ):
         self.world_x = world_x
         self.world_y = world_y
@@ -25,6 +26,7 @@ class AIBase(metaclass=EnemyMeta):
         self.sounds = sounds
         self.map_width = map_width
         self.map_height = map_height
+        self.damage_player = damage_player_fn
 
         self.alive = True
         self._already_dropped = False
@@ -137,6 +139,9 @@ class AIBase(metaclass=EnemyMeta):
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
         if not self.alive or not config.combat_state:
+            return
+        
+        if not hasattr(config, "obstacle_manager") or config.obstacle_manager is None:
             return
 
         self.update_goal(world_x, world_y, player_rect, enemies)
@@ -326,7 +331,7 @@ class AIBase(metaclass=EnemyMeta):
         pass
 
 class Enemy1(AIBase):
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7,
@@ -335,6 +340,7 @@ class Enemy1(AIBase):
             radius=30,
             push_strength=0.18,
             alert_duration=1000,
+            damage_player_fn=damage_player_fn
         )
         self.image_original = images["enemy1"]
         self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
@@ -413,7 +419,8 @@ class Enemy1(AIBase):
             15,
             self.bullet_image,
             speed=10 * PLAYER_VIEW_SCALE,
-            max_distance=2000 * PLAYER_VIEW_SCALE
+            max_distance=2000 * PLAYER_VIEW_SCALE,
+            damage=15
         )
         config.global_enemy_bullets.append(new_bullet)
 
@@ -454,7 +461,7 @@ class Enemy1(AIBase):
         screen.blit(rotated_img, rect)
 
 class Enemy2(AIBase):
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, kill_callback=None):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.5,
@@ -463,6 +470,7 @@ class Enemy2(AIBase):
             radius=30,
             push_strength=0.18,
             alert_duration=1000,
+            damage_player_fn=damage_player_fn
         )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
@@ -590,7 +598,8 @@ class Enemy2(AIBase):
             spread_angle,
             self.bullet_image,
             speed=(bullet_speed if bullet_speed is not None else 10 * PLAYER_VIEW_SCALE),
-            max_distance=2000 * PLAYER_VIEW_SCALE
+            max_distance=2000 * PLAYER_VIEW_SCALE,
+            damage=20
         )
         config.global_enemy_bullets.append(new_bullet)
 
@@ -617,6 +626,219 @@ class Enemy2(AIBase):
         )
         gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
         screen.blit(rotated_gun, gun_rect)
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+class Enemy3(AIBase):
+    FAR_DISTANCE = 500
+    NEAR_DISTANCE = 100
+    RADIUS_CLOSE_ATTACK = 120
+
+    DASH_DISTANCE = 200
+    DASH_SPEED_MULTIPLIER = 3
+    DASH_DAMAGE = 30
+    CHARGE_TIME = 1000
+    COOLDOWN_MIN = 1000
+    COOLDOWN_MAX = 2000
+
+    CLOSE_ATTACK_CHARGE = 1000
+    CLOSE_ATTACK_COOLDOWN_MIN = 2000
+    CLOSE_ATTACK_COOLDOWN_MAX = 3000
+    CLOSE_ATTACK_DAMAGE = 30
+    CLOSE_ATTACK_SWEEP_TIME = 200
+    CLOSE_ATTACK_SPEED_PENALTY = 0.7
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        self.base_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.base_speed,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=39,
+            push_strength=0.0,
+            alert_duration=1000,
+            damage_player_fn=damage_player_fn
+        )
+        self.image_original = images["enemy3"]
+        self.kill_callback = kill_callback
+        self.hp = 300
+        self.damage_player_fn = damage_player_fn
+
+        self.move_dir = random.choice([-1, 1])
+        self.move_change_interval = 800
+        self.last_move_change_time = pygame.time.get_ticks()
+
+        self.state = "normal"
+        self.fixed_angle = None
+        self.charge_start_time = 0
+        self.dash_start_x = 0
+        self.dash_start_y = 0
+        self.dash_cooldown_timer = random.randint(self.COOLDOWN_MIN, self.COOLDOWN_MAX)
+
+        self.close_state = "idle"
+        self.close_charge_start = 0
+        self.close_cooldown_timer = 0
+        self.close_sweep_start = 0
+        self.close_attack_angle = 0
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
+        dx = player_world_pos[0] - self.world_x
+        dy = player_world_pos[1] - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        now = pygame.time.get_ticks()
+
+        if self.dash_cooldown_timer > 0:
+            self.dash_cooldown_timer -= 16
+        if self.close_cooldown_timer > 0:
+            self.close_cooldown_timer -= 16
+
+        if self.close_state == "idle" and dist_to_player <= self.NEAR_DISTANCE and self.close_cooldown_timer <= 0:
+            self.close_state = "charging"
+            self.close_charge_start = now
+            self.close_attack_angle = math.atan2(dy, dx)
+            self.speed = self.base_speed * self.CLOSE_ATTACK_SPEED_PENALTY
+
+        elif self.close_state == "charging":
+            self.close_attack_angle = math.atan2(dy, dx)
+            if now - self.close_charge_start >= self.CLOSE_ATTACK_CHARGE:
+                px, py = player_world_pos
+                if self.damage_player_fn:
+                    rel_angle = math.atan2(py - self.world_y, px - self.world_x)
+                    angle_diff = (rel_angle - self.close_attack_angle + math.pi * 3) % (2 * math.pi) - math.pi
+                    dist = math.hypot(px - self.world_x, py - self.world_y)
+                    if abs(angle_diff) <= math.pi / 2 and dist <= self.RADIUS_CLOSE_ATTACK:
+                        self.damage_player_fn(self.CLOSE_ATTACK_DAMAGE)
+
+                self.close_state = "firing"
+                self.close_sweep_start = now
+                self.speed = self.base_speed
+
+        elif self.close_state == "firing":
+            self.close_attack_angle = math.atan2(dy, dx)
+            if now - self.close_sweep_start >= self.CLOSE_ATTACK_SWEEP_TIME:
+                self.close_state = "idle"
+                self.close_cooldown_timer = random.randint(self.CLOSE_ATTACK_COOLDOWN_MIN, self.CLOSE_ATTACK_COOLDOWN_MAX)
+
+        if self.state == "normal":
+            self.direction_angle = math.atan2(dy, dx)
+
+            if dist_to_player >= self.FAR_DISTANCE and self.dash_cooldown_timer <= 0 and self.close_state == "idle":
+                self.state = "charging_dash"
+                self.charge_start_time = now
+                self.fixed_angle = self.direction_angle
+                self.dash_start_x = self.world_x
+                self.dash_start_y = self.world_y
+                return
+
+            if now - self.last_move_change_time > self.move_change_interval:
+                self.move_dir = random.choice([-1, 1])
+                self.last_move_change_time = now
+
+            if dist_to_player > self.FAR_DISTANCE:
+                self.goal_pos = player_world_pos
+            elif self.NEAR_DISTANCE < dist_to_player <= self.FAR_DISTANCE:
+                angle_to_player = self.direction_angle
+                perp = angle_to_player + math.pi / 2
+                self.goal_pos = (
+                    self.world_x + math.cos(angle_to_player) * 100 + math.cos(perp) * 50 * self.move_dir,
+                    self.world_y + math.sin(angle_to_player) * 100 + math.sin(perp) * 50 * self.move_dir
+                )
+            else:
+                angle_to_player = self.direction_angle
+                perp = angle_to_player + math.pi / 2
+                self.goal_pos = (
+                    self.world_x + math.cos(perp) * 100 * self.move_dir,
+                    self.world_y + math.sin(perp) * 100 * self.move_dir
+                )
+
+        elif self.state == "charging_dash":
+            self.direction_angle = self.fixed_angle
+            self.goal_pos = (self.world_x, self.world_y)
+            if now - self.charge_start_time >= self.CHARGE_TIME:
+                self.state = "dashing"
+
+        elif self.state == "dashing":
+            dash_speed = self.speed * self.DASH_SPEED_MULTIPLIER
+            self.world_x += math.cos(self.fixed_angle) * dash_speed
+            self.world_y += math.sin(self.fixed_angle) * dash_speed
+
+            px, py = player_world_pos
+            if self.damage_player_fn:
+                if self.check_collision_circle((self.world_x, self.world_y), self.radius, (px, py), 15):
+                    self.damage_player_fn(self.DASH_DAMAGE)
+                    self.end_dash()
+                    return
+
+            if math.hypot(self.world_x - self.dash_start_x, self.world_y - self.dash_start_y) >= self.DASH_DISTANCE:
+                self.end_dash()
+
+    def end_dash(self):
+        self.state = "normal"
+        self.dash_cooldown_timer = random.randint(self.COOLDOWN_MIN, self.COOLDOWN_MAX)
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(5, 6)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        if self.close_state == "charging":
+            arc_surf = pygame.Surface((self.RADIUS_CLOSE_ATTACK * 2, self.RADIUS_CLOSE_ATTACK * 2), pygame.SRCALPHA)
+            center = (self.RADIUS_CLOSE_ATTACK, self.RADIUS_CLOSE_ATTACK)
+            start_angle = self.close_attack_angle - math.pi / 2
+            end_angle = self.close_attack_angle + math.pi / 2
+            points = [center]
+            steps = 30
+            for i in range(steps + 1):
+                ang = start_angle + (end_angle - start_angle) * (i / steps)
+                x = center[0] + math.cos(ang) * self.RADIUS_CLOSE_ATTACK
+                y = center[1] + math.sin(ang) * self.RADIUS_CLOSE_ATTACK
+                points.append((x, y))
+            pygame.draw.polygon(arc_surf, (255, 0, 0, 76), points)
+            screen.blit(arc_surf, (screen_x - self.RADIUS_CLOSE_ATTACK, screen_y - self.RADIUS_CLOSE_ATTACK))
+
+        if self.close_state == "firing":
+            progress = (pygame.time.get_ticks() - self.close_sweep_start) / self.CLOSE_ATTACK_SWEEP_TIME
+            line_angle = self.close_attack_angle - math.pi / 2 + math.pi * progress
+            line_surf = pygame.Surface((self.RADIUS_CLOSE_ATTACK * 2, self.RADIUS_CLOSE_ATTACK * 2), pygame.SRCALPHA)
+            pygame.draw.line(line_surf, (255, 255, 255, 150),
+                             (self.RADIUS_CLOSE_ATTACK, self.RADIUS_CLOSE_ATTACK),
+                             (self.RADIUS_CLOSE_ATTACK + math.cos(line_angle) * self.RADIUS_CLOSE_ATTACK,
+                              self.RADIUS_CLOSE_ATTACK + math.sin(line_angle) * self.RADIUS_CLOSE_ATTACK),
+                             14)
+            screen.blit(line_surf, (screen_x - self.RADIUS_CLOSE_ATTACK, screen_y - self.RADIUS_CLOSE_ATTACK))
+
+        if self.state == "charging_dash":
+            elapsed = pygame.time.get_ticks() - self.charge_start_time
+            rect_length = int((elapsed / self.CHARGE_TIME) * self.DASH_DISTANCE)
+            rect_width = 40
+            dx = math.cos(self.fixed_angle)
+            dy = math.sin(self.fixed_angle)
+            rect_surface = pygame.Surface((rect_length, rect_width), pygame.SRCALPHA)
+            rect_surface.fill((255, 0, 0, 76))
+            rect_surface = pygame.transform.rotate(rect_surface, -math.degrees(self.fixed_angle))
+            rect_rect = rect_surface.get_rect(center=(screen_x + dx * rect_length / 2, screen_y + dy * rect_length / 2))
+            screen.blit(rect_surface, rect_rect)
+
         scaled_img = pygame.transform.smoothscale(
             self.image_original,
             (

@@ -1,6 +1,8 @@
 START_MAP = {
     "obstacles":[],
-    "enemy_infos":[],
+    "enemy_infos": [
+        {"x": 100, "y": 100, "enemy_type": "enemy3"}
+    ],
     "crop_rect": {
         "x_ratio": 0.5,
         "y_ratio": 0.5
@@ -15,7 +17,6 @@ END_MAP = {
         "y_ratio": 0.5
     }
 }
-
 
 FIGHT_MAP_1 = {
     "obstacles": [

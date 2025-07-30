@@ -284,6 +284,15 @@ weapon_ui_cache = {
     "resized_images": {}
 }
 
+def damage_player(amount):
+    global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
+    player_hp = max(0, player_hp - amount)
+
+    damage_flash_alpha = 255
+    shake_timer = shake_timer_max
+    shake_elapsed = 0.0
+    shake_magnitude = 3
+
 def get_player_world_position():
     return (
         world_x + player_rect.centerx,
@@ -476,6 +485,7 @@ def change_room(direction):
                     sounds=sounds,
                     map_width=map_width,
                     map_height=map_height,
+                    damage_player_fn=damage_player,
                     kill_callback=increment_kill_count
                 )
                 enemies.append(enemy)
@@ -1527,7 +1537,7 @@ while running:
             player_center,
             player_radius
         ):
-            player_hp -= 20
+            player_hp -= bullet.damage
             damage_flash_alpha = 255
             shake_timer = shake_timer_max
             shake_elapsed = 0.0

@@ -118,6 +118,9 @@ def load_images():
     enemy2_img = pygame.image.load(path_image("image", "character", "Enemy2.png")).convert_alpha()
     enemy2_img = pygame.transform.smoothscale(enemy2_img, (90, 90))
 
+    enemy3_img = pygame.image.load(path_image("image", "character", "Enemy3.png")).convert_alpha()
+    enemy3_img = pygame.transform.smoothscale(enemy3_img, (117, 117))
+
     ammo_gauge_up_img = pygame.image.load(path_image("Image", "AmmoGaugeUp.png")).convert_alpha()
     ammo_gauge_up_img = pygame.transform.smoothscale(ammo_gauge_up_img, (16, 16))
     health_up_img = pygame.image.load(path_image("Image", "HealthUp.png")).convert_alpha()
@@ -143,6 +146,7 @@ def load_images():
         "enemy_bullet": enemy_bullet_img,
         "enemy1": enemy1_img,
         "enemy2": enemy2_img,
+        "enemy3": enemy3_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,
