@@ -196,6 +196,72 @@ class DroppedItem:
         rect = self.image.get_rect(center=(self.x - world_x, self.y - world_y))
         screen.blit(self.image, rect)
 
+class ShieldEffect:
+    def __init__(self, owner, radius, max_hp, regen_delay_ms=5000):
+        self.owner = owner
+        self.radius = radius
+        self.max_hp = max_hp
+        self.hp = max_hp
+        self.regen_delay_ms = regen_delay_ms
+        self.last_hit_time = 0
+        self.is_broken = False  # 쉴드 파괴 여부
+
+    def take_damage(self, damage):
+        now = pygame.time.get_ticks()
+
+        if self.hp > 0:
+            self.hp -= damage
+            if self.hp <= 0:
+                self.hp = 0
+                self.is_broken = True
+                if hasattr(self.owner, "shield_break_sound"):
+                    self.owner.shield_break_sound.play()
+        # 쉴드가 깨진 상태에서도 타이머 무조건 갱신
+        self.last_hit_time = now
+
+    def update(self):
+        now = pygame.time.get_ticks()
+
+        # 보호막이 남아있고, 완충이 필요한 경우
+        if self.hp > 0 and self.hp < self.max_hp:
+            if now - self.last_hit_time >= self.regen_delay_ms:
+                self.hp = self.max_hp
+                if hasattr(self.owner, "shield_charged_sound"):
+                    self.owner.shield_charged_sound.play()
+
+        # 보호막이 깨진 경우, 재생성 조건
+        elif self.hp <= 0 and self.is_broken:
+            if now - self.last_hit_time >= self.regen_delay_ms:
+                self.hp = self.max_hp
+                self.is_broken = False
+                if hasattr(self.owner, "shield_charged_sound"):
+                    self.owner.shield_charged_sound.play()
+
+    def draw(self, screen, world_offset_x, world_offset_y):
+        if self.hp <= 0:
+            return
+
+        ratio = self.hp / self.max_hp
+        if ratio > 0.5:
+            t = (ratio - 0.5) * 2
+            r = int(128 * (1 - t) + 0 * t)  # 파랑 → 보라
+            g = 0
+            b = int(128 * (1 - t) + 255 * t)
+        else:
+            t = ratio * 2
+            r = int(255 * (1 - t) + 80 * t)  # 보라 → 빨강
+            g = 0
+            b = int(0 * (1 - t) + 80 * t)
+
+        shield_color = (r, g, b, 128)  # 투명도 50%
+        px = int(self.owner.world_x - world_offset_x)
+        py = int(self.owner.world_y - world_offset_y)
+        draw_radius = int(self.radius * 1.3)
+
+        shield_surf = pygame.Surface((draw_radius * 2, draw_radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(shield_surf, shield_color, (draw_radius, draw_radius), draw_radius)
+        screen.blit(shield_surf, (px - draw_radius, py - draw_radius))
+
 class Bullet:
     # 직선으로 날아가는 기본 탄환
     def __init__(self, world_x, world_y, target_world_x, target_world_y,

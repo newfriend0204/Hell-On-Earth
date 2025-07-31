@@ -4,7 +4,7 @@ import random
 from config import *
 import config
 import asset_manager
-from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect
 
 ENEMY_CLASSES = []
 
@@ -875,3 +875,237 @@ class Enemy3(AIBase):
         )
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
+
+class Enemy4(AIBase):
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.6
+    CLOSE_THRESHOLD = 200
+    FAR_THRESHOLD = 800
+    STRAFE_SPEED = BASE_SPEED * 0.7
+    MIN_ATTACK_PREPARE_TIME = 2000
+    PREHEAT_SOUND_DELAY = 1000
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        # 기본 속성 초기화 (이동 속도, 사거리, 경고 지속시간)
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0,
+            far_threshold=self.FAR_THRESHOLD,
+            radius=30 * 1.2,
+            push_strength=0.0,
+            alert_duration=self.MIN_ATTACK_PREPARE_TIME,
+            damage_player_fn=damage_player_fn
+        )
+
+        self.image_original = images["enemy4"]
+        self.image = self.image_original
+        self.kill_callback = kill_callback
+        self.hp = 400
+
+        shield_radius = int(self.radius * 1.2)
+        self.shield = ShieldEffect(self, shield_radius, max_hp=200)
+        self.shield_break_sound = sounds["enemy4_shield_break"]
+        self.shield_charged_sound = sounds["enemy4_shield_chared"]
+
+        self.gun_image_original = images["gun5"]
+        self.bullet_image = images["enemy_bullet"]
+        self.fire_sound = sounds["enemy4_fire"]
+        self.preheat_sound = sounds["enemy4_preheat"]
+
+        self.is_firing = False
+        self.fire_start_time = 0
+        self.fire_duration = 1000
+        self.fire_interval = 80
+        self.last_fire_time = 0
+
+        self.next_attack_time = 0
+        self.attack_cooldown_min = 4000
+        self.attack_cooldown_max = 6000
+        self.attack_prepare_start = None
+        self.preheat_played = False
+
+        self.strafe_dir = random.choice([-1, 1])
+        self.strafe_change_time = pygame.time.get_ticks()
+        self.strafe_interval = 1000
+
+        self.move_change_time = 0
+        self.move_change_interval = 1000
+        self.current_lateral_distance = 0
+        self.current_forward_distance = 0
+        self.current_forward_angle = 0
+
+        self.alert_offset_y = -10
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 보호막 상태 갱신
+        self.shield.update()
+
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx = px - self.world_x
+        dy = py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+
+        now = pygame.time.get_ticks()
+
+        if self.is_firing:
+            # 난사 중 이동 정지
+            self.goal_pos = (self.world_x, self.world_y)
+            if now - self.fire_start_time >= self.fire_duration:
+                self.is_firing = False
+                self.next_attack_time = now + random.randint(self.attack_cooldown_min, self.attack_cooldown_max)
+                self.speed = self.BASE_SPEED
+            else:
+                if now - self.last_fire_time >= self.fire_interval:
+                    self.shoot()
+                    self.last_fire_time = now
+                self.speed = 0.0
+        else:
+            if dist_to_player <= self.FAR_THRESHOLD and now >= self.next_attack_time:
+                if self.attack_prepare_start is None:
+                    self.attack_prepare_start = now
+                    self.preheat_played = False
+                    self.show_alert = True
+                else:
+                    elapsed_prep = now - self.attack_prepare_start
+                    if not self.preheat_played and elapsed_prep >= self.PREHEAT_SOUND_DELAY:
+                        self.preheat_sound.play()
+                        self.preheat_played = True
+                    if elapsed_prep >= self.MIN_ATTACK_PREPARE_TIME:
+                        self.is_firing = True
+                        self.fire_start_time = now
+                        self.last_fire_time = 0
+                        self.attack_prepare_start = None
+                        self.show_alert = False
+            else:
+                self.attack_prepare_start = None
+                self.show_alert = False
+
+            # 거리별 무빙 패턴
+            if dist_to_player < self.CLOSE_THRESHOLD:
+                # 너무 가까우면 후퇴
+                angle = self.direction_angle + math.pi
+                offset_angle = angle + math.radians(random.uniform(-15, 15))
+                self.goal_pos = (
+                    self.world_x + math.cos(offset_angle) * 150,
+                    self.world_y + math.sin(offset_angle) * 150
+                )
+            elif self.CLOSE_THRESHOLD <= dist_to_player <= self.FAR_THRESHOLD:
+                # 중거리 무빙 (좌우 + 앞뒤)
+                if now - self.move_change_time > self.move_change_interval:
+                    self.move_change_time = now
+                    self.current_lateral_distance = random.uniform(80, 150)
+                    if random.random() < 0.5:
+                        self.current_forward_angle = self.direction_angle
+                    else:
+                        self.current_forward_angle = self.direction_angle + math.pi
+                    self.current_forward_distance = random.uniform(80, 200)
+
+                perp = self.direction_angle + math.pi / 2 * self.strafe_dir
+                self.goal_pos = (
+                    self.world_x + math.cos(perp) * self.current_lateral_distance +
+                    math.cos(self.current_forward_angle) * self.current_forward_distance,
+                    self.world_y + math.sin(perp) * self.current_lateral_distance +
+                    math.sin(self.current_forward_angle) * self.current_forward_distance
+                )
+            else:
+                # 멀면 접근
+                perp = self.direction_angle + math.pi / 2 * self.strafe_dir
+                forward = self.direction_angle
+                self.goal_pos = (
+                    self.world_x + math.cos(forward) * 120 + math.cos(perp) * random.uniform(40, 60),
+                    self.world_y + math.sin(forward) * 120 + math.sin(perp) * random.uniform(40, 60)
+                )
+
+        if now - self.strafe_change_time > self.strafe_interval:
+            self.strafe_dir *= -1
+            self.strafe_change_time = now
+
+        if not self.aware_of_player and dist_to_player < self.FAR_THRESHOLD:
+            self.aware_of_player = True
+
+    def shoot(self):
+        # 난사 발사 처리
+        if not self.is_firing:
+            return
+        self.fire_sound.play()
+
+        spawn_offset = 30
+        vertical_offset = 6
+        angle = self.direction_angle + math.radians(random.uniform(-25, 25))
+        offset_angle = angle + math.radians(90)
+        offset_dx = math.cos(offset_angle) * vertical_offset
+        offset_dy = math.sin(offset_angle) * vertical_offset
+
+        bullet_world_x = self.world_x + math.cos(angle) * spawn_offset + offset_dx
+        bullet_world_y = self.world_y + math.sin(angle) * spawn_offset + offset_dy
+        target_world_x = bullet_world_x + math.cos(angle) * 2000
+        target_world_y = bullet_world_y + math.sin(angle) * 2000
+
+        new_bullet = Bullet(
+            bullet_world_x,
+            bullet_world_y,
+            target_world_x,
+            target_world_y,
+            0,
+            self.bullet_image,
+            speed=2.5 * PLAYER_VIEW_SCALE,
+            max_distance=2000 * PLAYER_VIEW_SCALE,
+            damage=40
+        )
+        config.global_enemy_bullets.append(new_bullet)
+
+    def hit(self, damage, blood_effects, force=False):
+        # 피격 시 보호막 우선 처리, 파괴 시 타이머 갱신
+        if not self.alive:
+            return
+        prev_broken = self.shield.hp <= 0
+        if self.shield.hp > 0:
+            self.shield.take_damage(damage)
+            if not prev_broken and self.shield.hp <= 0:
+                self.shield_break_sound.play()
+        else:
+            self.shield.last_hit_time = pygame.time.get_ticks()
+            super().hit(damage, blood_effects, force)
+
+    def die(self, blood_effects):
+        # 사망 시 아이템 드랍
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(8, 8)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        # 경고 아이콘, 총, 본체, 보호막 순서로 그림
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        gun_pos_x = screen_x + math.cos(self.direction_angle) * 45
+        gun_pos_y = screen_y + math.sin(self.direction_angle) * 45
+        rotated_gun = pygame.transform.rotate(
+            self.gun_image_original, -math.degrees(self.direction_angle) - 90
+        )
+        gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
+        screen.blit(rotated_gun, gun_rect)
+
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+        self.shield.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+        if self.show_alert:
+            self.draw_alert(screen, screen_x, screen_y + self.alert_offset_y)
