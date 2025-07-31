@@ -18,7 +18,7 @@ class AIBase(metaclass=EnemyMeta):
     def __init__(
         self, world_x, world_y, images, sounds, map_width, map_height,
         speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.18, alert_duration=1000,
-        damage_player_fn=None
+        damage_player_fn=None, rank=1
     ):
         # 기본 AI 속성 초기화
         self.world_x = world_x
@@ -28,6 +28,7 @@ class AIBase(metaclass=EnemyMeta):
         self.map_width = map_width
         self.map_height = map_height
         self.damage_player = damage_player_fn
+        self.rank = rank
 
         self.alive = True
         self._already_dropped = False
@@ -359,7 +360,8 @@ class Enemy1(AIBase):
             radius=30,
             push_strength=0.18,
             alert_duration=1000,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=1
         )
         self.image_original = images["enemy1"]
         self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
@@ -491,7 +493,8 @@ class Enemy2(AIBase):
             radius=30,
             push_strength=0.18,
             alert_duration=1000,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=2
         )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
@@ -691,7 +694,8 @@ class Enemy3(AIBase):
             radius=39,
             push_strength=0.0,
             alert_duration=1000,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=4
         )
         self.image_original = images["enemy3"]
         self.kill_callback = kill_callback
@@ -895,7 +899,8 @@ class Enemy4(AIBase):
             radius=30 * 1.2,
             push_strength=0.0,
             alert_duration=self.MIN_ATTACK_PREPARE_TIME,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=4
         )
 
         self.image_original = images["enemy4"]
@@ -1109,3 +1114,184 @@ class Enemy4(AIBase):
 
         if self.show_alert:
             self.draw_alert(screen, screen_x, screen_y + self.alert_offset_y)
+
+class Enemy5(AIBase):
+    STATE_IDLE = 0
+    STATE_PREPARE_ATTACK = 1
+    STATE_ATTACK = 2
+
+    HP = 150
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7
+    APPROACH_SPEED = BASE_SPEED * 0.5
+    BULLET_SPEED = 12 * PLAYER_VIEW_SCALE
+    PELLET_COUNT = 8
+    PELLET_SPREAD_DEG = 30
+    PELLET_DAMAGE = 10
+    PELLET_RANGE = 500 * PLAYER_VIEW_SCALE
+    MIN_COOLDOWN = 2000
+    MAX_COOLDOWN = 5000
+    PREPARE_TIME = 1000
+    IDLE_MOVE_CHANGE_INTERVAL = (800, 1200)
+    MIN_DISTANCE = 100 * PLAYER_VIEW_SCALE
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        # 기본 속성 초기화 (속도, 사거리, 경고 시간, 충돌 반경 등)
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=150,
+            far_threshold=500,
+            radius=30 * PLAYER_VIEW_SCALE,
+            push_strength=0.0,
+            alert_duration=self.PREPARE_TIME,
+            damage_player_fn=damage_player_fn,
+            rank=3
+        )
+        self.image_original = images["enemy5"]
+        self.gun_image_original = pygame.transform.flip(images["gun3"], True, False)
+        self.bullet_image = images["enemy_bullet"]
+        self.fire_sound = sounds["enemy5_fire"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+        self.state = self.STATE_IDLE
+        self.last_attack_time = -self.MAX_COOLDOWN
+        self.prepare_start_time = 0
+        self.random_idle_dir = pygame.Vector2(0, 0)
+        self.last_idle_change = pygame.time.get_ticks()
+        self.next_idle_change_interval = random.randint(*self.IDLE_MOVE_CHANGE_INTERVAL)
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        player_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
+        dx = player_pos[0] - self.world_x
+        dy = player_pos[1] - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        now = pygame.time.get_ticks()
+        self.direction_angle = math.atan2(dy, dx)
+
+        if self.state == self.STATE_IDLE:
+            # 일정 주기마다 랜덤 무빙 방향 변경
+            if now - self.last_idle_change >= self.next_idle_change_interval:
+                angle_to_player = math.atan2(dy, dx)
+                random_angle = angle_to_player + math.radians(random.uniform(-20, 20))
+                self.random_idle_dir = pygame.Vector2(math.cos(random_angle), math.sin(random_angle))
+                self.last_idle_change = now
+                self.next_idle_change_interval = random.randint(*self.IDLE_MOVE_CHANGE_INTERVAL)
+
+            # 거리별 이동 목표 및 속도 설정
+            if dist_to_player > self.far_threshold:
+                target = self._keep_min_distance(player_pos, dist_to_player)
+                self.goal_pos = target
+                self.speed = self.BASE_SPEED
+            elif dist_to_player < self.near_threshold:
+                target = self._keep_min_distance(player_pos, dist_to_player)
+                self.goal_pos = target
+                self.speed = self.APPROACH_SPEED
+            else:
+                self.goal_pos = (
+                    self.world_x + self.random_idle_dir.x * 80,
+                    self.world_y + self.random_idle_dir.y * 80
+                )
+                self.speed = self.BASE_SPEED
+
+            # 공격 개시 조건
+            time_since_last_attack = now - self.last_attack_time
+            if time_since_last_attack >= self.MIN_COOLDOWN:
+                if dist_to_player <= self.near_threshold:
+                    self.enter_prepare_attack(now)
+                elif time_since_last_attack >= self.MAX_COOLDOWN:
+                    self.enter_prepare_attack(now)
+                elif random.random() < 0.0015:
+                    self.enter_prepare_attack(now)
+
+        elif self.state == self.STATE_PREPARE_ATTACK:
+            # 공격 준비 상태: 최소 거리 유지하며 접근
+            if dist_to_player > self.MIN_DISTANCE:
+                move_dir = pygame.Vector2(dx, dy)
+                if move_dir.length() > 0:
+                    move_dir.normalize_ip()
+                target = self._keep_min_distance(player_pos, dist_to_player)
+                self.goal_pos = target
+                self.speed = self.APPROACH_SPEED
+            else:
+                self.goal_pos = (self.world_x, self.world_y)
+                self.speed = 0
+
+            # 준비 시간 경과 시 공격
+            if now - self.prepare_start_time >= self.PREPARE_TIME:
+                self.state = self.STATE_ATTACK
+                self.shoot()
+                self.last_attack_time = now
+                self.state = self.STATE_IDLE
+
+    def _keep_min_distance(self, player_pos, dist_to_player):
+        # 플레이어와의 최소 거리 유지
+        if dist_to_player < self.MIN_DISTANCE:
+            angle_away = math.atan2(self.world_y - player_pos[1], self.world_x - player_pos[0])
+            return (
+                player_pos[0] + math.cos(angle_away) * self.MIN_DISTANCE,
+                player_pos[1] + math.sin(angle_away) * self.MIN_DISTANCE
+            )
+        return player_pos
+
+    def enter_prepare_attack(self, now):
+        # 공격 준비 상태 진입
+        self.state = self.STATE_PREPARE_ATTACK
+        self.prepare_start_time = now
+        self.show_alert = True
+
+    def shoot(self):
+        # 샷건 펠릿 발사
+        for _ in range(self.PELLET_COUNT):
+            spread = math.radians(random.uniform(-self.PELLET_SPREAD_DEG, self.PELLET_SPREAD_DEG))
+            angle = self.direction_angle + spread
+            vx = math.cos(angle)
+            vy = math.sin(angle)
+            bullet = Bullet(
+                self.world_x,
+                self.world_y,
+                self.world_x + vx * self.PELLET_RANGE,
+                self.world_y + vy * self.PELLET_RANGE,
+                spread_angle_degrees=0,
+                bullet_image=self.bullet_image,
+                speed=self.BULLET_SPEED,
+                max_distance=self.PELLET_RANGE,
+                damage=self.PELLET_DAMAGE
+            )
+            config.global_enemy_bullets.append(bullet)
+        self.fire_sound.play()
+
+    def die(self, blood_effects):
+        # 사망 시 드랍 아이템 생성
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+        if self.state == self.STATE_PREPARE_ATTACK:
+            self.draw_alert(screen, screen_x, screen_y)
+        gun_pos_x = screen_x + math.cos(self.direction_angle) * self.current_distance
+        gun_pos_y = screen_y + math.sin(self.direction_angle) * self.current_distance
+        rotated_gun = pygame.transform.rotate(
+            self.gun_image_original, -math.degrees(self.direction_angle) - 90
+        )
+        gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
+        screen.blit(rotated_gun, gun_rect)
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)

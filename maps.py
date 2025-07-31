@@ -1,8 +1,6 @@
 START_MAP = {
     "obstacles":[],
-    "enemy_infos": [
-        {"x": 100, "y": 100, "enemy_type": "enemy4"}
-    ],
+    "enemy_infos":[],
     "crop_rect": {
         "x_ratio": 0.5,
         "y_ratio": 0.5
