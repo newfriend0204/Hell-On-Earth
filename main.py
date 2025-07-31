@@ -5,7 +5,7 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent
+from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
@@ -20,13 +20,15 @@ from world import (
     room_states,
     initialize_room_states,
     reveal_neighbors,
-    update_room_state_after_combat
+    update_room_state_after_combat,
+    place_acquire_rooms
 )
 from maps import MAPS, FIGHT_MAPS
 
 CURRENT_MAP = MAPS[0]
-
+acquire_room_name = None
 grid = generate_map()
+grid = place_acquire_rooms(grid, count=3)
 print_grid(grid)
 
 # 맵 상태 초기화
@@ -53,6 +55,12 @@ sounds = load_sounds()
 config.images = images
 config.dropped_items = []
 weapon_assets = load_weapon_assets(images)
+START_WEAPONS = [
+    WEAPON_CLASSES[4],
+    WEAPON_CLASSES[5],
+    WEAPON_CLASSES[6],
+    WEAPON_CLASSES[8],
+]
 
 original_player_image = images["player"]
 original_bullet_image = images["bullet1"]
@@ -156,6 +164,17 @@ else:
         spawn_direction,
         margin=50
     )
+
+#디버그
+field_weapons = []
+start_weapon = FieldWeapon(
+    WEAPON_CLASSES[1],
+    SCREEN_WIDTH//2,
+    SCREEN_HEIGHT//2,
+    weapon_assets,
+    sounds
+)
+field_weapons.append(start_weapon)
 
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
@@ -290,6 +309,43 @@ weapon_ui_cache = {
     "resized_images": {}
 }
 
+space_pressed_last_frame = False
+
+def try_pickup_weapon():
+    # 스페이스 무기 줍기 단발 입력을 이벤트로 처리
+    global weapons, field_weapons
+    player_center_x = player_rect.centerx + world_x
+    player_center_y = player_rect.centery + world_y
+    for fw in field_weapons[:]:
+        near = fw.is_player_near(player_center_x, player_center_y)
+        if near:
+            if len(weapons) < 4:
+                # 빈 슬롯에 추가
+                new_weapon = fw.weapon_class.create_instance(
+                    weapon_assets,
+                    sounds,
+                    lambda: ammo_gauge,
+                    consume_ammo,
+                    get_player_world_position
+                )
+                weapons.append(new_weapon)
+                field_weapons.remove(fw)
+            else:
+                # 현재 무기와 교체
+                current_weapon_class = weapons[current_weapon_index].__class__
+                dropped_weapon = FieldWeapon(current_weapon_class, fw.world_x, fw.world_y, weapon_assets, sounds)
+                field_weapons.append(dropped_weapon)
+                new_weapon = fw.weapon_class.create_instance(
+                    weapon_assets,
+                    sounds,
+                    lambda: ammo_gauge,
+                    consume_ammo,
+                    get_player_world_position
+                )
+                weapons[current_weapon_index] = new_weapon
+                field_weapons.remove(fw)
+            break
+
 def damage_player(amount):
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
@@ -331,15 +387,20 @@ def init_weapon_ui_cache(weapons):
         weapon_ui_cache["resized_images"][id(img)] = scaled_img
 
 weapons = [
-    cls.create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position)
-    for cls in WEAPON_CLASSES
+    cls.create_instance(
+        weapon_assets,
+        sounds,
+        lambda: ammo_gauge,
+        consume_ammo,
+        get_player_world_position
+    )
+    for cls in START_WEAPONS
 ]
 init_weapon_ui_cache(weapons)
 
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room
-    global effective_bg_width, effective_bg_height
+    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, acquire_room_name
 
     WIDTH, HEIGHT = get_map_dimensions()
     changing_room = True
@@ -361,6 +422,16 @@ def change_room(direction):
         print("[DEBUG] 이동 불가: 빈 방")
         changing_room = False
         return
+    
+    if new_room_type == 'A':
+        # Acquire Room 진입 처리
+        acquire_index = random.randint(2, 4)
+        CURRENT_MAP = MAPS[acquire_index]
+        acquire_room_name = f"획득방{acquire_index-1}"
+        config.combat_state = False
+        config.combat_enabled = False
+    else:
+        acquire_room_name = None
 
     curr_center_x = effective_bg_width / 2
     curr_center_y = effective_bg_height / 2
@@ -515,6 +586,9 @@ def change_room(direction):
 
     sounds["room_move"].play()
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {room_states[new_y][new_x]}")
+
+    if acquire_room_name:
+        print(f"[DEBUG] {acquire_room_name} 진입")
 
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
@@ -763,7 +837,7 @@ def draw_minimap(screen, grid, current_room_pos):
             color = None
             alpha = 255
 
-            if state in (0, 2, 4):
+            if state in (0, 2, 4, 7):
                 color = (50, 50, 50)
                 alpha = 20
             elif state == 1:
@@ -774,6 +848,8 @@ def draw_minimap(screen, grid, current_room_pos):
                 color = (50, 50, 50)
             elif state == 6:
                 color = (160, 160, 160)
+            elif state == 8:
+                color = (255, 255, 150)
 
             if color:
                 rect = pygame.Rect(
@@ -1000,6 +1076,7 @@ while running:
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
+                try_pickup_weapon()
             elif event.key == pygame.K_TAB:
                 paused = not paused
                 if paused:
@@ -1501,6 +1578,13 @@ while running:
         expansion
     )
 
+    # 필드 무기 표시 및 습득 처리
+    player_center_x = player_rect.centerx + world_x
+    player_center_y = player_rect.centery + world_y
+    for fw in field_weapons[:]:
+        near = fw.is_player_near(player_center_x, player_center_y)
+        fw.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_near=near)
+
     for scatter in scattered_bullets[:]:
         # 탄피 이펙트 업데이트
         scatter.update()
@@ -1768,6 +1852,13 @@ while running:
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)
+
+    # Acquire Room 중앙 이름 표시 (디버그용)
+    if acquire_room_name:
+        name_font = pygame.font.Font(FONT_PATH, 48)
+        name_surface = name_font.render(acquire_room_name, True, (255, 255, 255))
+        name_rect = name_surface.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+        screen.blit(name_surface, name_rect)
     
     pygame.display.flip()
     clock.tick(60)

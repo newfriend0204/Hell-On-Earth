@@ -5,6 +5,7 @@ import random
 from collider import Collider
 from config import PLAYER_VIEW_SCALE
 import config
+from ui import KOREAN_FONT_28
 
 PARTICLE_COUNT = 30
 PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
@@ -12,6 +13,49 @@ PARTICLE_SPEED_MIN = 4
 PARTICLE_SPEED_MAX = 12
 PARTICLE_LIFETIME = 2000
 PARTICLE_FADE_TIME = 500
+
+class FieldWeapon:
+    # 필드에 놓여있는 무기
+    def __init__(self, weapon_class, world_x, world_y, weapon_assets, sounds, max_width=80):
+        self.weapon_class = weapon_class
+        temp_weapon = weapon_class.create_instance(
+            weapon_assets,
+            sounds,
+            0,
+            lambda *_: None,
+            lambda *_: (0, 0)
+        )
+        image = temp_weapon.front_image
+        iw, ih = image.get_size()
+        scale = min(max_width / iw, max_width / ih)
+        new_w = int(iw * scale)
+        new_h = int(ih * scale)
+        self.image = pygame.transform.smoothscale(image, (new_w, new_h))
+        self.world_x = world_x
+        self.world_y = world_y
+        self.pickup_radius = 80 * PLAYER_VIEW_SCALE
+        self.weapon_name = temp_weapon.name
+
+    def is_player_near(self, player_x, player_y):
+        dist = math.hypot(player_x - self.world_x, player_y - self.world_y)
+        return dist <= self.pickup_radius
+
+    def draw(self, screen, world_offset_x, world_offset_y, player_near=False):
+        # 무기 이미지
+        screen.blit(self.image, (self.world_x - world_offset_x - self.image.get_width()//2,
+                                 self.world_y - world_offset_y - self.image.get_height()//2))
+        if player_near:
+            # 역삼각형 표시
+            tri_x = self.world_x - world_offset_x
+            tri_y = self.world_y - world_offset_y - self.image.get_height()//2 - 20
+            points = [(tri_x, tri_y),
+                      (tri_x - 10, tri_y - 15),
+                      (tri_x + 10, tri_y - 15)]
+            pygame.draw.polygon(screen, (255, 255, 0), points)
+            # 이름 표시
+            text_surf = KOREAN_FONT_28.render(self.weapon_name, True, (255, 255, 0))
+            text_rect = text_surf.get_rect(center=(tri_x, tri_y - 30))
+            screen.blit(text_surf, text_rect)
 
 class ParticleBlood:
     # 피가 튀는 파티클 이펙트

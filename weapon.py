@@ -60,10 +60,10 @@ class WeaponBase:
         # 매 프레임마다 발사 입력을 처리하는 메서드
         # 발사 지연 시간(fire_delay)을 확인한 뒤 발사 동작 실행
         if self.can_left_click and mouse_left_down and pygame.time.get_ticks() - self.last_shot_time >= self.fire_delay:
-            self.on_left_click()
-            self.last_shot_time = pygame.time.get_ticks()
-        if self.can_right_click and mouse_right_down:
-            self.on_right_click()
+            # 탄약이 충분할 때만 발사 및 반동 처리
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = pygame.time.get_ticks()
 
 
 class Gun1(WeaponBase):
@@ -90,7 +90,7 @@ class Gun1(WeaponBase):
             sounds_dict={
                 "fire": sounds["gun1_fire"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -105,11 +105,9 @@ class Gun1(WeaponBase):
         self.shake_strength = 10
 
     def on_left_click(self):
-        # 탄약 부족 시 발사 불가
         if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
-        
-        # 탄약 차감 및 발사음 재생
+
         self.reduce_ammo(self.left_click_ammo_cost)
         self.sounds["fire"].play()
 
@@ -185,7 +183,7 @@ class Gun2(WeaponBase):
             sounds_dict={
                 "fire": sounds["gun2_fire"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -276,7 +274,7 @@ class Gun3(WeaponBase):
             sounds_dict={
                 "fire": sounds["gun3_fire"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -372,7 +370,7 @@ class Gun4(WeaponBase):
                 "fire": sounds["gun4_fire"],
                 "explosion": sounds["gun4_explosion"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -456,7 +454,7 @@ class Gun5(WeaponBase):
                 "fire": sounds["gun5_fire"],
                 "overheat": sounds["gun5_overheat"]
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -604,7 +602,7 @@ class Gun6(WeaponBase):
                 "right_fire": sounds["gun6_rightfire"],
                 "explosion": sounds["gun6_explosion"]
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position,
@@ -629,12 +627,14 @@ class Gun6(WeaponBase):
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            self.on_left_click()
-            self.last_shot_time = now
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
 
         if self.can_right_click and mouse_right_down and now - self.last_right_click_time >= self.right_fire_delay:
-            self.on_right_click()
-            self.last_right_click_time = now
+            if self.get_ammo_gauge() >= self.right_click_ammo_cost:
+                self.on_right_click()
+                self.last_right_click_time = now
 
     def on_left_click(self):
         # 소총 탄환 발사, 탄피 배출
@@ -753,7 +753,7 @@ class Gun7(WeaponBase):
                 "left_fire": sounds["gun7_leftfire"],
                 "right_fire": sounds["gun7_rightfire"]
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=True,
             get_player_world_position_fn=get_player_world_position
@@ -775,12 +775,14 @@ class Gun7(WeaponBase):
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            self.on_left_click()
-            self.last_shot_time = now
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
 
         if self.can_right_click and mouse_right_down and now - self.last_right_click_time >= self.right_fire_delay:
-            self.on_right_click()
-            self.last_right_click_time = now
+            if self.get_ammo_gauge() >= self.right_click_ammo_cost:
+                self.on_right_click()
+                self.last_right_click_time = now
 
     def on_left_click(self):
         # 소총 탄환 발사, 탄피 배출
@@ -917,7 +919,7 @@ class Gun8(WeaponBase):
                 "fire": sounds["gun8_fire"],
                 "explosion": sounds["gun8_explosion"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position,
@@ -935,9 +937,12 @@ class Gun8(WeaponBase):
 
     def on_update(self, mouse_left_down, mouse_right_down):
         # 좌클릭 쿨타임 체크 후 발사
-        if self.can_left_click and mouse_left_down and pygame.time.get_ticks() - self.last_shot_time >= self.fire_delay:
-            self.on_left_click()
-            self.last_shot_time = pygame.time.get_ticks()
+        now = pygame.time.get_ticks()
+        
+        if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
 
     def on_left_click(self):
         # 로켓 발사
@@ -1013,7 +1018,7 @@ class Gun9(WeaponBase):
                 "right_fire": sounds["gun9_rightfire"],
                 "explosion": sounds["gun9_explosion"],
             },
-            get_ammo_gauge_fn=lambda: ammo_gauge,
+            get_ammo_gauge_fn=ammo_gauge,
             reduce_ammo_fn=consume_ammo,
             bullet_has_trail=False,
             get_player_world_position_fn=get_player_world_position
@@ -1034,12 +1039,14 @@ class Gun9(WeaponBase):
         now = pygame.time.get_ticks()
 
         if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            self.on_left_click()
-            self.last_shot_time = now
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
 
         if self.can_right_click and mouse_right_down and now - self.last_right_click_time >= self.right_fire_delay:
-            self.on_right_click()
-            self.last_right_click_time = now
+            if self.get_ammo_gauge() >= self.right_click_ammo_cost:
+                self.on_right_click()
+                self.last_right_click_time = now
 
     def on_left_click(self):
         # 소총 탄환 발사, 탄피 배출
@@ -1131,4 +1138,4 @@ class Gun9(WeaponBase):
         bullet.trail_enabled = True
         config.bullets.append(bullet)
 
-WEAPON_CLASSES = [Gun4, Gun6, Gun8, Gun9]
+WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9]

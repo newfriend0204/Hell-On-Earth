@@ -13,12 +13,19 @@ MIN_F_ROOMS = 8
 MAX_F_ROOMS = 8
 
 # 각 방의 상태를 저장하는 2차원 리스트
-# 0: 빈 방(N), 1: 시작(S), 2: 미발견 끝방(E), 3: 발견된 끝방(E)
-# 4: 미발견 전투방(F), 5: 발견된 전투방(F), 6: 클리어된 전투방
+# 0: 빈 방(N)
+# 1: 시작(S)
+# 2: 미발견 끝방(E)
+# 3: 발견된 끝방(E)
+# 4: 미발견 전투방(F)
+# 5: 발견된 전투방(F)
+# 6: 클리어된 전투방(F)
+# 7: 미발견 획득방(A)
+# 8: 발견된 획득방(A)
 room_states = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
 
 def initialize_room_states(grid):
-    # 생성된 맵의 문자(S, E, F, N)를 숫자 상태로 변환하여 room_states에 저장
+    # 생성된 맵의 문자(S, E, F, A, N)를 숫자 상태로 변환하여 room_states에 저장
     for y in range(HEIGHT):
         for x in range(WIDTH):
             cell = grid[y][x]
@@ -30,6 +37,8 @@ def initialize_room_states(grid):
                 room_states[y][x] = 2
             elif cell == 'F':
                 room_states[y][x] = 4
+            elif cell == 'A':
+                room_states[y][x] = 7
 
 def update_room_state_after_combat(y, x):
     # 전투 종료 후 해당 좌표의 전투방 상태를 '클리어'로 변경
@@ -43,6 +52,8 @@ def reveal_neighbors(x, y, grid):
             room_states[ny][nx] = 3
         elif grid[ny][nx] == 'F' and room_states[ny][nx] == 4:
             room_states[ny][nx] = 5
+        elif grid[ny][nx] == 'A' and room_states[ny][nx] == 7:
+            room_states[ny][nx] = 8
 
 def manhattan(p1, p2):
     # 맨해튼 거리 계산 (대각선 무시, x+y 차이의 절댓값 합)
@@ -173,6 +184,27 @@ def generate_map():
             continue
 
         return grid
+    
+def place_acquire_rooms(grid, count=3):
+    #Acquire 방(A) 배치
+    candidates = []
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if grid[y][x] != 'N':
+                continue
+            # S, E와 인접하지 않게
+            if any(grid[ny][nx] in ('S', 'E') for nx, ny in neighbors(x, y)):
+                continue
+            # F와 최소 한 칸 연결
+            if not any(grid[ny][nx] == 'F' for nx, ny in neighbors(x, y)):
+                continue
+            candidates.append((x, y))
+    random.shuffle(candidates)
+    for i in range(min(count, len(candidates))):
+        x, y = candidates[i]
+        grid[y][x] = 'A'
+        room_states[y][x] = 7
+    return grid
 
 def print_grid(grid):
     # 맵을 콘솔에 시각적으로 출력 (디버그용)

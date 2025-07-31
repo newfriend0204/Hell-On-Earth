@@ -7,7 +7,35 @@ START_MAP = {
     }
 }
 
+
 END_MAP = {
+    "obstacles":[],
+    "enemy_infos":[],
+    "crop_rect": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.5
+    }
+}
+
+ACQUIRE_MAP_1 = {
+    "obstacles":[],
+    "enemy_infos":[],
+    "crop_rect": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.5
+    }
+}
+
+ACQUIRE_MAP_2 = {
+    "obstacles":[],
+    "enemy_infos":[],
+    "crop_rect": {
+        "x_ratio": 0.5,
+        "y_ratio": 0.5
+    }
+}
+
+ACQUIRE_MAP_3 = {
     "obstacles":[],
     "enemy_infos":[],
     "crop_rect": {
@@ -320,7 +348,10 @@ FIGHT_MAP_8 = {
 
 MAPS = [
     START_MAP,
-    END_MAP
+    END_MAP,
+    ACQUIRE_MAP_1,
+    ACQUIRE_MAP_2,
+    ACQUIRE_MAP_3
 ]
 
 FIGHT_MAPS = [
