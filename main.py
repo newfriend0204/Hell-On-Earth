@@ -26,7 +26,6 @@ from world import (
 from maps import MAPS, FIGHT_MAPS
 
 CURRENT_MAP = MAPS[0]
-acquire_room_name = None
 grid = generate_map()
 grid = place_acquire_rooms(grid, count=3)
 print_grid(grid)
@@ -165,16 +164,17 @@ else:
         margin=50
     )
 
-#디버그
 field_weapons = []
-start_weapon = FieldWeapon(
-    WEAPON_CLASSES[1],
-    SCREEN_WIDTH//2,
-    SCREEN_HEIGHT//2,
-    weapon_assets,
-    sounds
-)
-field_weapons.append(start_weapon)
+room_field_weapons = {}
+#디버그-필드에 무기 놓는 코드
+# start_weapon = FieldWeapon(
+#     WEAPON_CLASSES[1],
+#     SCREEN_WIDTH//2,
+#     SCREEN_HEIGHT//2,
+#     weapon_assets,
+#     sounds
+# )
+# field_weapons.append(start_weapon)
 
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
@@ -313,37 +313,48 @@ space_pressed_last_frame = False
 
 def try_pickup_weapon():
     # 스페이스 무기 줍기 단발 입력을 이벤트로 처리
-    global weapons, field_weapons
+    global weapons, field_weapons, current_weapon_index, changing_weapon, change_weapon_target, change_animation_timer, previous_distance, target_distance, current_distance
     player_center_x = player_rect.centerx + world_x
     player_center_y = player_rect.centery + world_y
     for fw in field_weapons[:]:
-        near = fw.is_player_near(player_center_x, player_center_y)
-        if near:
+        if fw.is_player_near(player_center_x, player_center_y):
+            sounds["swap_gun"].play()
+
             if len(weapons) < 4:
-                # 빈 슬롯에 추가
                 new_weapon = fw.weapon_class.create_instance(
-                    weapon_assets,
-                    sounds,
-                    lambda: ammo_gauge,
-                    consume_ammo,
-                    get_player_world_position
+                    weapon_assets, sounds, lambda: ammo_gauge,
+                    consume_ammo, get_player_world_position
                 )
                 weapons.append(new_weapon)
-                field_weapons.remove(fw)
+                current_weapon_index = len(weapons) - 1
             else:
-                # 현재 무기와 교체
                 current_weapon_class = weapons[current_weapon_index].__class__
-                dropped_weapon = FieldWeapon(current_weapon_class, fw.world_x, fw.world_y, weapon_assets, sounds)
-                field_weapons.append(dropped_weapon)
+                dropped_fw = FieldWeapon(
+                    current_weapon_class, fw.world_x, fw.world_y, weapon_assets, sounds
+                )
+                field_weapons.append(dropped_fw)
+                room_key = tuple(current_room_pos)
+                if room_key not in room_field_weapons:
+                    room_field_weapons[room_key] = []
+                room_field_weapons[room_key].append(dropped_fw)
                 new_weapon = fw.weapon_class.create_instance(
-                    weapon_assets,
-                    sounds,
-                    lambda: ammo_gauge,
-                    consume_ammo,
-                    get_player_world_position
+                    weapon_assets, sounds, lambda: ammo_gauge,
+                    consume_ammo, get_player_world_position
                 )
                 weapons[current_weapon_index] = new_weapon
-                field_weapons.remove(fw)
+
+            changing_weapon = True
+            change_weapon_target = current_weapon_index
+            change_animation_timer = 0.0
+            previous_distance = current_distance
+            target_distance = weapons[current_weapon_index].distance_from_center
+
+            # ★ 방 전용 무기 목록에서도 제거
+            room_key = tuple(current_room_pos)
+            if room_key in room_field_weapons and fw in room_field_weapons[room_key]:
+                room_field_weapons[room_key].remove(fw)
+
+            field_weapons.remove(fw)
             break
 
 def damage_player(amount):
@@ -400,7 +411,7 @@ init_weapon_ui_cache(weapons)
 
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, acquire_room_name
+    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height
 
     WIDTH, HEIGHT = get_map_dimensions()
     changing_room = True
@@ -422,16 +433,6 @@ def change_room(direction):
         print("[DEBUG] 이동 불가: 빈 방")
         changing_room = False
         return
-    
-    if new_room_type == 'A':
-        # Acquire Room 진입 처리
-        acquire_index = random.randint(2, 4)
-        CURRENT_MAP = MAPS[acquire_index]
-        acquire_room_name = f"획득방{acquire_index-1}"
-        config.combat_state = False
-        config.combat_enabled = False
-    else:
-        acquire_room_name = None
 
     curr_center_x = effective_bg_width / 2
     curr_center_y = effective_bg_height / 2
@@ -494,6 +495,40 @@ def change_room(direction):
         top_wall_height=0,
         tunnel_length=10000 * PLAYER_VIEW_SCALE
     )
+
+    if new_room_type == 'A':
+        acquire_index = random.randint(2, 2)  # 디버그용
+        CURRENT_MAP = MAPS[acquire_index]
+        config.combat_state = False
+        config.combat_enabled = False
+
+        reveal_neighbors(new_x, new_y, grid)
+
+        room_key = (new_x, new_y)
+
+        if room_key not in room_field_weapons:
+            center_x = new_world.effective_bg_width / 2
+            center_y = new_world.effective_bg_height / 2
+            spacing = 150 * PLAYER_VIEW_SCALE
+
+            weapon_classes = random.sample(WEAPON_CLASSES, 2)
+            weapons_in_room = []
+            for i, weapon_class in enumerate(weapon_classes):
+                fw = FieldWeapon(
+                    weapon_class,
+                    center_x + (i - 0.5) * spacing * 2,
+                    center_y,
+                    weapon_assets,
+                    sounds
+                )
+                weapons_in_room.append(fw)
+
+            room_field_weapons[room_key] = weapons_in_room
+
+        field_weapons.clear()
+        field_weapons.extend(room_field_weapons[room_key])
+    else:
+        field_weapons.clear()
 
     map_width = new_world.effective_bg_width
     map_height = new_world.effective_bg_height
@@ -586,9 +621,6 @@ def change_room(direction):
 
     sounds["room_move"].play()
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {room_states[new_y][new_x]}")
-
-    if acquire_room_name:
-        print(f"[DEBUG] {acquire_room_name} 진입")
 
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
@@ -1853,13 +1885,6 @@ while running:
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)
 
-    # Acquire Room 중앙 이름 표시 (디버그용)
-    if acquire_room_name:
-        name_font = pygame.font.Font(FONT_PATH, 48)
-        name_surface = name_font.render(acquire_room_name, True, (255, 255, 255))
-        name_rect = name_surface.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
-        screen.blit(name_surface, name_rect)
-    
     pygame.display.flip()
     clock.tick(60)
 pygame.quit()

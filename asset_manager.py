@@ -38,6 +38,12 @@ def load_images():
     gun9_img = pygame.image.load(path_image("image", "Gun", "Gun9Player.png")).convert_alpha()
     gun9_img = pygame.transform.smoothscale(gun9_img, (50, int(gun9_img.get_height() * (50 / gun9_img.get_width()))))
 
+    boss1gun1_img = pygame.image.load(path_image("image", "Gun", "Boss1Gun1.png")).convert_alpha()
+    boss1gun1_img = pygame.transform.smoothscale(boss1gun1_img, (50, int(boss1gun1_img.get_height() * (50 / boss1gun1_img.get_width()))))
+
+    boss1gun2_img = pygame.image.load(path_image("image", "Gun", "Boss1Gun2.png")).convert_alpha()
+    boss1gun2_img = pygame.transform.smoothscale(boss1gun2_img, (50, int(boss1gun2_img.get_height() * (50 / boss1gun2_img.get_width()))))
+
     warhead_img = pygame.image.load(path_image("image", "Gun", "Warhead1.png")).convert_alpha()
     warhead_img = pygame.transform.smoothscale(warhead_img, (40, 40))
 
@@ -134,6 +140,9 @@ def load_images():
     enemy5_img = pygame.image.load(path_image("image", "character", "Enemy5.png")).convert_alpha()
     enemy5_img = pygame.transform.smoothscale(enemy5_img, (90, 90))
 
+    boss1_img = pygame.image.load(path_image("image", "character", "Boss1.png")).convert_alpha()
+    boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
+
     ammo_gauge_up_img = pygame.image.load(path_image("Image", "AmmoGaugeUp.png")).convert_alpha()
     ammo_gauge_up_img = pygame.transform.smoothscale(ammo_gauge_up_img, (16, 16))
     health_up_img = pygame.image.load(path_image("Image", "HealthUp.png")).convert_alpha()
@@ -163,6 +172,7 @@ def load_images():
         "enemy3": enemy3_img,
         "enemy4": enemy4_img,
         "enemy5": enemy5_img,
+        "boss1": boss1_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,

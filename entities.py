@@ -42,20 +42,40 @@ class FieldWeapon:
 
     def draw(self, screen, world_offset_x, world_offset_y, player_near=False):
         # 무기 이미지
-        screen.blit(self.image, (self.world_x - world_offset_x - self.image.get_width()//2,
-                                 self.world_y - world_offset_y - self.image.get_height()//2))
+        screen.blit(
+            self.image,
+            (
+                self.world_x - world_offset_x - self.image.get_width() // 2,
+                self.world_y - world_offset_y - self.image.get_height() // 2
+            )
+        )
+
         if player_near:
-            # 역삼각형 표시
             tri_x = self.world_x - world_offset_x
-            tri_y = self.world_y - world_offset_y - self.image.get_height()//2 - 20
-            points = [(tri_x, tri_y),
-                      (tri_x - 10, tri_y - 15),
-                      (tri_x + 10, tri_y - 15)]
-            pygame.draw.polygon(screen, (255, 255, 0), points)
-            # 이름 표시
-            text_surf = KOREAN_FONT_28.render(self.weapon_name, True, (255, 255, 0))
-            text_rect = text_surf.get_rect(center=(tri_x, tri_y - 30))
+            base_tri_y = self.world_y - world_offset_y - self.image.get_height() // 2 + 5
+
+            time_ms = pygame.time.get_ticks()
+            phase = (time_ms // 500) % 2
+            anim_offset = 5 if phase == 1 else 0
+            tri_y = base_tri_y + anim_offset
+
+            text_surf = KOREAN_FONT_28.render(self.weapon_name, True, (255, 255, 255))
+
+            padding_x = 6
+            padding_y = 4
+            bg_rect = pygame.Rect(0, 0, text_surf.get_width() + padding_x * 2, text_surf.get_height() + padding_y * 2)
+            bg_rect.center = (tri_x, base_tri_y - 40)
+            pygame.draw.rect(screen, (0, 0, 0), bg_rect, border_radius=4)
+
+            text_rect = text_surf.get_rect(center=bg_rect.center)
             screen.blit(text_surf, text_rect)
+
+            points = [
+                (tri_x, tri_y),
+                (tri_x - 10, tri_y - 15),
+                (tri_x + 10, tri_y - 15)
+            ]
+            pygame.draw.polygon(screen, (255, 255, 255), points)
 
 class ParticleBlood:
     # 피가 튀는 파티클 이펙트

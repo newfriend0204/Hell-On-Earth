@@ -26,6 +26,8 @@ def load_sounds():
     button_select.set_volume(0.6)
 
     weapon_sounds = {
+        "boss1_gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun1Fire.mp3")),
+        "boss1_gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun2Fire.mp3")),
         "gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun1Fire.wav")),
         "gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun2Fire.wav")),
         "gun3_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun3Fire.wav")),
@@ -78,6 +80,8 @@ def load_sounds():
     weapon_sounds["enemy4_shield_break"].set_volume(0.25)
     weapon_sounds["enemy4_shield_chared"].set_volume(0.1)
     weapon_sounds["enemy5_fire"].set_volume(0.25)
+    weapon_sounds["boss1_gun1_fire"].set_volume(0.5)
+    weapon_sounds["boss1_gun2_fire"].set_volume(0.5)
 
     return {
         # 모든 사운드 딕셔너리 반환

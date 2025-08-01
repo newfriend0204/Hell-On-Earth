@@ -213,6 +213,7 @@ def print_grid(grid):
         'S': '⬜',
         'E': '🟥',
         'F': '🟩',
+        'A': '🟨'
     }
     for row in grid:
         print("".join(SYMBOLS.get(cell, ' ') for cell in row))

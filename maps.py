@@ -12,8 +12,8 @@ END_MAP = {
     "obstacles":[],
     "enemy_infos":[],
     "crop_rect": {
-        "x_ratio": 0.5,
-        "y_ratio": 0.5
+        "x_ratio": 1.5,
+        "y_ratio": 1.5
     }
 }
 

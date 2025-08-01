@@ -17,7 +17,7 @@ ASSET_DIR = os.path.join(BASE_DIR, "Asset")
 
 # 속도
 NORMAL_MAX_SPEED = 6
-SPRINT_MAX_SPEED = 9
+SPRINT_MAX_SPEED = 30 #9 디버그
 
 # 사운드 설정
 WALK_VOLUME = 0.5

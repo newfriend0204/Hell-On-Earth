@@ -1,5 +1,8 @@
 게임 제목-둠 이터널 챕터1(이 땅 위의 지옥-Hell on Earth)
 게임 스타일-Battledudes.io
 
-플레이어 모델-Battledudes.io 캐릭터
-적1 모델-Battledudes.io 캐릭터
+Gun6(개조된 기관단총)-하프라이프2 기관단총
+Gun7(C8-SFW)-Buck 주무기 (레인보우 식스 시즈 X)
+Gun9(ARX200)-Nomad 주무기 + 기압탄(특수 기술) (레인보우 식스 시즈 X)
+
+Boss1-Caveria (레인보우 식스 시즈 X)
