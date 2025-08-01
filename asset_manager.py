@@ -160,6 +160,8 @@ def load_images():
         "gun7": gun7_img,
         "gun8": gun8_img,
         "gun9": gun9_img,
+        "boss1gun1": boss1gun1_img,
+        "boss1gun2": boss1gun2_img,
         "bullet1": bullet1_img,
         "bullet2": bullet2_img,
         "grenade1": grenade_img,

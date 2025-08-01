@@ -22,6 +22,7 @@ MAX_F_ROOMS = 8
 # 6: 클리어된 전투방(F)
 # 7: 미발견 획득방(A)
 # 8: 발견된 획득방(A)
+# 9: 클리어된 끝방(E)
 room_states = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
 
 def initialize_room_states(grid):
@@ -43,7 +44,9 @@ def initialize_room_states(grid):
 def update_room_state_after_combat(y, x):
     # 전투 종료 후 해당 좌표의 전투방 상태를 '클리어'로 변경
     if room_states[y][x] in (4, 5):
-        room_states[y][x] = 6 
+        room_states[y][x] = 6
+    elif room_states[y][x] in (2, 3):
+        room_states[y][x] = 9
 
 def reveal_neighbors(x, y, grid):
     # 현재 방의 상하좌우 인접방을 '발견' 상태로 변경

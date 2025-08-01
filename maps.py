@@ -10,10 +10,12 @@ START_MAP = {
 
 END_MAP = {
     "obstacles":[],
-    "enemy_infos":[],
+    "enemy_infos":[
+        {"x": 1080, "y": 810, "enemy_type": "boss1"},
+    ],
     "crop_rect": {
-        "x_ratio": 1.5,
-        "y_ratio": 1.5
+        "x_ratio": 2,
+        "y_ratio": 2
     }
 }
 

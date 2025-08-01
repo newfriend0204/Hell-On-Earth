@@ -267,6 +267,9 @@ player_hp = 300
 player_hp_max = 300
 last_hp_visual = player_hp * 1.0
 
+current_boss = None
+last_boss_hp_visual = 0
+
 damage_flash_alpha = 0
 damage_flash_fade_speed = 5
 
@@ -296,7 +299,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge = 100
+ammo_gauge = 1000000
 last_ammo_visual = ammo_gauge * 1.0
 
 config.bullets = bullets
@@ -411,7 +414,7 @@ init_weapon_ui_cache(weapons)
 
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height
+    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss
 
     WIDTH, HEIGHT = get_map_dimensions()
     changing_room = True
@@ -466,6 +469,20 @@ def change_room(direction):
             }
             config.combat_state = False
             config.combat_enabled = False
+    elif new_room_type == 'E':
+        room_key = (new_x, new_y)
+        if room_states[room_key[1]][room_key[0]] == 9:
+            CURRENT_MAP = {
+                "obstacles": MAPS[1]["obstacles"],
+                "enemy_infos": [],
+                "crop_rect": MAPS[1]["crop_rect"]
+            }
+            config.combat_state = False
+            config.combat_enabled = False
+        else:
+            CURRENT_MAP = MAPS[1]
+            config.combat_state = True
+            config.combat_enabled = True
     else:
         # 일반 방 진입
         CURRENT_MAP = MAPS[0]
@@ -608,7 +625,12 @@ def change_room(direction):
                     kill_callback=increment_kill_count
                 )
                 enemies.append(enemy)
+                if enemy_type == "boss1":
+                    current_boss = enemy
                 break
+    
+    if not any(e_info["enemy_type"] == "boss1" for e_info in CURRENT_MAP["enemy_infos"]):
+        current_boss = None
     
     config.all_enemies = enemies
 
@@ -874,7 +896,7 @@ def draw_minimap(screen, grid, current_room_pos):
                 alpha = 20
             elif state == 1:
                 color = (120, 255, 120)
-            elif state == 3:
+            elif state in (3, 9):
                 color = (255, 120, 120)
             elif state == 5:
                 color = (50, 50, 50)
@@ -1013,6 +1035,43 @@ def draw_weapon_ui(screen, weapons, current_weapon_index):
         screen.blit(tooltip_bg, (tooltip_x, tooltip_y))
         screen.blit(tooltip_surface, (tooltip_x + 5, tooltip_y + 3))
 
+def draw_boss_hp_bar(screen, boss, last_boss_hp_visual):
+    bar_width = 600
+    bar_height = 28
+    x = (SCREEN_WIDTH - bar_width) // 2
+    y = 20
+    border_radius = bar_height // 3
+
+    # 배경
+    bg_surface = pygame.Surface((bar_width + 6, bar_height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, bar_width + 6, bar_height + 4), border_radius=border_radius + 2)
+    screen.blit(bg_surface, (x - 3, y - 2))
+
+    # HP 보간
+    smoothing_speed = 0.5
+    interpolated_hp = last_boss_hp_visual + (boss.hp - last_boss_hp_visual) * smoothing_speed
+
+    ratio = max(0.0, interpolated_hp / boss.max_hp)
+
+    # 색상 조건 변경
+    if ratio >= 0.75:
+        color = (0, 200, 0)       # 초록색
+    elif ratio >= 0.50:
+        color = (200, 200, 0)     # 노란색
+    elif ratio >= 0.25:
+        color = (255, 165, 0)     # 주황색
+    else:
+        color = (200, 0, 0)       # 빨간색
+
+    filled_width = int(bar_width * ratio)
+    pygame.draw.rect(screen, color, (x, y, filled_width, bar_height), border_radius=border_radius)
+
+    # 텍스트 (한국어 폰트)
+    text_surface = KOREAN_FONT_18.render(f"보스 HP: {int(boss.hp)}/{boss.max_hp}", True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y + bar_height // 2))
+    screen.blit(text_surface, text_rect)
+
+    return interpolated_hp
 def draw_hp_bar_remodeled(surface, current_hp, max_hp, pos, size, last_hp_drawn):
     x, y = pos
     width, height = size
@@ -1881,6 +1940,8 @@ while running:
 
     draw_minimap(screen, grid, current_room_pos)
     draw_weapon_ui(screen, weapons, current_weapon_index)
+    if current_boss and type(current_boss).__name__ == "Boss1" and current_boss.alive:
+        last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

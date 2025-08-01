@@ -1295,3 +1295,319 @@ class Enemy5(AIBase):
         )
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
+
+class Boss1(AIBase):
+    FAR_DISTANCE = 800
+    MID_DISTANCE = 500
+    CLOSE_DISTANCE = 200
+    GUN1_SAFE_MIN = MID_DISTANCE + 80
+    GUN1_SAFE_MAX = MID_DISTANCE + 150
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=0.0,
+            near_threshold=0,
+            far_threshold=0,
+            radius=60,
+            push_strength=0.0,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=10
+        )
+
+        self.image_original = images["boss1"]
+        self.gun1_image_original = images["boss1gun1"]
+        self.gun2_image_original = images["boss1gun2"]
+        self.bullet_image = images["enemy_bullet"]
+
+        self.sound_gun1 = sounds["boss1_gun1_fire"]
+        self.sound_gun2 = sounds["boss1_gun2_fire"]
+
+        self.hp = 1000
+        self.max_hp = 1000
+        self.kill_callback = kill_callback
+
+        self.half_phase_drop_done = False
+
+        # 은신 관련
+        self.is_hidden = False
+        self.hide_start_time = 0
+        self.hiding_transition = 0.0
+        self.unhiding_transition = 0.0
+        self.hide_speed = 1 / 0.5
+        self.unhide_speed = 1 / 0.5
+        self.base_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
+
+        # 긴급 은신
+        self.emergency_hide_active = False
+        self.emergency_hide_timer = 0
+        self.emergency_hide_duration = 2000
+
+        self.last_hp_after_unhide = self.hp
+        self.last_unhide_time = 0
+
+        self.state = "far"
+        self.current_weapon = None
+        self.state_timer = 0
+        self.mid_hold_timer = 0
+        self.far_hold_timer = 0
+        self.close_hold_timer = 0
+        self.lock_weapon_until = 0
+        self.target_pos = (self.world_x, self.world_y)
+        self.target_timer = 0
+        self.target_duration = 1000
+        self.last_dist = None
+
+        self.shoot_cooldown = 0
+        self.shoot_interval_gun1 = 300
+        self.shoot_interval_gun2 = 500
+
+        self.is_position_blocked_fn = is_position_blocked_fn
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 매 프레임마다 이동/공격 상태를 결정
+        # 은신 상태 유지/해제, 긴급 은신 발동 조건 체크
+        # 플레이어와 거리 기반으로 상태(Far, Mid, Close, Retreat) 전환
+        # 은신 중엔 마구잡이 이동 후 추격, 해제 시 공격 상태 복귀
+        now = pygame.time.get_ticks()
+        player_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
+        dx, dy = player_pos[0] - self.world_x, player_pos[1] - self.world_y
+        dist = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        self.state_timer += 16
+
+        if self.emergency_hide_active and now - self.emergency_hide_timer >= self.emergency_hide_duration:
+            self.emergency_hide_active = False
+
+        if not self.is_hidden and now - self.last_unhide_time >= 5000:
+            self._hide(emergency=True)
+
+        # 목표 갱신
+        self.target_timer += 16
+        if self.target_timer >= self.target_duration:
+            self.target_timer = 0
+            self.target_duration = random.randint(500, 1500)
+            self.target_pos = self._choose_target(player_pos)
+
+        if self.last_dist is not None:
+            if self.last_dist - dist > 200 and dist <= self.CLOSE_DISTANCE:
+                if random.random() < 0.5:
+                    self._hide(emergency=True)
+        self.last_dist = dist
+
+        if self.state in ("mid_gun1", "mid_gun2") and self.mid_hold_timer >= 3000:
+            if random.random() < 0.4:
+                self._hide(emergency=True)
+
+        # 상태 로직
+        if self.is_hidden:
+            elapsed_hide = now - self.hide_start_time
+            if elapsed_hide < 2000:  # 2초 동안 마구잡이 이동
+                self.speed = self.base_speed * 3.0
+                self.goal_pos = self._random_move_mid_or_more(player_pos)
+            else:  # 이후 추격
+                self.speed = self.base_speed * 1.5
+                self.goal_pos = player_pos
+            if elapsed_hide >= 2000 and dist <= self.CLOSE_DISTANCE:
+                self._unhide("gun2")
+        else:
+            if dist >= self.FAR_DISTANCE:
+                self._set_far_state()
+            elif dist >= self.MID_DISTANCE:
+                self._set_mid_state(dist, player_pos, now)
+            else:
+                self._set_close_state(player_pos, now)
+
+        if self.state == "retreat":
+            self.goal_pos = self._strafe_target(player_pos, retreat=True)
+            if self.state_timer >= 1500:
+                self.state = "far"
+
+    def _random_move_mid_or_more(self, player_pos):
+        # 은신 시 마구잡이 이동 목표 설정 (플레이어와 중거리 이상 유지)
+        px, py = player_pos
+        for _ in range(5):
+            angle = random.uniform(0, math.pi * 2)
+            dist = random.uniform(self.MID_DISTANCE, self.MID_DISTANCE + 200)
+            tx = px + math.cos(angle) * dist
+            ty = py + math.sin(angle) * dist
+            if not self.is_position_blocked_fn or not self.is_position_blocked_fn(tx, ty):
+                return (tx, ty)
+        return (self.world_x, self.world_y)
+
+    def _set_far_state(self):
+        # 플레이어와 멀 때: 천천히 접근, 일정 시간 지나면 은신
+        self.far_hold_timer += 16
+        self.mid_hold_timer = 0
+        self.close_hold_timer = 0
+        if self.state != "far":
+            self.state = "far"
+            self.state_timer = 0
+        if self.far_hold_timer >= 1000:
+            self._hide()
+        else:
+            self.speed = self.base_speed
+            self.goal_pos = self.target_pos
+
+    def _set_mid_state(self, dist, player_pos, now):
+        # 플레이어와 중간 거리일 때: Gun1 또는 Gun2 사용해 교전
+        # 거리 조건에 따라 무기 선택 및 사격
+        self.far_hold_timer = 0
+        self.close_hold_timer = 0
+        self.mid_hold_timer += 16
+        if dist >= self.GUN1_SAFE_MIN:
+            if dist < self.GUN1_SAFE_MIN:
+                self.goal_pos = self._strafe_target(player_pos, retreat=True)
+            else:
+                self.state = "mid_gun1"
+                self.current_weapon = "gun1"
+                self._shoot_if_ready("gun1", player_pos, now)
+                self.goal_pos = self.target_pos
+        else:
+            self.state = "mid_gun2"
+            self.current_weapon = "gun2"
+            self._shoot_if_ready("gun2", player_pos, now)
+            self.goal_pos = player_pos
+
+    def _set_close_state(self, player_pos, now):
+        # 플레이어와 가까울 때: Gun2로 공격 후 일정 시간 지나면 후퇴 상태로 전환
+        self.far_hold_timer = 0
+        self.mid_hold_timer = 0
+        self.close_hold_timer += 16
+        self.state = "close"
+        self.current_weapon = "gun2"
+        self._shoot_if_ready("gun2", player_pos, now)
+        self.goal_pos = self._strafe_target(player_pos, retreat=True)
+        if self.close_hold_timer >= random.randint(1500, 2000):
+            self.state = "retreat"
+            self.state_timer = 0
+
+    def _choose_target(self, player_pos):
+        # 현재 상태에 맞는 목표 좌표 계산 (회피/접근)
+        if self.state in ("mid_gun1", "mid_gun2", "close"):
+            return self._strafe_target(player_pos)
+        else:
+            return self._approach_target(player_pos)
+
+    def _approach_target(self, target_pos, sideways=True):
+        # 목표에 접근하는 좌표 계산 (좌우무빙 포함 가능)
+        tx, ty = target_pos
+        if sideways:
+            base_angle = math.atan2(ty - self.world_y, tx - self.world_x)
+            side_angle = base_angle + math.pi / 2
+            offset = random.choice([-1, 1]) * random.uniform(30, 60)
+            tx += math.cos(side_angle) * offset
+            ty += math.sin(side_angle) * offset
+        return (tx, ty)
+
+    def _strafe_target(self, target_pos, retreat=False):
+        # 좌우로 무빙하며 목표 좌표 계산, 후퇴 시 뒤로 이동
+        tx, ty = target_pos
+        base_angle = math.atan2(ty - self.world_y, tx - self.world_x)
+        if retreat:
+            base_angle += math.pi
+        forward = random.uniform(50, 100)
+        tx = self.world_x + math.cos(base_angle) * forward
+        ty = self.world_y + math.sin(base_angle) * forward
+        side_angle = base_angle + math.pi / 2
+        side_offset = random.choice([-1, 1]) * random.uniform(50, 100)
+        tx += math.cos(side_angle) * side_offset
+        ty += math.sin(side_angle) * side_offset
+        return (tx, ty)
+
+    def _hide(self, emergency=False):
+        # 은신 시작, 무기 숨기기, 긴급 은신 플래그 설정 가능
+        now = pygame.time.get_ticks()
+        self.is_hidden = True
+        self.hide_start_time = now
+        self.hiding_transition = 0.0
+        self.current_weapon = None
+        if emergency:
+            self.emergency_hide_active = True
+            self.emergency_hide_timer = now
+
+    def _unhide(self, weapon):
+        # 은신 해제, 무기 장착
+        self.is_hidden = False
+        self.unhiding_transition = 0.0
+        self.current_weapon = weapon
+        self.last_hp_after_unhide = self.hp
+        self.last_unhide_time = pygame.time.get_ticks()
+
+    def _shoot_if_ready(self, weapon_type, player_pos, now):
+        # 무기 쿨타임 확인 후 사격
+        if self.state == "far" or self.is_hidden:
+            return
+        interval = self.shoot_interval_gun1 if weapon_type == "gun1" else self.shoot_interval_gun2
+        if now >= self.shoot_cooldown:
+            self.shoot(weapon_type, player_pos)
+            self.shoot_cooldown = now + interval
+
+    def shoot(self, weapon_type, player_pos):
+        # Gun1 또는 Gun2 발사, 탄환 생성, 사운드 재생
+        if weapon_type == "gun1":
+            self.sound_gun1.play()
+            bullet_speed, damage = 12 * PLAYER_VIEW_SCALE, 15
+        else:
+            self.sound_gun2.play()
+            bullet_speed, damage = 16 * PLAYER_VIEW_SCALE, 25
+        spawn_offset = 30
+        vertical_offset = 6
+        offset_angle = self.direction_angle + math.radians(90)
+        ox = math.cos(offset_angle) * vertical_offset
+        oy = math.sin(offset_angle) * vertical_offset
+        bx = self.world_x + math.cos(self.direction_angle) * spawn_offset + ox
+        by = self.world_y + math.sin(self.direction_angle) * spawn_offset + oy
+        config.global_enemy_bullets.append(
+            Bullet(bx, by, player_pos[0], player_pos[1], 0, self.bullet_image,
+                   speed=bullet_speed, max_distance=2000 * PLAYER_VIEW_SCALE, damage=damage)
+        )
+
+    def hit(self, damage, blood_effects, force=False):
+        # 피격 처리, HP 절반 이하 진입 시 오브 드랍
+        # 일정 HP 감소 시 긴급 은신 발동
+        if not self.half_phase_drop_done and self.hp - damage <= self.max_hp * 0.5:
+            self.spawn_dropped_items(5, 7)
+            self.half_phase_drop_done = True
+        if not self.is_hidden and not self.emergency_hide_active:
+            if self.last_hp_after_unhide - self.hp >= 200:
+                self._hide(emergency=True)
+        if self.is_hidden and not self.emergency_hide_active:
+            self._unhide("gun2")
+        super().hit(damage, blood_effects, force)
+
+    def die(self, blood_effects):
+        # 사망 시 오브 드랍
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(10, 15)
+
+    def draw(self, screen, world_x, world_y, sx=0, sy=0):
+        # 은신 시 투명도 처리
+        if not self.alive:
+            return
+
+        screen_x = self.world_x - world_x + sx
+        screen_y = self.world_y - world_y + sy
+
+        if not self.is_hidden and self.current_weapon:
+            gun_img = self.gun1_image_original if self.current_weapon == "gun1" else self.gun2_image_original
+            rotated_gun = pygame.transform.rotate(gun_img, -math.degrees(self.direction_angle) + 90)
+            gx = screen_x + math.cos(self.direction_angle) * 45
+            gy = screen_y + math.sin(self.direction_angle) * 45
+            screen.blit(rotated_gun, rotated_gun.get_rect(center=(gx, gy)))
+
+        alpha = 255
+        if self.is_hidden:
+            self.hiding_transition = min(1.0, self.hiding_transition + self.hide_speed / 60)
+            alpha = int(255 * (1 - self.hiding_transition) * 0.25)
+        elif self.unhiding_transition < 1.0:
+            self.unhiding_transition = min(1.0, self.unhiding_transition + self.unhide_speed / 60)
+            alpha = int(255 * self.unhiding_transition)
+
+        rotated_img = pygame.transform.rotate(self.image_original, -math.degrees(self.direction_angle) + 90)
+        rotated_img.set_alpha(alpha)
+        screen.blit(rotated_img, rotated_img.get_rect(center=(screen_x, screen_y)))
