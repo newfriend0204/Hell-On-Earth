@@ -25,6 +25,41 @@ GUN1_VOLUME = 1.0
 GUN2_VOLUME = 1.0
 GUN3_VOLUME = 1.0
 
+STAGE_DATA = {
+    "1-1": {
+        "boss_map": 0,  # BOSS_MAPS[0] == BOSS_MAP_1
+        "enemy_rank_range": (1, 3),
+        "min_f_rooms": 5,
+        "max_f_rooms": 6,
+        "acquire_rooms": 2
+    },
+    "1-2": {
+        "boss_map": 1,
+        "enemy_rank_range": (2, 4),
+        "min_f_rooms": 5,
+        "max_f_rooms": 6,
+        "acquire_rooms": 2
+    },
+    "1-3": {
+        "boss_map": 2,
+        "enemy_rank_range": (3, 5),
+        "min_f_rooms": 6,
+        "max_f_rooms": 7,
+        "acquire_rooms": 3
+    }
+}
+CURRENT_STAGE = "1-1"
+
+combat_state = False
+combat_enabled = True
+images = None
+
+global_enemy_bullets = []
+all_enemies = []
+blood_effects = []
+dropped_items = []
+effects = []
+
 # Gun1, Gun2, Gun3 zoom level 초기값
 GUN1_ZOOM_LEVEL = -1.0
 GUN2_ZOOM_LEVEL = -300.0
@@ -57,13 +92,3 @@ OBJ_PATHS = {
     2: os.path.join(ASSET_DIR, "3DObject", "Gun23DObject.obj"),
     3: os.path.join(ASSET_DIR, "3DObject", "Gun33DObject.obj"),
 }
-
-combat_state = False
-combat_enabled = True
-images = None
-
-global_enemy_bullets = []
-all_enemies = []
-blood_effects = []
-dropped_items = []
-effects = []

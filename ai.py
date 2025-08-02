@@ -350,6 +350,7 @@ class AIBase(metaclass=EnemyMeta):
         pass
 
 class Enemy1(AIBase):
+    rank=1
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
         # 플레이어와의 거리 기반 목표 위치 설정
         super().__init__(
@@ -361,7 +362,6 @@ class Enemy1(AIBase):
             push_strength=0.18,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
-            rank=1
         )
         self.image_original = images["enemy1"]
         self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
@@ -483,6 +483,7 @@ class Enemy1(AIBase):
         screen.blit(rotated_img, rect)
 
 class Enemy2(AIBase):
+    rank=2
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
         # 플레이어와의 거리 기반 목표 위치 및 원거리 공격 준비
         super().__init__(
@@ -494,7 +495,6 @@ class Enemy2(AIBase):
             push_strength=0.18,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
-            rank=2
         )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
@@ -665,6 +665,8 @@ class Enemy2(AIBase):
         screen.blit(rotated_img, rect)
 
 class Enemy3(AIBase):
+    rank=3
+
     FAR_DISTANCE = 500
     NEAR_DISTANCE = 100
     RADIUS_CLOSE_ATTACK = 120
@@ -695,7 +697,6 @@ class Enemy3(AIBase):
             push_strength=0.0,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
-            rank=4
         )
         self.image_original = images["enemy3"]
         self.kill_callback = kill_callback
@@ -881,6 +882,8 @@ class Enemy3(AIBase):
         screen.blit(rotated_img, rect)
 
 class Enemy4(AIBase):
+    rank=4
+
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.6
     CLOSE_THRESHOLD = 200
     FAR_THRESHOLD = 800
@@ -900,7 +903,6 @@ class Enemy4(AIBase):
             push_strength=0.0,
             alert_duration=self.MIN_ATTACK_PREPARE_TIME,
             damage_player_fn=damage_player_fn,
-            rank=4
         )
 
         self.image_original = images["enemy4"]
@@ -1116,6 +1118,8 @@ class Enemy4(AIBase):
             self.draw_alert(screen, screen_x, screen_y + self.alert_offset_y)
 
 class Enemy5(AIBase):
+    rank=5
+
     STATE_IDLE = 0
     STATE_PREPARE_ATTACK = 1
     STATE_ATTACK = 2
@@ -1146,7 +1150,6 @@ class Enemy5(AIBase):
             push_strength=0.0,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
-            rank=3
         )
         self.image_original = images["enemy5"]
         self.gun_image_original = pygame.transform.flip(images["gun3"], True, False)
@@ -1297,6 +1300,8 @@ class Enemy5(AIBase):
         screen.blit(rotated_img, rect)
 
 class Boss1(AIBase):
+    rank=10
+
     FAR_DISTANCE = 800
     MID_DISTANCE = 500
     CLOSE_DISTANCE = 200
@@ -1314,7 +1319,6 @@ class Boss1(AIBase):
             push_strength=0.0,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
-            rank=10
         )
 
         self.image_original = images["boss1"]
@@ -1613,6 +1617,8 @@ class Boss1(AIBase):
         screen.blit(rotated_img, rotated_img.get_rect(center=(screen_x, screen_y)))
 
 class Boss2(AIBase):
+    rank=10
+
     HP_MAX = 2000
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
     ORB_DROP_MULTIPLIER = 1.33
@@ -1636,7 +1642,7 @@ class Boss2(AIBase):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=300, far_threshold=700,
                          radius=50, push_strength=0.0, alert_duration=0,
-                         damage_player_fn=damage_player_fn, rank=10)
+                         damage_player_fn=damage_player_fn)
 
         self.hp = self.HP_MAX
         self.max_hp = self.HP_MAX

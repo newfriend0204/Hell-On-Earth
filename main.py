@@ -12,26 +12,19 @@ from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES
 from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab
-from world import (
-    World,
-    generate_map,
-    print_grid,
-    get_map_dimensions,
-    room_states,
-    initialize_room_states,
-    reveal_neighbors,
-    update_room_state_after_combat,
-    place_acquire_rooms
-)
-from maps import MAPS, FIGHT_MAPS
-
-CURRENT_MAP = MAPS[1] # 디버그
-grid = generate_map()
-grid = place_acquire_rooms(grid, count=3)
-print_grid(grid)
+import world
+from maps import MAPS, FIGHT_MAPS, BOSS_MAPS
 
 # 맵 상태 초기화
-initialize_room_states(grid)
+CURRENT_MAP = MAPS[0]
+stage_settings = STAGE_DATA[CURRENT_STAGE]
+world.MIN_F_ROOMS = stage_settings["min_f_rooms"]
+world.MAX_F_ROOMS = stage_settings["max_f_rooms"]
+grid = world.generate_map()
+grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
+world.initialize_room_states(grid)
+world.print_grid(grid)
+
 
 pygame.init()
 pygame.font.init()
@@ -80,6 +73,27 @@ obstacle_manager = ObstacleManager(
 )
 obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
 
+expansion = 350 * PLAYER_VIEW_SCALE
+
+hole_width = 300 * PLAYER_VIEW_SCALE
+hole_height = 300 * PLAYER_VIEW_SCALE
+
+wall_thickness = 10 * PLAYER_VIEW_SCALE
+
+world_instance = world.World(
+    # 월드(맵) 객체 생성
+    background_image=background_image,
+    crop_rect=CURRENT_MAP.get("crop_rect"),
+    PLAYER_VIEW_SCALE=PLAYER_VIEW_SCALE,
+    BG_WIDTH=BG_WIDTH,
+    BG_HEIGHT=BG_HEIGHT,
+    hole_width=hole_width,
+    hole_height=hole_height,
+    left_wall_width=0,
+    top_wall_height=0,
+    tunnel_length=10000 * PLAYER_VIEW_SCALE
+)
+
 s_pos = None
 # 시작 위치(S) 찾기
 for y, row in enumerate(grid):
@@ -90,7 +104,7 @@ for y, row in enumerate(grid):
     if s_pos:
         break
 current_room_pos = list(s_pos)
-reveal_neighbors(s_pos[0], s_pos[1], grid)
+world.reveal_neighbors(s_pos[0], s_pos[1], grid)
 
 north_hole_open = False
 south_hole_open = False
@@ -98,7 +112,7 @@ west_hole_open = False
 east_hole_open = False
 
 sx, sy = s_pos
-WIDTH, HEIGHT = get_map_dimensions()
+WIDTH, HEIGHT = world.get_map_dimensions()
 
 if sy > 0:
     if grid[sy - 1][sx] != 'N':
@@ -116,29 +130,8 @@ if sx < WIDTH - 1:
     if grid[sy][sx + 1] != 'N':
         east_hole_open = True
 
-expansion = 350 * PLAYER_VIEW_SCALE
-
-hole_width = 300 * PLAYER_VIEW_SCALE
-hole_height = 300 * PLAYER_VIEW_SCALE
-
-wall_thickness = 10 * PLAYER_VIEW_SCALE
-
-world = World(
-    # 월드(맵) 객체 생성
-    background_image=background_image,
-    crop_rect=CURRENT_MAP.get("crop_rect"),
-    PLAYER_VIEW_SCALE=PLAYER_VIEW_SCALE,
-    BG_WIDTH=BG_WIDTH,
-    BG_HEIGHT=BG_HEIGHT,
-    hole_width=hole_width,
-    hole_height=hole_height,
-    left_wall_width=0,
-    top_wall_height=0,
-    tunnel_length=10000 * PLAYER_VIEW_SCALE
-)
-
-effective_bg_width = world.effective_bg_width
-effective_bg_height = world.effective_bg_height
+effective_bg_width = world_instance.effective_bg_width
+effective_bg_height = world_instance.effective_bg_height
 
 map_width = effective_bg_width
 map_height = effective_bg_height
@@ -148,18 +141,18 @@ right_wall_width = left_wall_width
 top_wall_height = (map_height / 2) - (hole_height / 2)
 bottom_wall_height = top_wall_height
 
-world.left_wall_width = left_wall_width
-world.top_wall_height = top_wall_height
+world_instance.left_wall_width = left_wall_width
+world_instance.top_wall_height = top_wall_height
 
 if CURRENT_MAP is MAPS[0]:
     # 시작 맵이면 중앙 스폰
-    player_world_x, player_world_y = world.get_spawn_point(
+    player_world_x, player_world_y = world_instance.get_spawn_point(
         direction=None,
         is_start_map=True
     )
 else:
     spawn_direction = "west"
-    player_world_x, player_world_y = world.get_spawn_point(
+    player_world_x, player_world_y = world_instance.get_spawn_point(
         spawn_direction,
         margin=50
     )
@@ -179,7 +172,7 @@ room_field_weapons = {}
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
 
-walls = world.generate_walls(
+walls = world_instance.generate_walls(
     # 기본 벽 생성
     map_width=map_width,
     map_height=map_height,
@@ -413,16 +406,63 @@ weapons = [
 ]
 init_weapon_ui_cache(weapons)
 
+def advance_to_next_stage():
+    # 현재 스테이지를 다음 스테이지로 전환하고 시작방으로 이동
+    visited_f_rooms.clear()
+
+    import config
+    stage_order = list(STAGE_DATA.keys())
+    idx = stage_order.index(config.CURRENT_STAGE)
+
+    if idx >= len(stage_order) - 1:
+        print("[DEBUG] 마지막 스테이지입니다. 더 이상 진행할 수 없습니다.")
+        return
+
+    next_stage = stage_order[idx + 1]
+    config.CURRENT_STAGE = next_stage
+    print(f"[DEBUG] 스테이지 전환: {config.CURRENT_STAGE} → {next_stage}")
+
+    stage_settings = STAGE_DATA[next_stage]
+    world.MIN_F_ROOMS = stage_settings["min_f_rooms"]
+    world.MAX_F_ROOMS = stage_settings["max_f_rooms"]
+
+    global grid
+    grid = world.generate_map()
+    world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
+    world.initialize_room_states(grid)
+    world.print_grid(grid)
+
+    for y, row in enumerate(grid):
+        for x, cell in enumerate(row):
+            if cell == 'S':
+                world.reveal_neighbors(x, y, grid)
+                break
+
+    for y, row in enumerate(grid):
+        for x, cell in enumerate(row):
+            if cell == 'S':
+                current_room_pos[0] = x
+                current_room_pos[1] = y
+                change_room(None)
+                return
+            
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y
+    global enemies, changing_room, effective_bg_width, effective_bg_height, current_boss
 
-    WIDTH, HEIGHT = get_map_dimensions()
+    WIDTH, HEIGHT = world.get_map_dimensions()
     changing_room = True
 
-    dx, dy = DIRECTION_OFFSET[direction]
-    new_x = current_room_pos[0] + dx
-    new_y = current_room_pos[1] + dy
+    if direction is None:
+        new_x, new_y = current_room_pos
+        dx, dy = 0, 0
+        spawn_direction = None
+    else:
+        dx, dy = DIRECTION_OFFSET[direction]
+        new_x = current_room_pos[0] + dx
+        new_y = current_room_pos[1] + dy
+        spawn_direction = SPAWN_FROM_OPPOSITE[direction]
 
     if not (0 <= new_x < WIDTH and 0 <= new_y < HEIGHT):
         print("[DEBUG] 이동 불가: 맵 경계 밖")
@@ -430,10 +470,8 @@ def change_room(direction):
         return
 
     new_room_type = grid[new_y][new_x]
-    spawn_direction = SPAWN_FROM_OPPOSITE[direction]
 
     if new_room_type == 'N':
-        # 빈 방이면 이동 불가
         print("[DEBUG] 이동 불가: 빈 방")
         changing_room = False
         return
@@ -450,16 +488,15 @@ def change_room(direction):
     obstacle_manager.combat_obstacles.clear()
 
     if new_room_type == 'F':
-        # 전투방 진입 처리
         room_key = (new_x, new_y)
         if room_key not in visited_f_rooms:
             fight_map_index = random.randint(0, len(FIGHT_MAPS) - 1)
             visited_f_rooms[room_key] = {
                 "fight_map_index": fight_map_index,
-                "cleared": False
+                "cleared": False,
+                "enemy_types": []
             }
-            print(f"[DEBUG] FIGHT_MAP 랜덤 선택: index {fight_map_index}")
-        fight_map_index = visited_f_rooms[room_key]["fight_map_index"]
+        fight_map_index = visited_f_rooms[room_key].get("fight_map_index", random.randint(0, len(FIGHT_MAPS) - 1))
         CURRENT_MAP = FIGHT_MAPS[fight_map_index]
 
         if visited_f_rooms[room_key]["cleared"]:
@@ -470,27 +507,18 @@ def change_room(direction):
             }
             config.combat_state = False
             config.combat_enabled = False
+
     elif new_room_type == 'E':
-        room_key = (new_x, new_y)
-        if room_states[room_key[1]][room_key[0]] == 9:
-            CURRENT_MAP = {
-                "obstacles": MAPS[1]["obstacles"],
-                "enemy_infos": [],
-                "crop_rect": MAPS[1]["crop_rect"]
-            }
-            config.combat_state = False
-            config.combat_enabled = False
-        else:
-            CURRENT_MAP = MAPS[1]
-            config.combat_state = True
-            config.combat_enabled = True
+        stage_boss_index = STAGE_DATA[config.CURRENT_STAGE]["boss_map"]
+        CURRENT_MAP = BOSS_MAPS[stage_boss_index]
+        config.combat_state = True
+        config.combat_enabled = True
     else:
-        # 일반 방 진입
-        CURRENT_MAP = MAPS[1] # 디버그
+        CURRENT_MAP = MAPS[0]
 
     current_room_pos = [new_x, new_y]
     sx, sy = new_x, new_y
-    WIDTH, HEIGHT = get_map_dimensions()
+    WIDTH, HEIGHT = world.get_map_dimensions()
 
     north_hole_open = (sy > 0 and grid[sy - 1][sx] != 'N')
     south_hole_open = (sy < HEIGHT - 1 and grid[sy + 1][sx] != 'N')
@@ -501,7 +529,7 @@ def change_room(direction):
     obstacle_manager.generate_obstacles_from_map(CURRENT_MAP)
     config.obstacle_manager = obstacle_manager
 
-    new_world = World(
+    new_world = world.World(
         background_image=background_image,
         crop_rect=CURRENT_MAP.get("crop_rect"),
         PLAYER_VIEW_SCALE=PLAYER_VIEW_SCALE,
@@ -515,15 +543,14 @@ def change_room(direction):
     )
 
     if new_room_type == 'A':
-        acquire_index = random.randint(2, 2)  # 디버그
+        acquire_index = random.randint(2, 2)
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
 
-        reveal_neighbors(new_x, new_y, grid)
+        world.reveal_neighbors(new_x, new_y, grid)
 
         room_key = (new_x, new_y)
-
         if room_key not in room_field_weapons:
             center_x = new_world.effective_bg_width / 2
             center_y = new_world.effective_bg_height / 2
@@ -540,7 +567,6 @@ def change_room(direction):
                     sounds
                 )
                 weapons_in_room.append(fw)
-
             room_field_weapons[room_key] = weapons_in_room
 
         field_weapons.clear()
@@ -562,24 +588,29 @@ def change_room(direction):
     player_center_x = player_rect.centerx
     player_center_y = player_rect.centery
 
-    spawn_world_x, spawn_world_y = new_world.get_spawn_point(
-        direction=spawn_direction,
-        margin=275
-    )
-
-    if direction in ("west", "east"):
-        spawn_world_y += dy_from_center
+    if spawn_direction is None:
+        spawn_world_x, spawn_world_y = new_world.get_spawn_point(
+            direction=None,
+            is_start_map=True
+        )
     else:
-        spawn_world_x += dx_from_center
+        spawn_world_x, spawn_world_y = new_world.get_spawn_point(
+            direction=spawn_direction,
+            margin=275
+        )
+        if direction in ("west", "east"):
+            spawn_world_y += dy_from_center
+        else:
+            spawn_world_x += dx_from_center
 
-    world = new_world
+    world_instance = new_world
     world_x = spawn_world_x - player_center_x
     world_y = spawn_world_y - player_center_y
 
-    effective_bg_width = world.effective_bg_width
-    effective_bg_height = world.effective_bg_height
+    effective_bg_width = world_instance.effective_bg_width
+    effective_bg_height = world_instance.effective_bg_height
 
-    walls = world.generate_walls(
+    walls = world_instance.generate_walls(
         map_width=map_width,
         map_height=map_height,
         wall_thickness=wall_thickness,
@@ -609,31 +640,61 @@ def change_room(direction):
             enemy.scattered_bullets.clear()
 
     enemies = []
-    for info in CURRENT_MAP["enemy_infos"]:
-        # 적 스폰
+    rank_min, rank_max = STAGE_DATA[config.CURRENT_STAGE]["enemy_rank_range"]
+
+    enemies_by_rank = {}
+    for cls in ENEMY_CLASSES:
+        rank = getattr(cls, "rank", None)
+        if rank is not None:
+            enemies_by_rank.setdefault(rank, []).append(cls)
+
+    room_key = (new_x, new_y)
+    for idx, info in enumerate(CURRENT_MAP["enemy_infos"]):
         ex = info["x"] * PLAYER_VIEW_SCALE
         ey = info["y"] * PLAYER_VIEW_SCALE
-        enemy_type = info["enemy_type"].lower()
-        for cls in ENEMY_CLASSES:
-            if cls.__name__.lower() == enemy_type:
-                enemy = cls(
-                    world_x=ex,
-                    world_y=ey,
-                    images=images,
-                    sounds=sounds,
-                    map_width=map_width,
-                    map_height=map_height,
-                    damage_player_fn=damage_player,
-                    kill_callback=increment_kill_count
-                )
-                enemies.append(enemy)
-                if enemy_type in ("boss1", "boss2"):
-                    current_boss = enemy
-                break
-    
-    if not any(e_info["enemy_type"] in ("boss1", "boss2") for e_info in CURRENT_MAP["enemy_infos"]):
+        if "enemy_type" in info:
+            enemy_type = info["enemy_type"].lower()
+            for cls in ENEMY_CLASSES:
+                if cls.__name__.lower() == enemy_type:
+                    enemy = cls(
+                        world_x=ex,
+                        world_y=ey,
+                        images=images,
+                        sounds=sounds,
+                        map_width=map_width,
+                        map_height=map_height,
+                        damage_player_fn=damage_player,
+                        kill_callback=increment_kill_count
+                    )
+                    enemies.append(enemy)
+                    if enemy_type in ("boss1", "boss2"):
+                        current_boss = enemy
+                    break
+        else:
+            if "enemy_types" in visited_f_rooms[room_key] and len(visited_f_rooms[room_key]["enemy_types"]) > idx:
+                enemy_class_name = visited_f_rooms[room_key]["enemy_types"][idx]
+                enemy_class = next(cls for cls in ENEMY_CLASSES if cls.__name__ == enemy_class_name)
+            else:
+                valid_classes = [c for c in enemies_by_rank[rank_choice] if not c.__name__.lower().startswith("boss")]
+                if not valid_classes:
+                    continue
+                enemy_class = random.choice(valid_classes)
+                visited_f_rooms[room_key]["enemy_types"].append(enemy_class.__name__)
+            enemy = enemy_class(
+                world_x=ex,
+                world_y=ey,
+                images=images,
+                sounds=sounds,
+                map_width=map_width,
+                map_height=map_height,
+                damage_player_fn=damage_player,
+                kill_callback=increment_kill_count
+            )
+            enemies.append(enemy)
+
+    if not any("enemy_type" in e_info and e_info["enemy_type"] in ("boss1", "boss2") for e_info in CURRENT_MAP["enemy_infos"]):
         current_boss = None
-    
+
     config.all_enemies = enemies
 
     if len(CURRENT_MAP["enemy_infos"]) == 0:
@@ -644,7 +705,7 @@ def change_room(direction):
         config.combat_enabled = True
 
     sounds["room_move"].play()
-    print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {room_states[new_y][new_x]}")
+    print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {world.room_states[new_y][new_x]}")
 
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
@@ -872,24 +933,24 @@ def draw_minimap(screen, grid, current_room_pos):
 
     for y in range(grid_height):
         for x in range(grid_width):
-            state = room_states[y][x]
+            state = world.room_states[y][x]
 
             cx = start_x + x * (mini_tile + tile_gap) + mini_tile // 2
             cy = start_y + y * (mini_tile + tile_gap) + mini_tile // 2
 
-            if x + 1 < grid_width and state in connectable_states and room_states[y][x + 1] in connectable_states:
+            if x + 1 < grid_width and state in connectable_states and world.room_states[y][x + 1] in connectable_states:
                 cx2 = start_x + (x + 1) * (mini_tile + tile_gap) + mini_tile // 2
                 pygame.draw.rect(screen, (50, 50, 50),
                     pygame.Rect(min(cx, cx2), cy - 2, abs(cx2 - cx), 4))
 
-            if y + 1 < grid_height and state in connectable_states and room_states[y + 1][x] in connectable_states:
+            if y + 1 < grid_height and state in connectable_states and world.room_states[y + 1][x] in connectable_states:
                 cy2 = start_y + (y + 1) * (mini_tile + tile_gap) + mini_tile // 2
                 pygame.draw.rect(screen, (50, 50, 50),
                     pygame.Rect(cx - 2, min(cy, cy2), 4, abs(cy2 - cy)))
 
     for y in range(grid_height):
         for x in range(grid_width):
-            state = room_states[y][x]
+            state = world.room_states[y][x]
             color = None
             alpha = 255
 
@@ -1119,23 +1180,59 @@ def draw_ammo_bar_remodeled(surface, current_ammo, max_ammo, pos, size, last_amm
     return interpolated_ammo
 
 enemies = []
-for info in CURRENT_MAP["enemy_infos"]:
+rank_min, rank_max = STAGE_DATA[config.CURRENT_STAGE]["enemy_rank_range"]
+
+enemies_by_rank = {}
+for cls in ENEMY_CLASSES:
+    rank = getattr(cls, "rank", None)
+    if rank is not None:
+        enemies_by_rank.setdefault(rank, []).append(cls)
+
+room_key = tuple(current_room_pos)
+visited_f_rooms.setdefault(room_key, {}).setdefault("enemy_types", [])
+
+for idx, info in enumerate(CURRENT_MAP["enemy_infos"]):
     ex = info["x"] * PLAYER_VIEW_SCALE
     ey = info["y"] * PLAYER_VIEW_SCALE
-    enemy_type = info["enemy_type"].lower()
-    for cls in ENEMY_CLASSES:
-        if cls.__name__.lower() == enemy_type:
-            enemy = cls(
-                world_x=ex,
-                world_y=ey,
-                images=images,
-                sounds=sounds,
-                map_width=map_width,
-                map_height=map_height,
-                kill_callback=increment_kill_count
-            )
-            enemies.append(enemy)
-            break
+    if "enemy_type" in info:
+        # 보스맵 등 enemy_type이 있는 경우
+        enemy_type = info["enemy_type"].lower()
+        for cls in ENEMY_CLASSES:
+            if cls.__name__.lower() == enemy_type:
+                enemy = cls(
+                    world_x=ex,
+                    world_y=ey,
+                    images=images,
+                    sounds=sounds,
+                    map_width=map_width,
+                    map_height=map_height,
+                    kill_callback=increment_kill_count
+                )
+                enemies.append(enemy)
+                break
+    else:
+        if idx < len(visited_f_rooms[room_key]["enemy_types"]):
+            # 기존 기록 사용
+            enemy_class_name = visited_f_rooms[room_key]["enemy_types"][idx]
+            enemy_class = next(cls for cls in ENEMY_CLASSES if cls.__name__ == enemy_class_name)
+        else:
+            # 새로 생성 후 기록
+            possible_ranks = [r for r in range(rank_min, rank_max + 1) if r in enemies_by_rank]
+            if not possible_ranks:
+                continue
+            rank_choice = random.choice(possible_ranks)
+            enemy_class = random.choice(enemies_by_rank[rank_choice])
+            visited_f_rooms[room_key]["enemy_types"].append(enemy_class.__name__)
+        enemy = enemy_class(
+            world_x=ex,
+            world_y=ey,
+            images=images,
+            sounds=sounds,
+            map_width=map_width,
+            map_height=map_height,
+            kill_callback=increment_kill_count
+        )
+        enemies.append(enemy)
 
 if len(enemies) == 0:
     config.combat_enabled = False
@@ -1166,6 +1263,10 @@ while running:
             elif event.key == pygame.K_d:
                 move_right = True
             elif event.key == pygame.K_SPACE:
+                if grid[current_room_pos[1]][current_room_pos[0]] == 'E' and not config.combat_state:
+                    advance_to_next_stage()
+                else:
+                    print("[DEBUG] 스페이스 전환 조건 불충족: E방이 아니거나 전투 중")
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
@@ -1178,7 +1279,7 @@ while running:
                     selected_tab = 0
                     bullets[:] = [b for b in bullets if not isinstance(b, ExplosionEffectPersistent)]
                     screen.fill((0, 0, 0))
-                    world.draw_full(
+                    world_instance.draw_full(
                         screen, world_x, world_y, shake_offset_x, shake_offset_y,
                         combat_walls_info, obstacle_manager, expansion
                     )
@@ -1211,7 +1312,7 @@ while running:
                 if room_key in visited_f_rooms:
                     visited_f_rooms[room_key]["cleared"] = True
 
-                update_room_state_after_combat(cy, cx)
+                world.update_room_state_after_combat(cy, cx)
 
                 config.combat_state = False
                 config.combat_enabled = False
@@ -1252,7 +1353,7 @@ while running:
     if paused:
         # 일시정지 상태일 때 UI 처리
         screen.fill((0, 0, 0))
-        world.draw_full(
+        world_instance.draw_full(
             screen, world_x, world_y, shake_offset_x, shake_offset_y,
             combat_walls_info, obstacle_manager, expansion
         )
@@ -1378,7 +1479,7 @@ while running:
             config.combat_state = True
             print("[DEBUG] Combat START!")
 
-            reveal_neighbors(current_room_pos[0], current_room_pos[1], grid)
+            world.reveal_neighbors(current_room_pos[0], current_room_pos[1], grid)
 
             combat_walls_info.clear()
 
@@ -1456,7 +1557,7 @@ while running:
                 "state": "visible",
             })
 
-            combat_walls = world.generate_thin_combat_walls(
+            combat_walls = world_instance.generate_thin_combat_walls(
                 left_wall_width=left_wall_width,
                 top_wall_height=top_wall_height,
                 hole_width=hole_width,
@@ -1649,7 +1750,7 @@ while running:
         if room_key in visited_f_rooms:
             visited_f_rooms[room_key]["cleared"] = True
 
-        update_room_state_after_combat(cy, cx)
+        world.update_room_state_after_combat(cy, cx)
 
         config.combat_state = False
         config.combat_enabled = False
@@ -1666,7 +1767,7 @@ while running:
 
     screen.fill((0, 0, 0))
 
-    world.draw_full(
+    world_instance.draw_full(
         screen,
         world_x,
         world_y,
@@ -1887,7 +1988,7 @@ while running:
     def render_game_frame():
         screen.fill((0, 0, 0))
 
-        world.draw_full(
+        world_instance.draw_full(
             screen, world_x, world_y, shake_offset_x, shake_offset_y,
             combat_walls_info, obstacle_manager, expansion
         )

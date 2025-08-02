@@ -510,7 +510,6 @@ class Grenade:
             if dist <= self.explosion_radius:
                 factor = max(0, min(1, 1 - dist / self.explosion_radius))
                 damage = self.min_damage + (self.max_damage - self.min_damage) * factor
-                print(f"[DEBUG] 유탄 폭발 거리 {dist:.1f}, 데미지 {damage:.1f}")
                 enemy.hit(damage, config.blood_effects)
 
                 if not enemy.alive:

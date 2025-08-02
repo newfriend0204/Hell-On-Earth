@@ -25,6 +25,12 @@ MAX_F_ROOMS = 8
 # 9: 클리어된 끝방(E)
 room_states = [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)]
 
+def apply_stage_room_settings(stage_data):
+    global MIN_F_ROOMS, MAX_F_ROOMS
+    MIN_F_ROOMS = stage_data.get("min_f_rooms", MIN_F_ROOMS)
+    MAX_F_ROOMS = stage_data.get("max_f_rooms", MAX_F_ROOMS)
+    return stage_data.get("acquire_rooms", 3)
+
 def initialize_room_states(grid):
     # 생성된 맵의 문자(S, E, F, A, N)를 숫자 상태로 변환하여 room_states에 저장
     for y in range(HEIGHT):
