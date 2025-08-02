@@ -28,6 +28,9 @@ def load_sounds():
     weapon_sounds = {
         "boss1_gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun1Fire.mp3")),
         "boss1_gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun2Fire.mp3")),
+        "boss2_gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss2Gun1Fire.mp3")),
+        "boss2_gun1_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss2Gun1Explosion.mp3")),
+        "boss2_gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss2Gun2Fire.wav")),
         "gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun1Fire.wav")),
         "gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun2Fire.wav")),
         "gun3_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun3Fire.wav")),
@@ -46,6 +49,12 @@ def load_sounds():
         "gun9_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun9LeftFire.mp3")),
         "gun9_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun9RightFire.mp3")),
         "gun9_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun9Explosion.mp3")),
+    }
+
+    entity_sounds = {
+        "drone_spawn": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneSpawn.mp3")),
+        "drone_warning": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneWarning.mp3")),
+        "drone_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
     }
 
     weapon_sounds["gun1_fire"].set_volume(GUN1_VOLUME)
@@ -82,6 +91,13 @@ def load_sounds():
     weapon_sounds["enemy5_fire"].set_volume(0.25)
     weapon_sounds["boss1_gun1_fire"].set_volume(0.5)
     weapon_sounds["boss1_gun2_fire"].set_volume(0.5)
+    weapon_sounds["boss2_gun1_fire"].set_volume(0.5)
+    weapon_sounds["boss2_gun1_explosion"].set_volume(0.5)
+    weapon_sounds["boss2_gun2_fire"].set_volume(0.5)
+
+    entity_sounds["drone_spawn"].set_volume(0.5)
+    entity_sounds["drone_warning"].set_volume(1)
+    entity_sounds["drone_explosion"].set_volume(0.5)
 
     return {
         # 모든 사운드 딕셔너리 반환
@@ -91,5 +107,6 @@ def load_sounds():
         "swap_gun": swap_gun_sound,
         "button_click": button_click,
         "button_select": button_select,
-        **weapon_sounds
+        **weapon_sounds,
+        **entity_sounds
     }

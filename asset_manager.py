@@ -143,6 +143,12 @@ def load_images():
     boss1_img = pygame.image.load(path_image("image", "character", "Boss1.png")).convert_alpha()
     boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
 
+    boss2_img = pygame.image.load(path_image("image", "character", "Boss2.png")).convert_alpha()
+    boss2_img = pygame.transform.smoothscale(boss2_img, (120, 120))
+
+    drone_img = pygame.image.load(path_image("image", "entity", "Drone.png")).convert_alpha()
+    drone_img = pygame.transform.smoothscale(drone_img, (60, 60))
+
     ammo_gauge_up_img = pygame.image.load(path_image("Image", "AmmoGaugeUp.png")).convert_alpha()
     ammo_gauge_up_img = pygame.transform.smoothscale(ammo_gauge_up_img, (16, 16))
     health_up_img = pygame.image.load(path_image("Image", "HealthUp.png")).convert_alpha()
@@ -175,6 +181,8 @@ def load_images():
         "enemy4": enemy4_img,
         "enemy5": enemy5_img,
         "boss1": boss1_img,
+        "boss2": boss2_img,
+        "drone": drone_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,

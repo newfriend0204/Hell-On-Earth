@@ -415,13 +415,6 @@ class Bullet:
         rect = rotated_image.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_image, rect)
 
-    def is_offscreen(self, screen_width, screen_height, world_x, world_y):
-        margin = 2000
-        screen_x = self.world_x - world_x
-        screen_y = self.world_y - world_y
-        return (screen_x < -margin or screen_x > screen_width + margin or
-                screen_y < -margin or screen_y > screen_height + margin)
-
 class Grenade:
     # 발사 후 일정 거리 또는 충돌 시 폭발하는 유탄/로켓
     def __init__(self, x, y, vx, vy, image, explosion_radius, max_damage, min_damage, explosion_image, explosion_sound):
@@ -542,15 +535,6 @@ class Grenade:
                 (self.x - size // 2 - world_x, self.y - size // 2 - world_y)
             )
 
-    def is_offscreen(self, screen_width, screen_height, world_x, world_y):
-        margin = 2000
-        screen_x = self.x - world_x
-        screen_y = self.y - world_y
-        return (
-            screen_x < -margin or screen_x > screen_width + margin or
-            screen_y < -margin or screen_y > screen_height + margin
-        )
-
 class PressureBullet:
     # 폭발과 넉백 효과를 주는 특수 탄환
     def __init__(self, x, y, vx, vy, image, explosion_radius, damage, knockback_distance, explosion_sound):
@@ -655,16 +639,6 @@ class PressureBullet:
              self.y - world_offset_y - self.image.get_height() / 2)
         )
 
-    def is_offscreen(self, screen_width, screen_height, world_x, world_y):
-        screen_x = self.x - world_x
-        screen_y = self.y - world_y
-        return (
-            screen_x < -self.image.get_width() or
-            screen_x > screen_width + self.image.get_width() or
-            screen_y < -self.image.get_height() or
-            screen_y > screen_height + self.image.get_height()
-        )
-
 class ExplosionEffectPersistent:
     # 일정 시간 지속되는 폭발 시각 효과
     def __init__(self, x, y, image, duration=0.4, scale=1.5):
@@ -711,6 +685,97 @@ class ExplosionEffectPersistent:
         scaled = pygame.transform.smoothscale(self.image, (size, size)).copy()
         scaled.set_alpha(self.alpha)
         screen.blit(scaled, (self.x - size // 2 - world_x, self.y - size // 2 - world_y))
+
+class HomingMissile:
+    # 유도 기능이 있는 미사일 투사체
+    def __init__(self, x, y, target, image, explosion_radius, damage, explosion_image, explosion_sound,
+                 live_tracking=False, turn_rate=0.02, max_distance=500):
+        self.x = x
+        self.y = y
+        self.image = image
+        self.target = target
+        self.explosion_radius = explosion_radius
+        self.damage = damage
+        self.explosion_image = explosion_image
+        self.explosion_sound = explosion_sound
+
+        self.live_tracking = live_tracking
+        self.speed = 6 * config.PLAYER_VIEW_SCALE
+        self.turn_rate = turn_rate
+        self.angle = math.atan2(
+            (target[1] - y) if target else 0,
+            (target[0] - x) if target else 1
+        )
+
+        self.start_time = pygame.time.get_ticks()
+        self.straight_time = 500
+        self.spawn_protect_time = 300
+
+        self.start_x = x
+        self.start_y = y
+        self.max_distance = max_distance
+
+        self.collider = Collider("circle", center=(x, y), size=image.get_width() // 2)
+        self.to_remove = False
+        self.drawn_once = False
+        self.owner = None
+
+    def update(self, obstacle_manager=None):
+        # 목표 추적, 회전 각도 변경, 충돌 및 사거리 초과 시 폭발
+        now = pygame.time.get_ticks()
+
+        if self.live_tracking:
+            self.target = (
+                config.world_x + config.player_rect.centerx,
+                config.world_y + config.player_rect.centery
+            )
+
+        if now - self.start_time > self.straight_time and self.target:
+            desired_angle = math.atan2(self.target[1] - self.y, self.target[0] - self.x)
+            diff = (desired_angle - self.angle + math.pi) % (2 * math.pi) - math.pi
+            self.angle += max(-self.turn_rate, min(self.turn_rate, diff))
+
+        self.x += math.cos(self.angle) * self.speed
+        self.y += math.sin(self.angle) * self.speed
+        self.collider.center = (self.x, self.y)
+
+        if math.hypot(self.x - self.start_x, self.y - self.start_y) >= self.max_distance:
+            self.explode()
+            return
+
+        if now - self.start_time >= self.spawn_protect_time:
+            px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.image.get_width() / 2:
+                self.explode()
+                return
+            
+        if obstacle_manager:
+            for obs in obstacle_manager.placed_obstacles + obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+                for c in obs.colliders:
+                    if c.check_collision_circle((self.x, self.y), self.image.get_width() / 2, (obs.world_x, obs.world_y)):
+                        if not getattr(c, "bullet_passable", False):
+                            self.explode()
+                            return
+
+    def explode(self):
+        # 폭발 처리, 폭발 이펙트 생성 및 범위 피해 적용
+        effect = ExplosionEffectPersistent(self.x, self.y, self.explosion_image)
+        config.bullets.append(effect)
+
+        px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+        if math.hypot(px - self.x, py - self.y) <= self.explosion_radius:
+            if self.owner and hasattr(self.owner, "damage_player"):
+                self.owner.damage_player(self.damage)
+        self.explosion_sound.play()
+
+        self.to_remove = True
+
+    def draw(self, screen, world_x, world_y):
+        # 미사일 회전 이미지 그리기
+        rotated = pygame.transform.rotate(self.image, -math.degrees(self.angle))
+        rect = rotated.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(rotated, rect)
+        self.drawn_once = True
 
 class ScatteredBullet:
     # 발사 시 배출되는 탄피/파편 이펙트

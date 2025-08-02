@@ -4,7 +4,7 @@ import random
 from config import *
 import config
 import asset_manager
-from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile
 
 ENEMY_CLASSES = []
 
@@ -1611,3 +1611,258 @@ class Boss1(AIBase):
         rotated_img = pygame.transform.rotate(self.image_original, -math.degrees(self.direction_angle) + 90)
         rotated_img.set_alpha(alpha)
         screen.blit(rotated_img, rotated_img.get_rect(center=(screen_x, screen_y)))
+
+class Boss2(AIBase):
+    HP_MAX = 2000
+    SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
+    ORB_DROP_MULTIPLIER = 1.33
+    ORB_DROP_ON_HALF_HP_RATIO = 0.5
+    GUN1_DAMAGE = 120
+    GUN1_RADIUS = 110
+    GUN1_COOLDOWN = 2000
+    GUN2_DAMAGE = 10
+    GUN2_COOLDOWN = 1500
+    DRONE_SPEED = 4 * PLAYER_VIEW_SCALE
+    DRONE_DAMAGE = 150
+    DRONE_RADIUS = int(70 * 1.2)
+    DRONE_KNOCKBACK = 150
+    DRONE_WARNING_TIME = 500
+    DRONE_RESPAWN_TIME = 5000
+    DRONE_RESPAWN_TIME_LOW_HP = 3000
+    INITIAL_DRONES = 2
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        super().__init__(world_x, world_y, images, sounds, map_width, map_height,
+                         speed=self.SPEED, near_threshold=300, far_threshold=700,
+                         radius=50, push_strength=0.0, alert_duration=0,
+                         damage_player_fn=damage_player_fn, rank=10)
+
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.kill_callback = kill_callback
+        self.half_hp_triggered = False
+        self.current_gun = 1
+
+        self.image_original = images["boss2"]
+        self.gun1_image_original = images["gun8"]
+        self.gun2_image_original = images["gun3"]
+        self.bullet_image = images["bullet1"]
+        self.warhead_image = images["warhead1"]
+        self.explosion_image = images["explosion1"]
+        self.cartridge_image = images["cartridge_case1"]
+
+        self.sound_gun1_fire = sounds["boss2_gun1_fire"]
+        self.sound_gun1_explosion = sounds["boss2_gun1_explosion"]
+        self.sound_gun2_fire = sounds["boss2_gun2_fire"]
+
+        self.drone_img = images["drone"]
+        self.sound_drone_spawn = sounds["drone_spawn"]
+        self.sound_drone_warning = sounds["drone_warning"]
+        self.sound_drone_explosion = sounds["drone_explosion"]
+        self.drones = []
+        self.last_drone_spawn_time = 0
+
+        self.direction_angle = 0
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+
+        self.last_gun1_time = 0
+        self.last_gun2_time = 0
+
+        for _ in range(self.INITIAL_DRONES):
+            self.spawn_drone()
+
+    class DroneChaser:
+        # 소환하는 추격 드론 클래스
+        def __init__(self, boss, spawn_x, spawn_y):
+            self.boss = boss
+            self.x = spawn_x
+            self.y = spawn_y
+            self.state = "chasing"
+            self.warning_start = None
+            self.angle = 0
+
+        def update(self, player_x, player_y):
+            # 플레이어 추격 및 폭발 준비 상태로 전환
+            if self.state == "dead":
+                return
+            dx, dy = player_x - self.x, player_y - self.y
+            dist = math.hypot(dx, dy)
+            self.angle = math.atan2(dy, dx)
+
+            if self.state == "chasing":
+                if dist > 0:
+                    self.x += (dx / dist) * Boss2.DRONE_SPEED
+                    self.y += (dy / dist) * Boss2.DRONE_SPEED
+                if dist < 60:
+                    self.state = "warning"
+                    self.warning_start = pygame.time.get_ticks()
+                    self.boss.sound_drone_warning.play()
+            elif self.state == "warning":
+                if pygame.time.get_ticks() - self.warning_start >= Boss2.DRONE_WARNING_TIME:
+                    self.explode()
+
+        def explode(self, no_damage=False):
+            # 드론 폭발 처리, 범위 내 플레이어에게 피해
+            self.boss.sound_drone_warning.stop()
+            config.effects.append(ExplosionEffectPersistent(self.x, self.y, self.boss.explosion_image))
+            self.boss.sound_drone_explosion.play()
+            if not no_damage and self.boss.damage_player:
+                px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+                if math.hypot(px - self.x, py - self.y) <= Boss2.DRONE_RADIUS:
+                    self.boss.damage_player(Boss2.DRONE_DAMAGE)
+            self.state = "dead"
+
+        def draw(self, screen, world_x, world_y):
+            # 드론 그리기, 폭발 경고 상태일 경우 빨간색 필터
+            if self.state == "dead":
+                return
+            img = self.boss.drone_img.copy()
+            if self.state == "warning":
+                img.fill((255, 0, 0), special_flags=pygame.BLEND_RGB_ADD)
+            rotated = pygame.transform.rotate(img, -math.degrees(self.angle) - 90)
+            rect = rotated.get_rect(center=(self.x - world_x, self.y - world_y))
+            screen.blit(rotated, rect)
+
+    def spawn_drone(self):
+        # 드론 소환
+        sx = self.world_x + random.randint(-100, 100)
+        sy = self.world_y + random.randint(-100, 100)
+        self.drones.append(self.DroneChaser(self, sx, sy))
+        self.sound_drone_spawn.play()
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 보스 AI 메인 루프: 드론 갱신/소환, 체력 상태별 아이템 드랍, 무기 선택
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+
+        for drone in self.drones:
+            drone.update(px, py)
+        self.drones = [d for d in self.drones if d.state != "dead"]
+
+        respawn_time = self.DRONE_RESPAWN_TIME_LOW_HP if self.hp <= self.HP_MAX // 2 else self.DRONE_RESPAWN_TIME
+        if len(self.drones) < self.INITIAL_DRONES and pygame.time.get_ticks() - self.last_drone_spawn_time >= respawn_time:
+            self.spawn_drone()
+            self.last_drone_spawn_time = pygame.time.get_ticks()
+
+        if not self.half_hp_triggered and self.hp <= self.HP_MAX // 2:
+            self.spawn_dropped_items(int(5 * self.ORB_DROP_MULTIPLIER), int(7 * self.ORB_DROP_MULTIPLIER))
+            self.half_hp_triggered = True
+
+        now = pygame.time.get_ticks()
+        if dist > 700:
+            if now - self.last_gun1_time >= self.GUN1_COOLDOWN:
+                self.attack_gun1()
+        elif dist > 300:
+            if now - self.last_gun2_time >= self.GUN2_COOLDOWN:
+                self.attack_gun2(px, py)
+        else:
+            self.evade(px, py)
+
+    def attack_gun1(self):
+        self.current_gun = 1
+        self.last_gun1_time = pygame.time.get_ticks()
+        self.sound_gun1_fire.play()
+
+        red_warhead = self.warhead_image.copy()
+        red_warhead.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
+        missile = HomingMissile(
+            x=self.world_x,
+            y=self.world_y,
+            target=None,
+            image=red_warhead,
+            explosion_radius=self.GUN1_RADIUS,
+            damage=self.GUN1_DAMAGE,
+            explosion_image=self.explosion_image,
+            explosion_sound=self.sound_gun1_explosion,
+            live_tracking=True,
+            turn_rate=0.03,
+            max_distance=600
+        )
+        missile.owner = self
+        config.global_enemy_bullets.append(missile)
+
+    def attack_gun2(self, px, py):
+        self.current_gun = 2
+        self.last_gun2_time = pygame.time.get_ticks()
+        self.sound_gun2_fire.play()
+
+        red_bullet_img = self.bullet_image.copy()
+        red_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
+        angle = math.atan2(py - self.world_y, px - self.world_x)
+        for _ in range(15):
+            spread = math.radians(random.uniform(-30, 30))
+            dx = math.cos(angle + spread)
+            dy = math.sin(angle + spread)
+            bullet = Bullet(
+                self.world_x, self.world_y,
+                self.world_x + dx * 100, self.world_y + dy * 100,
+                spread_angle_degrees=0,
+                bullet_image=red_bullet_img,
+                speed=11.25 * PLAYER_VIEW_SCALE,
+                max_distance=600 * PLAYER_VIEW_SCALE,
+                damage=self.GUN2_DAMAGE
+            )
+            bullet.trail_enabled = False
+            bullet.owner = self
+            config.global_enemy_bullets.append(bullet)
+
+        eject_angle = self.direction_angle + math.radians(90 + random.uniform(-15, 15))
+        vx, vy = math.cos(eject_angle), math.sin(eject_angle)
+        big_case = pygame.transform.smoothscale(
+            self.cartridge_image,
+            (int(self.cartridge_image.get_width() * 1.5),
+             int(self.cartridge_image.get_height() * 1.5))
+        )
+        self.scattered_bullets.append(
+            ScatteredBullet(self.world_x, self.world_y, vx, vy, big_case)
+        )
+
+    def evade(self, px, py):
+        # 플레이어와 근접 시 후퇴 동작
+        dx, dy = self.world_x - px, self.world_y - py
+        dist = math.hypot(dx, dy)
+        if dist < 80:
+            self.world_x += math.cos(self.direction_angle + math.pi) * self.SPEED
+            self.world_y += math.sin(self.direction_angle + math.pi) * self.SPEED
+        elif dist > 0:
+            self.world_x += (dx / dist) * self.SPEED
+            self.world_y += (dy / dist) * self.SPEED
+
+    def die(self, blood_effects):
+        # 보스 사망 시 드론 폭발, 아이템 드랍
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        for drone in self.drones:
+            drone.explode(no_damage=True)
+        self.drones.clear()
+        self.spawn_dropped_items(int(10 * self.ORB_DROP_MULTIPLIER), int(15 * self.ORB_DROP_MULTIPLIER))
+
+    def draw(self, screen, world_x, world_y, sx=0, sy=0):
+        # 무기/본체/드론 그리기
+        if not self.alive:
+            return
+        scr_x = self.world_x - world_x + sx
+        scr_y = self.world_y - world_y + sy
+        if self.current_gun == 1:
+            gun_img = self.gun1_image_original
+        else:
+            gun_img = self.gun2_image_original
+        gun_rot = pygame.transform.rotate(gun_img, -math.degrees(self.direction_angle) - 90)
+        gun_rect = gun_rot.get_rect(center=(scr_x + math.cos(self.direction_angle) * self.current_distance,
+                                            scr_y + math.sin(self.direction_angle) * self.current_distance))
+        screen.blit(gun_rot, gun_rect)
+        scaled_img = pygame.transform.smoothscale(self.image_original,
+                                                  (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                                                   int(self.image_original.get_height() * PLAYER_VIEW_SCALE)))
+        boss_rot = pygame.transform.rotate(scaled_img, -math.degrees(self.direction_angle) + 90)
+        rect = boss_rot.get_rect(center=(scr_x, scr_y))
+        screen.blit(boss_rot, rect)
+        for drone in self.drones:
+            drone.draw(screen, world_x, world_y)

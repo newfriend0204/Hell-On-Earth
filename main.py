@@ -25,7 +25,7 @@ from world import (
 )
 from maps import MAPS, FIGHT_MAPS
 
-CURRENT_MAP = MAPS[0]
+CURRENT_MAP = MAPS[1] # 디버그
 grid = generate_map()
 grid = place_acquire_rooms(grid, count=3)
 print_grid(grid)
@@ -275,6 +275,7 @@ damage_flash_fade_speed = 5
 
 blood_effects = []
 config.blood_effects = blood_effects
+config.effects = []
 
 kill_count = 0
 
@@ -485,7 +486,7 @@ def change_room(direction):
             config.combat_enabled = True
     else:
         # 일반 방 진입
-        CURRENT_MAP = MAPS[0]
+        CURRENT_MAP = MAPS[1] # 디버그
 
     current_room_pos = [new_x, new_y]
     sx, sy = new_x, new_y
@@ -514,7 +515,7 @@ def change_room(direction):
     )
 
     if new_room_type == 'A':
-        acquire_index = random.randint(2, 2)  # 디버그용
+        acquire_index = random.randint(2, 2)  # 디버그
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
@@ -602,6 +603,7 @@ def change_room(direction):
     blood_effects.clear()
     config.dropped_items.clear()
     config.global_enemy_bullets.clear()
+    config.effects.clear()
     for enemy in enemies:
         if hasattr(enemy, "scattered_bullets"):
             enemy.scattered_bullets.clear()
@@ -625,11 +627,11 @@ def change_room(direction):
                     kill_callback=increment_kill_count
                 )
                 enemies.append(enemy)
-                if enemy_type == "boss1":
+                if enemy_type in ("boss1", "boss2"):
                     current_boss = enemy
                 break
     
-    if not any(e_info["enemy_type"] == "boss1" for e_info in CURRENT_MAP["enemy_infos"]):
+    if not any(e_info["enemy_type"] in ("boss1", "boss2") for e_info in CURRENT_MAP["enemy_infos"]):
         current_boss = None
     
     config.all_enemies = enemies
@@ -1302,6 +1304,12 @@ while running:
         if scatter.alpha <= 0:
             scattered_bullets.remove(scatter)
 
+    for effect in config.effects[:]:
+        if hasattr(effect, "update"):
+            effect.update()
+        if getattr(effect, "finished", False):
+            config.effects.remove(effect)
+
     if changing_weapon:
         change_animation_timer += clock.get_time() / 1000.0
         t = min(change_animation_timer / change_animation_time, 1.0)
@@ -1717,6 +1725,10 @@ while running:
     for enemy in enemies:
         enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
+    for effect in config.effects:
+        if hasattr(effect, "draw"):
+            effect.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
     for bullet in bullets[:]:
         # 플레이어 발사체 적 충돌 처리
         if isinstance(bullet, ExplosionEffectPersistent):
@@ -1741,19 +1753,20 @@ while running:
             player_center,
             player_radius
         ):
-            player_hp -= bullet.damage
-            damage_flash_alpha = 255
-            shake_timer = shake_timer_max
-            shake_elapsed = 0.0
-            shake_magnitude = 3
+            from entities import HomingMissile
+            if isinstance(bullet, HomingMissile):
+                bullet.explode()
+            else:
+                player_hp -= bullet.damage
+                damage_flash_alpha = 255
+                shake_timer = shake_timer_max
+                shake_elapsed = 0.0
+                shake_magnitude = 3
 
             bullet.to_remove = True
-            config.global_enemy_bullets.remove(bullet)
-            continue
-
-        if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
-            config.global_enemy_bullets.remove(bullet)
-            continue
+            if bullet in config.global_enemy_bullets:
+                config.global_enemy_bullets.remove(bullet)
+                continue
 
         if getattr(bullet, "to_remove", False):
             config.global_enemy_bullets.remove(bullet)
@@ -1852,10 +1865,6 @@ while running:
         if hit:
             bullet.to_remove = True
             continue
-
-        if bullet.is_offscreen(SCREEN_WIDTH, SCREEN_HEIGHT, world_x, world_y):
-            bullet.to_remove = True
-            continue
     
     if not changing_room:
         # 방 전환 위치 체크
@@ -1940,7 +1949,7 @@ while running:
 
     draw_minimap(screen, grid, current_room_pos)
     draw_weapon_ui(screen, weapons, current_weapon_index)
-    if current_boss and type(current_boss).__name__ == "Boss1" and current_boss.alive:
+    if current_boss and type(current_boss).__name__ in ("Boss1", "Boss2") and current_boss.alive:
         last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
