@@ -11,6 +11,7 @@ BOLD_FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Bold.ttf")
 
 KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 KOREAN_FONT_28 = pygame.font.Font(FONT_PATH, 28)
+KOREAN_FONT_25 = pygame.font.Font(FONT_PATH, 25)
 KOREAN_FONT_BOLD_28 = pygame.font.Font(BOLD_FONT_PATH, 28)
 
 TAB_NAMES = ["내 상태", "무기1", "무기2", "무기3", "무기4"]
@@ -18,14 +19,92 @@ TAB_SIZE = (140, 140)
 TAB_SPACING = -15
 NUM_TABS = len(TAB_NAMES)
 
-gun_ids = ["gun3", "gun6", "gun1", "gun2"]
+gun_ids = ["gun1", "gun2", "gun3", "gun4"]
 weapon_stats = {
     # 무기별 스탯 및 설명, 사용법
-    "gun1": {"name": "M1911", "power": 30, "spread": 10, "cost": 10, "rank": "1", "desc": "NF 코퍼레이션이 지급하는 기본 권총입니다. 모든 경비들이 차고다닙니다.", "usage": "좌클릭\n단발사격\n\n우클릭\n없음."},
-    "gun2": {"name": "AK47", "power": 20, "spread": 15, "cost": 7, "rank": "1", "desc": "NF 코퍼레이션이 군인들에게 지급하는 기본 소총입니다.", "usage": "좌클릭\n연사\n\n우클릭\n없음."},
-    "gun3": {"name": "Remington 870", "power": 10, "spread": 35, "cost": 15, "rank": "2", "desc": "사거리가 다른 샷건들보단 짧지만, 강력한 위력을 자랑합니다.", "usage": "좌클릭\n15발 동시 사격\n\n우클릭\n없음."},
-    "gun6": {"name": "개조된 기관단총", "power": 20, "spread": "좌클릭:8 우클릭:0", "cost": 10, "rank": "3", "desc": "빠루를 든 사내가 애용하는 기관단총입니다. 우클릭 시 유탄을 발사해 큰 피해를 입힐 수 있습니다.", "usage": "좌클릭\n연사\n\n우클릭\n사거리가 짧은 유탄을 발사합니다."},
+    "gun1": {
+        "name": "M1911",
+        "power": 28,
+        "spread": 8,
+        "cost": 5,
+        "rank": "1",
+        "desc": "NF 코퍼레이션이 지급하는 기본 권총입니다. 모든 경비들이 차고다닙니다.",
+        "usage": "좌클릭\n단발사격."
+    },
+    "gun2": {
+        "name": "AK47",
+        "power": 18,
+        "spread": 9,
+        "cost": 3,
+        "rank": "1",
+        "desc": "NF 코퍼레이션이 군인들에게 지급하는 기본 소총입니다.",
+        "usage": "좌클릭\n연사"
+    },
+    "gun3": {
+        "name": "Remington 870",
+        "power": "8 x 15발",
+        "spread": 30,
+        "cost": 8,
+        "rank": "2",
+        "desc": "사거리가 다른 샷건들보단 짧지만, 근거리에서는 강력한 위력을 자랑합니다.",
+        "usage": "좌클릭\n15발 산탄 발사"
+    },
+    "gun4": {
+        "name": "유탄 발사기",
+        "power": "최대 80 / 최소 15",
+        "spread": 0,
+        "cost": 15,
+        "rank": "3",
+        "desc": "광역 피해를 주는 폭발 무기입니다. 중심에 가까울수록 피해가 큽니다.",
+        "usage": "좌클릭\n사거리가 적당한 유탄 발사"
+    },
+    "gun5": {
+        "name": "미니건",
+        "power": 14,
+        "spread": 5,
+        "cost": 6,
+        "rank": "2",
+        "desc": "강력한 연사력의 기관총입니다. 발사 전 약간의 예열 시간이 필요합니다.",
+        "usage": "좌클릭\n0.8간의 예열 시간 후 강력한 연사력으로 발사\n마우스를 놓으면 1.0간의 과열 시간이 존재하며, 시간이 지날때까지 다시 예열 불가능"
+    },
+    "gun6": {
+        "name": "개조된 기관단총",
+        "power": "좌: 20 / 우: 최대 80, 최소 30",
+        "spread": "좌: 8 / 우: 0",
+        "cost": "좌: 7 / 우: 15",
+        "rank": "3",
+        "desc": "빠루를 든 사내가 애용하는 기관단총입니다. 우클릭 시 유탄을 발사할 수 있습니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n사거리가 짧은 유탄 발사"
+    },
+    "gun7": {
+        "name": "C8-SFW",
+        "power": "좌: 25 / 우: 17 x 5발",
+        "spread": "좌: 6 / 우: 15",
+        "cost": "좌: 4 / 우: 10",
+        "rank": "2",
+        "desc": "BUCK이라고 불리는 대원이 애용하는 돌격소총입니다. 좌클릭으로 산탄을 발사할 수 있습니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n산탄 발사"
+    },
+    "gun8": {
+        "name": "RPG",
+        "power": "최대 120 / 최소 40",
+        "spread": 0,
+        "cost": 29,
+        "rank": "3",
+        "desc": "강력한 폭발 범위를 가진 로켓 발사기입니다.",
+        "usage": "좌클릭\n로켓 발사"
+    },
+    "gun9": {
+        "name": "ARX200",
+        "power": "좌: 25 / 우: 10 + 넉백",
+        "spread": "좌: 6 / 우: 0",
+        "cost": "좌: 8 / 우: 18",
+        "rank": "4",
+        "desc": "NOMAD라고 불리는 대원이 애용하는 돌격소총입니다. 좌클릭으로 적을 밀치는 기압탄을 발사합니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n기압탄 발사"
+    }
 }
+
 
 def load_ui_image(filename):
     return pygame.image.load(os.path.join(ASSET_UI_DIR, filename))
@@ -112,8 +191,12 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
         return tab_rects
 
     weapon = weapons[idx]
-    weapon_id = gun_ids[idx]
-    stat = weapon_stats[weapon_id]
+    weapon_id = None
+    for wid, _ in weapon_stats.items():
+        if wid.lower() in weapon.__class__.__name__.lower():
+            weapon_id = wid
+            break
+    stat = weapon_stats.get(weapon_id, {})
 
     screen_width, screen_height = screen.get_size()
     margin_x = 30
@@ -148,7 +231,7 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
     y = stat_y + 50
     for icon, text in icon_texts:
         screen.blit(icon, (stat_x + 10, y))
-        txt = KOREAN_FONT_BOLD_28.render(text, True, (120, 255, 120))
+        txt = KOREAN_FONT_25.render(text, True, (120, 255, 120))
         screen.blit(txt, (stat_x + 50, y + 3))
         y += 40
 
@@ -168,7 +251,7 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
 
     return tab_rects
 
-def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, max_ammo, selected_tab, sounds):
+def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, selected_tab, sounds):
     # '내 상태' 탭 UI 그리기
     screen_width, screen_height = screen.get_size()
 
@@ -239,14 +322,14 @@ def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, max_ammo, sele
     pygame.draw.rect(screen, (120,255,120), (hp_bg_rect.x, hp_bg_rect.y, int(bar_w * player_hp / player_hp_max), bar_h), border_radius=10)
 
     ammo_label = KOREAN_FONT_BOLD_28.render("탄약", True, (120,255,120))
-    ammo_num = KOREAN_FONT_BOLD_28.render(f"{int(ammo_gauge)}/{max_ammo}", True, (255,200,80))
+    ammo_num = KOREAN_FONT_BOLD_28.render(f"{int(ammo_gauge)}/{ammo_gauge_max}", True, (255,200,80))
     ammo_label_y = ammo_bar_y - label_bar_gap - ammo_label.get_height()
     ammo_num_y = ammo_label_y
     screen.blit(ammo_label, (info_x + bar_margin, ammo_label_y))
     screen.blit(ammo_num, (info_x + bar_margin + bar_w - ammo_num.get_width(), ammo_num_y))
     ammo_bg_rect = pygame.Rect(info_x + bar_margin, ammo_bar_y, bar_w, bar_h)
     pygame.draw.rect(screen, (30, 50, 30), ammo_bg_rect.inflate(8,8), border_radius=10)
-    pygame.draw.rect(screen, (255,200,80), (ammo_bg_rect.x, ammo_bg_rect.y, int(bar_w * ammo_gauge / max_ammo), bar_h), border_radius=10)
+    pygame.draw.rect(screen, (255,200,80), (ammo_bg_rect.x, ammo_bg_rect.y, int(bar_w * ammo_gauge / ammo_gauge_max), bar_h), border_radius=10)
 
     panel_width = (screen_width // 2) - margin_x * 2
     panel_height = screen_height - margin_y * 2

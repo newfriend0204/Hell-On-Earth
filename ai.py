@@ -363,6 +363,7 @@ class Enemy1(AIBase):
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
         )
+        self.hp = 120
         self.image_original = images["enemy1"]
         self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
         self.bullet_image = images["enemy_bullet"]
@@ -502,7 +503,7 @@ class Enemy2(AIBase):
         self.cartridge_image = images["cartridge_case1"]
         self.player_bullet_image = images["bullet1"]
         self.kill_callback = kill_callback
-        self.hp = 150
+        self.hp = 170
         self.fire_sound = self.sounds["gun2_fire_enemy"]
         self.current_distance = 50 * PLAYER_VIEW_SCALE
         self.recoil_strength = 8
@@ -665,15 +666,15 @@ class Enemy2(AIBase):
         screen.blit(rotated_img, rect)
 
 class Enemy3(AIBase):
-    rank=3
+    rank=4
 
     FAR_DISTANCE = 500
     NEAR_DISTANCE = 100
     RADIUS_CLOSE_ATTACK = 120
 
-    DASH_DISTANCE = 200
+    DASH_DISTANCE = 250
     DASH_SPEED_MULTIPLIER = 3
-    DASH_DAMAGE = 30
+    DASH_DAMAGE = 35
     CHARGE_TIME = 1000
     COOLDOWN_MIN = 1000
     COOLDOWN_MAX = 2000
@@ -681,7 +682,7 @@ class Enemy3(AIBase):
     CLOSE_ATTACK_CHARGE = 1000
     CLOSE_ATTACK_COOLDOWN_MIN = 2000
     CLOSE_ATTACK_COOLDOWN_MAX = 3000
-    CLOSE_ATTACK_DAMAGE = 30
+    CLOSE_ATTACK_DAMAGE = 25
     CLOSE_ATTACK_SWEEP_TIME = 200
     CLOSE_ATTACK_SPEED_PENALTY = 0.7
 
@@ -908,7 +909,7 @@ class Enemy4(AIBase):
         self.image_original = images["enemy4"]
         self.image = self.image_original
         self.kill_callback = kill_callback
-        self.hp = 400
+        self.hp = 360
 
         shield_radius = int(self.radius * 1.2)
         self.shield = ShieldEffect(self, shield_radius, max_hp=200)
@@ -1118,7 +1119,7 @@ class Enemy4(AIBase):
             self.draw_alert(screen, screen_x, screen_y + self.alert_offset_y)
 
 class Enemy5(AIBase):
-    rank=5
+    rank=3
 
     STATE_IDLE = 0
     STATE_PREPARE_ATTACK = 1
@@ -1329,8 +1330,8 @@ class Boss1(AIBase):
         self.sound_gun1 = sounds["boss1_gun1_fire"]
         self.sound_gun2 = sounds["boss1_gun2_fire"]
 
-        self.hp = 1000
-        self.max_hp = 1000
+        self.hp = 1500
+        self.max_hp = 1500
         self.kill_callback = kill_callback
 
         self.half_phase_drop_done = False
@@ -1619,7 +1620,7 @@ class Boss1(AIBase):
 class Boss2(AIBase):
     rank=10
 
-    HP_MAX = 2000
+    HP_MAX = 1750
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
     ORB_DROP_MULTIPLIER = 1.33
     ORB_DROP_ON_HALF_HP_RATIO = 0.5

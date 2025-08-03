@@ -174,9 +174,10 @@ def generate_map():
                 grid[py][px] = 'F'
                 f_positions.append((px, py))
 
-        expand_f_rooms(grid, f_positions, ex, ey, MIN_F_ROOMS)
+        target_f_rooms = random.randint(MIN_F_ROOMS, MAX_F_ROOMS)
+        expand_f_rooms(grid, f_positions, ex, ey, target_f_rooms)
 
-        if len(f_positions) < MIN_F_ROOMS:
+        if len(f_positions) < target_f_rooms:
             continue
 
         visited = set()

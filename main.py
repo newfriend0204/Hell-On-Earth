@@ -25,7 +25,6 @@ grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
 world.initialize_room_states(grid)
 world.print_grid(grid)
 
-
 pygame.init()
 pygame.font.init()
 pygame.mixer.init()
@@ -51,7 +50,7 @@ START_WEAPONS = [
     WEAPON_CLASSES[4],
     WEAPON_CLASSES[5],
     WEAPON_CLASSES[6],
-    WEAPON_CLASSES[8],
+    WEAPON_CLASSES[7],
 ]
 
 original_player_image = images["player"]
@@ -256,9 +255,18 @@ running = True
 
 player_radius = int(30 * PLAYER_VIEW_SCALE)
 
-player_hp = 300
-player_hp_max = 300
+player_hp_max = 200
+player_hp = player_hp_max
 last_hp_visual = player_hp * 1.0
+
+def consume_ammo(cost):
+    global ammo_gauge
+    ammo_gauge -= cost
+
+current_weapon_index = 0
+ammo_gauge_max = 300
+ammo_gauge = ammo_gauge_max 
+last_ammo_visual = ammo_gauge * 1.0
 
 current_boss = None
 last_boss_hp_visual = 0
@@ -287,14 +295,6 @@ SPAWN_FROM_OPPOSITE = {
     "west": "east",
     "east": "west"
 }
-
-def consume_ammo(cost):
-    global ammo_gauge
-    ammo_gauge -= cost
-
-current_weapon_index = 0
-ammo_gauge = 1000000
-last_ammo_visual = ammo_gauge * 1.0
 
 config.bullets = bullets
 config.scattered_bullets = scattered_bullets
@@ -675,6 +675,10 @@ def change_room(direction):
                 enemy_class_name = visited_f_rooms[room_key]["enemy_types"][idx]
                 enemy_class = next(cls for cls in ENEMY_CLASSES if cls.__name__ == enemy_class_name)
             else:
+                possible_ranks = [r for r in range(rank_min, rank_max + 1) if r in enemies_by_rank]
+                if not possible_ranks:
+                    continue
+                rank_choice = random.choice(possible_ranks)
                 valid_classes = [c for c in enemies_by_rank[rank_choice] if not c.__name__.lower().startswith("boss")]
                 if not valid_classes:
                     continue
@@ -1367,7 +1371,7 @@ while running:
         if selected_tab != 0:
             ui_tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons, sounds)
         else:
-            ui_tab_rects = draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, 100, selected_tab, sounds)
+            ui_tab_rects = draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, selected_tab, sounds)
         pygame.display.flip()
         clock.tick(60)
         continue
@@ -1818,7 +1822,7 @@ while running:
             if item.item_type == "health":
                 player_hp = min(player_hp_max, player_hp + item.value)
             elif item.item_type == "ammo":
-                ammo_gauge = min(100, ammo_gauge + item.value)
+                ammo_gauge = min(ammo_gauge_max, ammo_gauge + item.value)
             config.dropped_items.remove(item)
 
     obstacle_manager.draw_non_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y)
@@ -1888,7 +1892,7 @@ while running:
 
     ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
     ammo_bar_size = (400, 20)
-    last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, 100, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
+    last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, ammo_gauge_max, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
     hp_bar_pos = (80, SCREEN_HEIGHT - 50)
     hp_bar_size = (400, 20)
     last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)

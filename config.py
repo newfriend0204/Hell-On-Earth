@@ -35,14 +35,14 @@ STAGE_DATA = {
     },
     "1-2": {
         "boss_map": 1,
-        "enemy_rank_range": (2, 4),
+        "enemy_rank_range": (1, 4),
         "min_f_rooms": 5,
         "max_f_rooms": 6,
         "acquire_rooms": 2
     },
     "1-3": {
         "boss_map": 2,
-        "enemy_rank_range": (3, 5),
+        "enemy_rank_range": (2, 5),
         "min_f_rooms": 6,
         "max_f_rooms": 7,
         "acquire_rooms": 3

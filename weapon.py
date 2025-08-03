@@ -67,9 +67,9 @@ class WeaponBase:
 
 
 class Gun1(WeaponBase):
-    AMMO_COST = 10
-    DAMAGE = 30
-    SPREAD = 10
+    AMMO_COST = 5
+    DAMAGE = 28
+    SPREAD = 8
     FIRE_DELAY = 350
 
     @staticmethod
@@ -160,9 +160,9 @@ class Gun1(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun2(WeaponBase):
-    AMMO_COST = 7
-    DAMAGE = 20
-    SPREAD = 10
+    AMMO_COST = 3
+    DAMAGE = 18
+    SPREAD = 9
     FIRE_DELAY = 150
 
     @staticmethod
@@ -250,11 +250,11 @@ class Gun2(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun3(WeaponBase):
-    AMMO_COST = 15
-    DAMAGE = 10
+    AMMO_COST = 8
+    DAMAGE = 8
     FIRE_DELAY = 750
     NUM_BULLETS = 15
-    SPREAD_DEGREES = 35
+    SPREAD_DEGREES = 30
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
@@ -343,12 +343,12 @@ class Gun3(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun4(WeaponBase):
-    AMMO_COST = 30
+    AMMO_COST = 15
     DAMAGE_MAX = 80
-    DAMAGE_MIN = 10
+    DAMAGE_MIN = 15
     SPREAD = 0
     FIRE_DELAY = 1000
-    EXPLOSION_RADIUS = 200
+    EXPLOSION_RADIUS = 190
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
@@ -428,10 +428,10 @@ class Gun4(WeaponBase):
             config.bullets.append(grenade)
 
 class Gun5(WeaponBase):
-    AMMO_COST = 10
-    DAMAGE = 15
+    AMMO_COST = 6
+    DAMAGE = 14
     FIRE_INTERVAL = 80
-    PREHEAT_DURATION = 1000
+    PREHEAT_DURATION = 800
     COOLDOWN_DURATION = 1000
 
     @staticmethod
@@ -572,8 +572,8 @@ class Gun5(WeaponBase):
         self.speed_penalty = self.base_speed_penalty
 
 class Gun6(WeaponBase):
-    LEFT_AMMO_COST = 10
-    RIGHT_AMMO_COST = 20
+    LEFT_AMMO_COST = 7
+    RIGHT_AMMO_COST = 15
     LEFT_FIRE_DELAY = 150
     RIGHT_FIRE_DELAY = 1000
     BULLET_DAMAGE = 20
@@ -731,8 +731,8 @@ class Gun7(WeaponBase):
     LEFT_FIRE_DELAY = 110
     RIGHT_FIRE_DELAY = 700
 
-    LEFT_AMMO_COST = 5
-    RIGHT_AMMO_COST = 15
+    LEFT_AMMO_COST = 4
+    RIGHT_AMMO_COST = 10
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
@@ -891,10 +891,10 @@ class Gun7(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun8(WeaponBase):
-    AMMO_COST = 40
+    AMMO_COST = 29
     DAMAGE_MAX = 120
-    DAMAGE_MIN = 30
-    FIRE_DELAY = 1200
+    DAMAGE_MIN = 40
+    FIRE_DELAY = 1100
     EXPLOSION_RADIUS = 300
 
     BULLET_SPEED = 0.4
@@ -987,12 +987,12 @@ class Gun8(WeaponBase):
             config.bullets.append(grenade)
 
 class Gun9(WeaponBase):
-    LEFT_AMMO_COST = 7
-    RIGHT_AMMO_COST = 20
+    LEFT_AMMO_COST = 8
+    RIGHT_AMMO_COST = 18
     LEFT_FIRE_DELAY = 150
     RIGHT_FIRE_DELAY = 1000
     LEFT_DAMAGE = 25
-    RIGHT_DAMAGE = 30
+    RIGHT_DAMAGE = 10
     RIGHT_EXPLOSION_RADIUS = 150
     RIGHT_KNOCKBACK = 200
     LEFT_SPREAD = 6
