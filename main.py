@@ -47,10 +47,10 @@ config.images = images
 config.dropped_items = []
 weapon_assets = load_weapon_assets(images)
 START_WEAPONS = [
+    WEAPON_CLASSES[3],
     WEAPON_CLASSES[4],
-    WEAPON_CLASSES[5],
-    WEAPON_CLASSES[6],
-    WEAPON_CLASSES[7],
+    WEAPON_CLASSES[13],
+    WEAPON_CLASSES[14],
 ]
 
 original_player_image = images["player"]
@@ -1952,14 +1952,7 @@ while running:
                     enemy_center_world,
                     enemy.radius
                 ):
-                    if current_weapon == 1:
-                        damage = 30
-                    elif current_weapon == 2:
-                        damage = 20
-                    elif current_weapon == 3:
-                        damage = 10
-                    else:
-                        damage = 30
+                    damage = getattr(bullet, "damage", 0)
                     enemy.hit(damage, blood_effects)
                     if not enemy.alive:
                         enemies.remove(enemy)

@@ -38,6 +38,30 @@ def load_images():
     gun9_img = pygame.image.load(path_image("image", "Gun", "Gun9Player.png")).convert_alpha()
     gun9_img = pygame.transform.smoothscale(gun9_img, (50, int(gun9_img.get_height() * (50 / gun9_img.get_width()))))
 
+    gun10_img = pygame.image.load(path_image("image", "Gun", "Gun10Player.png")).convert_alpha()
+    gun10_img = pygame.transform.smoothscale(gun10_img, (50, int(gun10_img.get_height() * (50 / gun10_img.get_width()))))
+
+    gun11_img = pygame.image.load(path_image("image", "Gun", "Gun10Player.png")).convert_alpha()
+    gun11_img = pygame.transform.smoothscale(gun11_img, (50, int(gun11_img.get_height() * (50 / gun11_img.get_width()))))
+
+    gun12_img = pygame.image.load(path_image("image", "Gun", "Gun12Player.png")).convert_alpha()
+    gun12_img = pygame.transform.smoothscale(gun12_img, (55, int(gun12_img.get_height() * (55 / gun12_img.get_width()))))
+
+    gun13_img = pygame.image.load(path_image("image", "Gun", "Gun13Player.png")).convert_alpha()
+    gun13_img = pygame.transform.smoothscale(gun13_img, (55, int(gun13_img.get_height() * (55 / gun13_img.get_width()))))
+
+    gun14_img = pygame.image.load(path_image("image", "Gun", "Gun14Player.png")).convert_alpha()
+    gun14_img = pygame.transform.smoothscale(gun14_img, (55, int(gun14_img.get_height() * (55 / gun14_img.get_width()))))
+
+    gun15_img = pygame.image.load(path_image("image", "Gun", "Gun15Player.png")).convert_alpha()
+    gun15_img = pygame.transform.smoothscale(gun15_img, (55, int(gun15_img.get_height() * (55 / gun15_img.get_width()))))
+
+    gun16_img = pygame.image.load(path_image("image", "Gun", "Gun16Player.png")).convert_alpha()
+    gun16_img = pygame.transform.smoothscale(gun16_img, (55, int(gun16_img.get_height() * (55 / gun16_img.get_width()))))
+
+    gun17_img = pygame.image.load(path_image("image", "Gun", "Gun17Player.png")).convert_alpha()
+    gun17_img = pygame.transform.smoothscale(gun17_img, (55, int(gun17_img.get_height() * (55 / gun17_img.get_width()))))
+
     boss1gun1_img = pygame.image.load(path_image("image", "Gun", "Boss1Gun1.png")).convert_alpha()
     boss1gun1_img = pygame.transform.smoothscale(boss1gun1_img, (50, int(boss1gun1_img.get_height() * (50 / boss1gun1_img.get_width()))))
 
@@ -55,7 +79,6 @@ def load_images():
 
     # 탄환 이미지 크기 조정
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
-    bullet2_img = pygame.image.load(path_image("image", "Gun", "Bullet2.png")).convert_alpha()
     scale_factor = 60 / bullet1_img.get_width()
     bullet1_img = pygame.transform.smoothscale(
         bullet1_img,
@@ -64,6 +87,7 @@ def load_images():
             int(bullet1_img.get_height() * scale_factor)
         )
     )
+    bullet2_img = pygame.image.load(path_image("image", "Gun", "Bullet2.png")).convert_alpha()
     scale_factor = 40 / bullet2_img.get_width()
     bullet2_img = pygame.transform.smoothscale(
         bullet2_img,
@@ -72,15 +96,29 @@ def load_images():
             int(bullet2_img.get_height() * scale_factor)
         )
     )
+    bullet3_img = pygame.image.load(path_image("image", "Gun", "Bullet3.png")).convert_alpha()
+    scale_factor = 50 / bullet3_img.get_width()
+    bullet3_img = pygame.transform.smoothscale(
+        bullet3_img,
+        (
+            int(bullet3_img.get_width() * scale_factor),
+            int(bullet3_img.get_height() * scale_factor)
+        )
+    )
 
     # 적 탄환 색상 변경(빨간색)
     enemy_bullet_img = bullet1_img.copy()
     enemy_bullet_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
-    cartridge_case_img = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
-    cartridge_case_img = pygame.transform.smoothscale(
-        cartridge_case_img,
-        (5, int(cartridge_case_img.get_height() * 5 / cartridge_case_img.get_width()))
+    cartridge_case_img1 = pygame.image.load(path_image("image", "Gun", "CartridgeCase1.png")).convert_alpha()
+    cartridge_case_img1 = pygame.transform.smoothscale(
+        cartridge_case_img1,
+        (3, int(cartridge_case_img1.get_height() * 5 / cartridge_case_img1.get_width()))
+    )
+    cartridge_case_img2 = pygame.image.load(path_image("image", "Gun", "CartridgeCase2.png")).convert_alpha()
+    cartridge_case_img2 = pygame.transform.smoothscale(
+        cartridge_case_img2,
+        (20, int(cartridge_case_img2.get_height() * 20 / cartridge_case_img2.get_width()))
     )
 
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
@@ -166,14 +204,24 @@ def load_images():
         "gun7": gun7_img,
         "gun8": gun8_img,
         "gun9": gun9_img,
+        "gun10": gun10_img,
+        "gun11": gun11_img,
+        "gun12": gun12_img,
+        "gun13": gun13_img,
+        "gun14": gun14_img,
+        "gun15": gun15_img,
+        "gun16": gun16_img,
+        "gun17": gun17_img,
         "boss1gun1": boss1gun1_img,
         "boss1gun2": boss1gun2_img,
         "bullet1": bullet1_img,
         "bullet2": bullet2_img,
+        "bullet3": bullet3_img,
         "grenade1": grenade_img,
         "warhead1": warhead_img,
         "explosion1": explosion_img,
-        "cartridge_case1": cartridge_case_img,
+        "cartridge_case1": cartridge_case_img1,
+        "cartridge_case2": cartridge_case_img2,
         "enemy_bullet": enemy_bullet_img,
         "enemy1": enemy1_img,
         "enemy2": enemy2_img,
@@ -212,7 +260,7 @@ def load_weapon_assets(images):
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun3.png")).convert_alpha(),
             "topdown": images["gun3"],
             "bullets": [images["bullet1"]],
-            "cartridges": [images["cartridge_case1"]],
+            "cartridges": [images["cartridge_case2"]],
         },
         "gun4": {
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun4.png")).convert_alpha(),
@@ -243,7 +291,7 @@ def load_weapon_assets(images):
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun7.png")).convert_alpha(),
             "topdown": images["gun7"],
             "bullets": [images["bullet1"]],
-            "cartridges": [images["cartridge_case1"]],
+            "cartridges": [images["cartridge_case1"], images["cartridge_case2"]],
         },
         "gun8": {
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun8.png")).convert_alpha(),
@@ -261,6 +309,42 @@ def load_weapon_assets(images):
                 [images["bullet2"]]
             ],
             "cartridges": [images["cartridge_case1"]],
+        },
+        "gun10": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun10.png")).convert_alpha(),
+            "topdown": images["gun10"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun11": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun11.png")).convert_alpha(),
+            "topdown": images["gun11"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case2"]],
+        },
+        "gun12": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun12.png")).convert_alpha(),
+            "topdown": images["gun12"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [],
+        },
+        "gun13": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun13.png")).convert_alpha(),
+            "topdown": images["gun13"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun14": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun14.png")).convert_alpha(),
+            "topdown": images["gun14"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun15": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun15.png")).convert_alpha(),
+            "topdown": images["gun15"],
+            "bullets": [images["bullet3"]],
+            "cartridges": [],
         },
     }
     return weapons

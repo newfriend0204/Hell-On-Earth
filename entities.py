@@ -779,12 +779,10 @@ class HomingMissile:
 class ScatteredBullet:
     # 발사 시 배출되는 탄피/파편 이펙트
     def __init__(self, x, y, vx, vy, bullet_image, scale=1.0):
-        self.image_original = pygame.transform.scale(
+        w, h = bullet_image.get_size()
+        self.image_original = pygame.transform.smoothscale(
             bullet_image,
-            (
-                max(1, int(3 * PLAYER_VIEW_SCALE * scale)),
-                max(1, int(7 * PLAYER_VIEW_SCALE * scale))
-            )
+            (int(w * scale), int(h * scale))
         )
         self.image = self.image_original.copy()
 

@@ -21,9 +21,6 @@ SPRINT_MAX_SPEED = 30 #9 디버그
 
 # 사운드 설정
 WALK_VOLUME = 0.5
-GUN1_VOLUME = 1.0
-GUN2_VOLUME = 1.0
-GUN3_VOLUME = 1.0
 
 STAGE_DATA = {
     "1-1": {
