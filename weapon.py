@@ -2009,4 +2009,331 @@ class Gun15(WeaponBase):
 
         self.plasma_charge = 0
 
-WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10, Gun11, Gun12, Gun13, Gun14, Gun15]
+class Gun16(WeaponBase):
+    LEFT_AMMO_COST = 3
+    RIGHT_AMMO_COST = 4
+    LEFT_FIRE_DELAY = 100
+    RIGHT_FIRE_DELAY = 85
+    LEFT_DAMAGE = 12
+    RIGHT_DAMAGE = 14
+    LEFT_SPREAD = 15
+    RIGHT_SPREAD = 9
+    RANGE = 1700
+    SPEED = 11 * config.PLAYER_VIEW_SCALE
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun16(
+            name="P90",
+            front_image=weapon_assets["gun16"]["front"],
+            topdown_image=weapon_assets["gun16"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun16"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun16"]["cartridges"],
+            can_left_click=True,
+            can_right_click=True,
+            left_click_ammo_cost=Gun16.LEFT_AMMO_COST,
+            right_click_ammo_cost=Gun16.RIGHT_AMMO_COST,
+            tier=1,
+            sounds_dict={
+                "fire": sounds["gun16_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = Gun16.LEFT_FIRE_DELAY
+        self.right_fire_delay = Gun16.RIGHT_FIRE_DELAY
+        self.last_right_click_time = 0
+        self.recoil_strength = 4
+        self.speed_penalty = 0.04
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 48
+        self.shake_strength = 8
+        self.ads_mode = False
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+
+        # ADS 모드 토글
+        if mouse_right_down:
+            self.ads_mode = True
+            self.fire_delay = Gun16.RIGHT_FIRE_DELAY
+            self.recoil_strength = 5
+            self.speed_penalty = 0.12
+            self.shake_strength = 9
+        else:
+            self.ads_mode = False
+            self.fire_delay = Gun16.LEFT_FIRE_DELAY
+            self.recoil_strength = 4
+            self.speed_penalty = 0.04
+            self.shake_strength = 8
+
+        # 발사 처리
+        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
+            if self.get_ammo_gauge() >= (self.right_click_ammo_cost if self.ads_mode else self.left_click_ammo_cost):
+                if self.ads_mode:
+                    self.on_right_click()
+                else:
+                    self.on_left_click()
+                self.last_shot_time = now
+
+    def on_left_click(self):
+        # 기본 모드 사격
+        self._fire_bullet(self.LEFT_DAMAGE, self.LEFT_SPREAD, self.left_click_ammo_cost)
+
+    def on_right_click(self):
+        # ADS 모드 사격
+        self._fire_bullet(self.RIGHT_DAMAGE, self.RIGHT_SPREAD, self.right_click_ammo_cost)
+
+    def _fire_bullet(self, damage, spread_deg, ammo_cost):
+        if self.get_ammo_gauge() < ammo_cost:
+            return
+        self.reduce_ammo(ammo_cost)
+        self.sounds["fire"].play()
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        angle = math.atan2(dy, dx)
+        spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
+        angle += spread
+
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+        bullet_x = px + offset_x
+        bullet_y = py + offset_y
+
+        bullet = Bullet(
+            bullet_x,
+            bullet_y,
+            bullet_x + vx * self.RANGE,
+            bullet_y + vy * self.RANGE,
+            spread_angle_degrees=spread_deg,
+            bullet_image=self.bullet_images[0],
+            speed=self.SPEED,
+            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
+            damage=damage
+        )
+        bullet.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet)
+
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            vx_c = math.cos(eject_angle) * 1.2
+            vy_c = math.sin(eject_angle) * 1.2
+            scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+class Gun17(WeaponBase):
+    AMMO_COST = 5
+    BULLETS_PER_BURST = 3
+    BURST_INTERVAL = 70
+    FIRE_DELAY = 600
+    DAMAGE = 30
+    SPREAD = 0
+    RANGE = 1900
+    SPEED = 12 * config.PLAYER_VIEW_SCALE
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun17(
+            name="FAMAS",
+            front_image=weapon_assets["gun17"]["front"],
+            topdown_image=weapon_assets["gun17"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun17"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun17"]["cartridges"],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun17.AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=3,
+            sounds_dict={
+                "fire": sounds["gun17_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = Gun17.FIRE_DELAY
+        self.recoil_strength = 6
+        self.speed_penalty = 0.08
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+        self.shake_strength = 12
+
+        self.burst_shots_remaining = 0
+        self.last_burst_shot_time = 0
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+
+        # 점사 발사 처리
+        if self.burst_shots_remaining > 0:
+            if now - self.last_burst_shot_time >= self.BURST_INTERVAL:
+                self._fire_single_bullet()
+                self.burst_shots_remaining -= 1
+                self.last_burst_shot_time = now
+            return  # 점사 중에는 새로운 발사 입력 무시
+
+        # 점사 시작 조건
+        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
+            if self.get_ammo_gauge() >= self.AMMO_COST:
+                self.on_left_click()
+                self.last_shot_time = now
+
+    def on_left_click(self):
+        self.reduce_ammo(self.AMMO_COST)
+        self.sounds["fire"].play()
+
+        config.shake_timer = 5
+        config.shake_strength = self.shake_strength
+
+        self.burst_shots_remaining = self.BULLETS_PER_BURST
+        self.last_burst_shot_time = 0
+
+    def _fire_single_bullet(self):
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        angle = math.atan2(dy, dx)
+
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+        bullet_x = px + offset_x
+        bullet_y = py + offset_y
+
+        bullet = Bullet(
+            bullet_x,
+            bullet_y,
+            bullet_x + vx * self.RANGE,
+            bullet_y + vy * self.RANGE,
+            spread_angle_degrees=self.SPREAD,
+            bullet_image=self.bullet_images[0],
+            speed=self.SPEED,
+            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
+            damage=self.DAMAGE
+        )
+        bullet.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet)
+
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            vx_c = math.cos(eject_angle) * 1.2
+            vy_c = math.sin(eject_angle) * 1.2
+            scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+class Gun18(WeaponBase):
+    AMMO_COST = 7
+    FIRE_DELAY = 80
+    DAMAGE = 13
+    SPREAD = 30
+    RANGE = 2000
+    SPEED = 11 * config.PLAYER_VIEW_SCALE
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun18(
+            name="SMG-11",
+            front_image=weapon_assets["gun18"]["front"],
+            topdown_image=weapon_assets["gun18"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun18"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun18"]["cartridges"],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun18.AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=1,
+            sounds_dict={
+                "fire": sounds["gun18_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = Gun18.FIRE_DELAY
+        self.recoil_strength = 5
+        self.speed_penalty = 0.03
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 45
+        self.shake_strength = 8
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+
+        # 좌클릭 자동사격
+        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
+
+    def on_left_click(self):
+        self._fire_bullet(self.DAMAGE, self.SPREAD, self.left_click_ammo_cost)
+
+    def _fire_bullet(self, damage, spread_deg, ammo_cost):
+        if self.get_ammo_gauge() < ammo_cost:
+            return
+        self.reduce_ammo(ammo_cost)
+        self.sounds["fire"].play()
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        angle = math.atan2(dy, dx)
+        spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
+        angle += spread
+
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+        bullet_x = px + offset_x
+        bullet_y = py + offset_y
+
+        bullet = Bullet(
+            bullet_x,
+            bullet_y,
+            bullet_x + vx * self.RANGE,
+            bullet_y + vy * self.RANGE,
+            spread_angle_degrees=spread_deg,
+            bullet_image=self.bullet_images[0],
+            speed=self.SPEED,
+            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
+            damage=damage
+        )
+        bullet.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet)
+
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            vx_c = math.cos(eject_angle) * 1.2
+            vy_c = math.sin(eject_angle) * 1.2
+            scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10, Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18]

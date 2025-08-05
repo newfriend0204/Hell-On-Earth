@@ -50,7 +50,7 @@ START_WEAPONS = [
     WEAPON_CLASSES[3],
     WEAPON_CLASSES[4],
     WEAPON_CLASSES[13],
-    WEAPON_CLASSES[14],
+    WEAPON_CLASSES[17],
 ]
 
 original_player_image = images["player"]

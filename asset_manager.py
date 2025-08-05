@@ -62,6 +62,9 @@ def load_images():
     gun17_img = pygame.image.load(path_image("image", "Gun", "Gun17Player.png")).convert_alpha()
     gun17_img = pygame.transform.smoothscale(gun17_img, (55, int(gun17_img.get_height() * (55 / gun17_img.get_width()))))
 
+    gun18_img = pygame.image.load(path_image("image", "Gun", "Gun18Player.png")).convert_alpha()
+    gun18_img = pygame.transform.smoothscale(gun18_img, (50, int(gun18_img.get_height() * (50 / gun18_img.get_width()))))
+
     boss1gun1_img = pygame.image.load(path_image("image", "Gun", "Boss1Gun1.png")).convert_alpha()
     boss1gun1_img = pygame.transform.smoothscale(boss1gun1_img, (50, int(boss1gun1_img.get_height() * (50 / boss1gun1_img.get_width()))))
 
@@ -212,6 +215,7 @@ def load_images():
         "gun15": gun15_img,
         "gun16": gun16_img,
         "gun17": gun17_img,
+        "gun18": gun18_img,
         "boss1gun1": boss1gun1_img,
         "boss1gun2": boss1gun2_img,
         "bullet1": bullet1_img,
@@ -345,6 +349,24 @@ def load_weapon_assets(images):
             "topdown": images["gun15"],
             "bullets": [images["bullet3"]],
             "cartridges": [],
+        },
+        "gun16": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun16.png")).convert_alpha(),
+            "topdown": images["gun16"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun17": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun17.png")).convert_alpha(),
+            "topdown": images["gun17"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun18": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun18.png")).convert_alpha(),
+            "topdown": images["gun18"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
         },
     }
     return weapons
