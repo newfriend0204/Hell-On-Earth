@@ -638,6 +638,234 @@ class PressureBullet:
              self.y - world_offset_y - self.image.get_height() / 2)
         )
 
+class Fireball:
+    # 화염구 투사체: 직격 피해와 짧은 화상 DOT를 주는 발사체
+    def __init__(self, x, y, vx, vy, damage, burn_damage, burn_duration, image):
+        self.x = x
+        self.y = y
+        self.vx = vx * PLAYER_VIEW_SCALE
+        self.vy = vy * PLAYER_VIEW_SCALE
+        self.damage = damage
+        self.burn_damage = burn_damage
+        self.burn_duration = burn_duration
+        self.image = image
+        self.angle_degrees = math.degrees(math.atan2(vy, vx))
+        self.collider = Collider("circle", center=(x, y), size=image.get_width() // 4)
+        self.owner = None
+        self.to_remove = False
+
+        self.hit_player = False
+        self.hit_start_time = 0
+        self.last_burn_tick = 0
+
+    def update(self, obstacle_manager):
+        # 비행, 충돌 판정, 플레이어 명중 시 DOT 처리
+        if not self.hit_player:
+            self.x += self.vx
+            self.y += self.vy
+            self.collider.center = (self.x, self.y)
+
+            px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.collider.size:
+                if self.owner and hasattr(self.owner, "damage_player"):
+                    self.owner.damage_player(self.damage)
+                self.hit_player = True
+                self.hit_start_time = pygame.time.get_ticks()
+                self.last_burn_tick = self.hit_start_time
+                return
+
+            for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+                for c in obs.colliders:
+                    if c.check_collision_circle((self.x, self.y), self.collider.size, (obs.world_x, obs.world_y)):
+                        if not getattr(c, "bullet_passable", False):
+                            self.to_remove = True
+                            return
+        else:
+            now = pygame.time.get_ticks()
+            if now - self.hit_start_time <= self.burn_duration:
+                if now - self.last_burn_tick >= 500:
+                    if self.owner and hasattr(self.owner, "damage_player"):
+                        self.owner.damage_player(self.burn_damage)
+                    self.last_burn_tick = now
+            else:
+                self.to_remove = True
+
+    def draw(self, screen, world_x, world_y):
+        scale_factor = 50 / self.image.get_width()
+        scaled_w = int(self.image.get_width() * scale_factor)
+        scaled_h = int(self.image.get_height() * scale_factor)
+        scaled_img = pygame.transform.smoothscale(self.image, (scaled_w, scaled_h))
+        rotated = pygame.transform.rotate(scaled_img, -self.angle_degrees)
+        rect = rotated.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(rotated, rect)
+
+class FlamePillar:
+    # 지연 후 활성화되어 범위 피해를 주는 불기둥
+    def __init__(self, center_x, center_y, radius, delay, duration, damage_tick, image, warning_color):
+        self.cx = center_x
+        self.cy = center_y
+        self.radius = int(radius * 0.8)
+        self.delay = delay
+        self.duration = int(duration * 1.5)
+        self.damage_tick = damage_tick
+        self.image = image
+        self.warning_color = warning_color
+        self.spawn_time = pygame.time.get_ticks()
+        self.active = False
+        self.finished = False
+        self.last_damage_time = 0
+        self.start_time = None
+
+        self.grow_time = 50
+        self.fade_time = 50
+
+    def update(self):
+        # 활성화/지속 시간 관리, 범위 내 플레이어 피해 적용
+        now = pygame.time.get_ticks()
+        elapsed = now - self.spawn_time
+
+        if not self.active:
+            if elapsed >= self.delay:
+                self.active = True
+                self.start_time = now
+        else:
+            life_elapsed = now - self.start_time
+            if life_elapsed >= self.duration:
+                self.finished = True
+                return
+
+            px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+            if math.hypot(px - self.cx, py - self.cy) <= self.radius:
+                if now - self.last_damage_time >= 500:
+                    if hasattr(config, "damage_player"):
+                        config.damage_player(self.damage_tick)
+                    self.last_damage_time = now
+
+    def draw(self, screen, world_x, world_y):
+        # 경고 원과 불기둥 이미지를 상황에 맞게 표시
+        if not self.active:
+            warn_surf = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(warn_surf, self.warning_color, (self.radius, self.radius), self.radius)
+            screen.blit(warn_surf, (self.cx - self.radius - world_x, self.cy - self.radius - world_y))
+        else:
+            now = pygame.time.get_ticks()
+            life_elapsed = now - self.start_time
+            progress = life_elapsed / self.duration
+
+            if life_elapsed < self.grow_time:
+                scale_factor = life_elapsed / self.grow_time
+                alpha = int(255 * scale_factor)
+            elif self.duration - life_elapsed < self.fade_time:
+                scale_factor = (self.duration - life_elapsed) / self.fade_time
+                alpha = int(255 * scale_factor)
+            else:
+                scale_factor = 1.0
+                alpha = 255
+
+            size = max(1, int(self.radius * 2 * scale_factor))
+            scaled_img = pygame.transform.smoothscale(self.image, (size, size))
+            scaled_img.set_alpha(alpha)
+
+            rect = scaled_img.get_rect(center=(self.cx - world_x, self.cy - world_y))
+            screen.blit(scaled_img, rect)
+
+class TeleportFlash:
+    # 순간이동 시 잠깐 표시되는 붉은 번쩍임 효과
+    def __init__(self, x, y, color=(255, 50, 50), duration=250):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.duration = duration
+        self.start_time = pygame.time.get_ticks()
+        self.finished = False
+
+    def update(self):
+        if pygame.time.get_ticks() - self.start_time >= self.duration:
+            self.finished = True
+
+    def draw(self, screen, world_x, world_y):
+        alpha = max(0, 255 - int(255 * ((pygame.time.get_ticks() - self.start_time) / self.duration)))
+        surf = pygame.Surface((80, 80), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (*self.color, alpha), (40, 40), 40)
+        screen.blit(surf, (self.x - 40 - world_x, self.y - 40 - world_y))
+
+class GrenadeProjectile:
+    # 발사 후 일정 시간 뒤 폭발하는 수류탄 투사체
+    def __init__(self, x, y, vx, vy, speed, image, explosion_radius, max_damage, min_damage, explosion_image, explosion_sound, explosion_delay=1500):
+        self.x = x
+        self.y = y
+        self.vx = vx * speed * config.PLAYER_VIEW_SCALE
+        self.vy = vy * speed * config.PLAYER_VIEW_SCALE
+        self.image = image
+        self.start_time = pygame.time.get_ticks()
+        self.explosion_delay = explosion_delay
+        self.scale = 1.0
+        self.explosion_radius = explosion_radius
+        self.max_damage = max_damage
+        self.min_damage = min_damage
+        self.explosion_image = explosion_image
+        self.explosion_sound = explosion_sound
+        self.collider = Collider("circle", center=(x, y), size=image.get_width() // 2)
+        self.alive = True
+
+    def update(self, obstacle_manager):
+        # 투사체 이동 및 폭발 타이머 관리
+        if not self.alive:
+            return
+
+        self.x += self.vx
+        self.y += self.vy
+        self.collider.center = (self.x, self.y)
+
+        if not getattr(self, "ignore_enemy_collision", False):
+            for enemy in config.all_enemies:
+                if not getattr(enemy, "alive", True):
+                    continue
+                dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+                if dist <= self.collider.size:
+                    self.explode()
+                    return
+
+        elapsed = pygame.time.get_ticks() - self.start_time
+        t = (elapsed % 500) / 500
+        self.scale = 1.0 + 0.3 * math.sin(t * math.pi)
+
+        if elapsed >= self.explosion_delay:
+            self.explode()
+
+    def explode(self):
+        # 폭발 처리 및 범위 피해 적용
+        if not self.alive:
+            return
+        self.alive = False
+        self.explosion_sound.play()
+        config.bullets.append(ExplosionEffectPersistent(self.x, self.y, self.explosion_image))
+
+        if not config.combat_state:
+            return
+
+        for enemy in config.all_enemies[:]:
+            if not getattr(enemy, "alive", True):
+                continue
+            dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+            if dist <= self.explosion_radius:
+                factor = max(0, min(1, 1 - dist / self.explosion_radius))
+                damage = self.min_damage + (self.max_damage - self.min_damage) * factor
+                enemy.hit(damage, config.blood_effects)
+                if not enemy.alive:
+                    if enemy in config.all_enemies:
+                        config.all_enemies.remove(enemy)
+                    config.blood_effects.append(ScatteredBlood(enemy.world_x, enemy.world_y))
+
+    def draw(self, screen, world_x, world_y):
+        # 화면에 수류탄 투사체를 크기 변화와 함께 그림
+        if not self.alive:
+            return
+        size = int(self.image.get_width() * self.scale)
+        img_scaled = pygame.transform.smoothscale(self.image, (size, size))
+        rect = img_scaled.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(img_scaled, rect)
+
 class ExplosionEffectPersistent:
     # 일정 시간 지속되는 폭발 시각 효과
     def __init__(self, x, y, image, duration=0.4, scale=1.5):

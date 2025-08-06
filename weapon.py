@@ -2336,4 +2336,213 @@ class Gun18(WeaponBase):
             scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
             config.scattered_bullets.append(scatter)
 
-WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10, Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18]
+class Gun19(WeaponBase):
+    AMMO_COST_DEFEND = 8
+    DEFEND_ANGLE = 120
+    DEFEND_DISTANCE = 80 * config.PLAYER_VIEW_SCALE
+    DEPLOY_DURATION = 100
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun19(
+            name="방패",
+            front_image=weapon_assets["gun19"]["front"],
+            topdown_image=weapon_assets["gun19"]["topdown"],
+            uses_bullets=False,
+            bullet_images=[],
+            uses_cartridges=False,
+            cartridge_images=[],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=0,
+            right_click_ammo_cost=0,
+            tier=4,
+            sounds_dict={
+                "defend": sounds["gun19_defend"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.state = "idle"
+        self.deploy_start_time = 0
+        self.recoil_strength = 0
+        self.speed_penalty = 0.05
+        self.distance_from_center_idle = config.PLAYER_VIEW_SCALE * 0
+        self.distance_from_center_deployed = config.PLAYER_VIEW_SCALE * 45
+        self.current_distance = self.distance_from_center_idle
+        self.distance_from_center = self.current_distance
+        self.shake_strength = 0
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        # 방패 상태 머신: idle → deploying → defending
+        now = pygame.time.get_ticks()
+
+        if self.state == "idle":
+            self.current_distance = self.distance_from_center_idle
+            if mouse_left_down:
+                self.state = "deploying"
+                self.deploy_start_time = now
+
+        elif self.state == "deploying":
+            progress = (now - self.deploy_start_time) / self.DEPLOY_DURATION
+            if progress >= 1.0:
+                self.state = "defending"
+                self.current_distance = self.distance_from_center_deployed
+            else:
+                self.current_distance = self.distance_from_center_idle + \
+                    (self.distance_from_center_deployed - self.distance_from_center_idle) * progress
+
+            if not mouse_left_down:
+                self.state = "idle"
+
+        elif self.state == "defending":
+            self.current_distance = self.distance_from_center_deployed
+            if not mouse_left_down:
+                self.state = "idle"
+
+        self.distance_from_center = self.current_distance
+
+    def is_defending(self):
+        return self.state == "defending"
+
+    def try_block_bullet(self, bullet):
+        # 현재 방어 상태일 때 총알을 막을 수 있는지 판정
+        if not self.is_defending():
+            return False
+
+        px, py = self.get_player_world_position()
+        if hasattr(bullet, "world_x") and hasattr(bullet, "world_y"):
+            bx, by = bullet.world_x, bullet.world_y
+        elif hasattr(bullet, "x") and hasattr(bullet, "y"):
+            bx, by = bullet.x, bullet.y
+        else:
+            return False
+
+        dx = bx - px
+        dy = by - py
+        dist = math.hypot(dx, dy)
+        if dist > self.DEFEND_DISTANCE:
+            return False
+
+        facing_dx = math.cos(math.atan2(
+            pygame.mouse.get_pos()[1] - config.player_rect.centery,
+            pygame.mouse.get_pos()[0] - config.player_rect.centerx))
+        facing_dy = math.sin(math.atan2(
+            pygame.mouse.get_pos()[1] - config.player_rect.centery,
+            pygame.mouse.get_pos()[0] - config.player_rect.centerx))
+
+        dot = (dx / dist) * facing_dx + (dy / dist) * facing_dy
+        angle_diff = math.degrees(math.acos(max(min(dot, 1.0), -1.0)))
+        if angle_diff <= self.DEFEND_ANGLE / 2:
+            if self.get_ammo_gauge() >= self.AMMO_COST_DEFEND:
+                self.reduce_ammo(self.AMMO_COST_DEFEND)
+                self.sounds["defend"].play()
+                return True
+
+        return False
+
+class Gun20(WeaponBase):
+    FIRE_DELAY = 300
+    AMMO_COST = 35
+    GRENADE_SPEED = 2.5
+    EXPLOSION_RADIUS = 150
+    DAMAGE_MAX = 80
+    DAMAGE_MIN = 30
+    THROW_DELAY = 400
+    EXPLOSION_DELAY = 800
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun20(
+            name="수류탄",
+            front_image=weapon_assets["gun20"]["front"],
+            topdown_image=weapon_assets["gun20"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun20"]["bullets"],
+            explosion_image=weapon_assets["gun20"]["explosion"],
+            uses_cartridges=False,
+            cartridge_images=[],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun20.AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=4,
+            sounds_dict={
+                "fire": sounds["gun20_fire"],
+                "explosion": sounds["gun20_explosion"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, explosion_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.explosion_image = explosion_image
+        self.fire_delay = Gun20.FIRE_DELAY
+        self.recoil_strength = 5
+        self.speed_penalty = 0.08
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 35
+        self.shake_strength = 10
+        self.pending_throw_time = None
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        # 발사 예약 및 실행 처리
+        now = pygame.time.get_ticks()
+
+        if self.pending_throw_time and now >= self.pending_throw_time:
+            self._do_throw_grenade()
+            self.pending_throw_time = None
+            self.last_shot_time = now
+
+        if mouse_left_down and now - self.last_shot_time >= self.fire_delay and self.pending_throw_time is None:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.reduce_ammo(self.left_click_ammo_cost)
+                self.sounds["fire"].play()
+                self.pending_throw_time = now + self.THROW_DELAY
+
+    def _do_throw_grenade(self, target_pos=None):
+        # 실제 수류탄 발사 로직 (3발 부채꼴)
+        if target_pos:
+            mouse_x, mouse_y = target_pos
+        else:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        px, py = self.get_player_world_position()
+        base_angle = math.atan2(mouse_y - config.player_rect.centery, mouse_x - config.player_rect.centerx)
+
+        from entities import GrenadeProjectile
+
+        for offset_deg in (-15, 0, 15):
+            angle = base_angle + math.radians(offset_deg)
+            vx = math.cos(angle)
+            vy = math.sin(angle)
+
+            offset_x = vx * self.distance_from_center
+            offset_y = vy * self.distance_from_center
+
+            grenade = GrenadeProjectile(
+                x=px + offset_x,
+                y=py + offset_y,
+                vx=vx,
+                vy=vy,
+                speed=self.GRENADE_SPEED,
+                image=self.bullet_images[0],
+                explosion_radius=self.EXPLOSION_RADIUS,
+                max_damage=self.DAMAGE_MAX,
+                min_damage=self.DAMAGE_MIN,
+                explosion_image=self.explosion_image,
+                explosion_sound=self.sounds["explosion"],
+                explosion_delay=self.EXPLOSION_DELAY
+            )
+            grenade.ignore_enemy_collision = True
+            config.bullets.append(grenade)
+
+WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10,
+                  Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18, Gun19, Gun20]

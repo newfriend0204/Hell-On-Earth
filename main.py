@@ -50,7 +50,7 @@ START_WEAPONS = [
     WEAPON_CLASSES[3],
     WEAPON_CLASSES[4],
     WEAPON_CLASSES[13],
-    WEAPON_CLASSES[17],
+    WEAPON_CLASSES[19],
 ]
 
 original_player_image = images["player"]
@@ -346,7 +346,6 @@ def try_pickup_weapon():
             previous_distance = current_distance
             target_distance = weapons[current_weapon_index].distance_from_center
 
-            # ★ 방 전용 무기 목록에서도 제거
             room_key = tuple(current_room_pos)
             if room_key in room_field_weapons and fw in room_field_weapons[room_key]:
                 room_field_weapons[room_key].remove(fw)
@@ -363,6 +362,7 @@ def damage_player(amount):
     shake_timer = shake_timer_max
     shake_elapsed = 0.0
     shake_magnitude = 3
+config.damage_player = damage_player
 
 def get_player_world_position():
     return (
@@ -1851,6 +1851,16 @@ while running:
     for bullet in config.global_enemy_bullets[:]:
         # 적 발사체 업데이트 및 플레이어 충돌 체크
         bullet.update(obstacle_manager)
+        
+        # Gun19 방패 판정
+        from weapon import Gun19
+        current_weapon = weapons[current_weapon_index]
+        if isinstance(current_weapon, Gun19):
+            if current_weapon.try_block_bullet(bullet):
+                bullet.to_remove = True
+                if bullet in config.global_enemy_bullets:
+                    config.global_enemy_bullets.remove(bullet)
+                continue
 
         if check_circle_collision(
             bullet.collider.center,
@@ -1952,13 +1962,14 @@ while running:
                     enemy_center_world,
                     enemy.radius
                 ):
-                    damage = getattr(bullet, "damage", 0)
-                    enemy.hit(damage, blood_effects)
-                    if not enemy.alive:
-                        enemies.remove(enemy)
-                    bullet.to_remove = True
-                    hit = True
-                    break
+                    if not getattr(bullet, "ignore_enemy_collision", False):
+                        damage = getattr(bullet, "damage", 0)
+                        enemy.hit(damage, blood_effects)
+                        if not enemy.alive:
+                            enemies.remove(enemy)
+                        bullet.to_remove = True
+                        hit = True
+                        break
 
         if hit:
             bullet.to_remove = True

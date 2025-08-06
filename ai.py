@@ -1300,6 +1300,307 @@ class Enemy5(AIBase):
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
+class Enemy6(AIBase):
+    rank = 7
+    HP_MAX = 700
+    SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+
+    FIREBALL_DAMAGE = 60
+    FIREBALL_BURN_DMG = 12
+    FIREBALL_BURN_DURATION = 2000
+    FIREBALL_COOLDOWN = 1500
+
+    PILLAR_DAMAGE_TICK = 35
+    PILLAR_RADIUS = 150
+    PILLAR_DELAY = 700
+    PILLAR_DURATION = 3000
+    PILLAR_COOLDOWN = 3500
+
+    TELEPORT_MIN_COOLDOWN = 6000
+    TELEPORT_MAX_COOLDOWN = 8000
+    TELEPORT_DISTANCE = 550
+    TELEPORT_SAFE_DIST = 700
+    TELEPORT_INVULN_TIME = 300
+
+    ENRAGE_THRESHOLD = 0.5
+    ENRAGE_SPEED_MULT = 1.2
+    ENRAGE_PILLAR_EXTRA = 1000
+    ENRAGE_TELEPORT_REDUCE = 1000
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.SPEED,
+            near_threshold=200,
+            far_threshold=900,
+            radius=55,
+            push_strength=0.0,
+            alert_duration=800,
+            damage_player_fn=damage_player_fn
+        )
+        self.image_original = images["enemy6"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP_MAX
+        self.enraged = False
+
+        now = pygame.time.get_ticks()
+        self.next_fireball_time = now + 2000
+        self.next_pillar_time = now + 3000
+        self.next_teleport_time = now + random.randint(self.TELEPORT_MIN_COOLDOWN, self.TELEPORT_MAX_COOLDOWN)
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 플레이어 위치와 거리 기반으로 공격, 순간이동, 이동 로직 수행
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx = px - self.world_x
+        dy = py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        now = pygame.time.get_ticks()
+
+        if not self.enraged and self.hp <= self.HP_MAX * self.ENRAGE_THRESHOLD:
+            self.enraged = True
+            self.FIREBALL_COOLDOWN = int(self.FIREBALL_COOLDOWN / self.ENRAGE_SPEED_MULT)
+            self.PILLAR_COOLDOWN = int(self.PILLAR_COOLDOWN / self.ENRAGE_SPEED_MULT)
+            self.PILLAR_DURATION += self.ENRAGE_PILLAR_EXTRA
+            self.TELEPORT_MIN_COOLDOWN -= self.ENRAGE_TELEPORT_REDUCE
+            self.TELEPORT_MAX_COOLDOWN -= self.ENRAGE_TELEPORT_REDUCE
+
+        if now >= self.next_teleport_time and dist_to_player <= self.TELEPORT_SAFE_DIST:
+            self.teleport_away_from_player((px, py))
+            self.next_teleport_time = now + random.randint(self.TELEPORT_MIN_COOLDOWN, self.TELEPORT_MAX_COOLDOWN)
+            self.cast_fireball((px, py))
+
+        if now >= self.next_pillar_time:
+            self.cast_flame_pillar((px, py))
+            self.next_pillar_time = now + self.PILLAR_COOLDOWN
+
+        if now >= self.next_fireball_time:
+            self.cast_fireball((px, py))
+            self.next_fireball_time = now + self.FIREBALL_COOLDOWN
+
+        if dist_to_player < 600:
+            self.goal_pos = (
+                self.world_x - math.cos(self.direction_angle) * 200,
+                self.world_y - math.sin(self.direction_angle) * 200
+            )
+        else:
+            self.goal_pos = (
+                self.world_x + math.cos(self.direction_angle + math.pi / 2) * 150,
+                self.world_y + math.sin(self.direction_angle + math.pi / 2) * 150
+            )
+
+    def cast_fireball(self, player_pos):
+        # 플레이어를 향해 3갈래 화염구 발사
+        px, py = player_pos
+        base_angle = math.atan2(py - self.world_y, px - self.world_x)
+        for offset in (-math.radians(20), 0, math.radians(20)):
+            angle = base_angle + offset
+            vx = math.cos(angle)
+            vy = math.sin(angle)
+            from entities import Fireball
+            fb = Fireball(
+                x=self.world_x,
+                y=self.world_y,
+                vx=vx * 8,
+                vy=vy * 8,
+                damage=self.FIREBALL_DAMAGE,
+                burn_damage=self.FIREBALL_BURN_DMG,
+                burn_duration=self.FIREBALL_BURN_DURATION,
+                image=self.images["fireball"]
+            )
+            fb.owner = self
+            config.global_enemy_bullets.append(fb)
+        self.sounds["fireball"].play()
+
+    def cast_flame_pillar(self, player_pos):
+        # 지연 후 플레이어 위치에 불기둥 생성
+        px, py = player_pos
+        from entities import FlamePillar
+        pillar = FlamePillar(
+            center_x=px,
+            center_y=py,
+            radius=self.PILLAR_RADIUS,
+            delay=self.PILLAR_DELAY,
+            duration=self.PILLAR_DURATION,
+            damage_tick=self.PILLAR_DAMAGE_TICK,
+            image=self.images["flame_pillar"],
+            warning_color=(255, 0, 0, 128)
+        )
+        config.effects.append(pillar)
+        self.sounds["flame_pillar"].play()
+
+    def teleport_away_from_player(self, player_pos):
+        # 플레이어 반대 방향으로 순간이동 (맵 경계/장애물 체크 포함)
+        px, py = player_pos
+        angle = math.atan2(self.world_y - py, self.world_x - px)
+        tx = self.world_x + math.cos(angle) * self.TELEPORT_DISTANCE
+        ty = self.world_y + math.sin(angle) * self.TELEPORT_DISTANCE
+
+        margin = 50
+        tx = max(margin, min(tx, self.map_width - margin))
+        ty = max(margin, min(ty, self.map_height - margin))
+
+        if config.obstacle_manager.check_collision_circle((tx, ty), self.radius):
+            return
+
+        self.world_x, self.world_y = tx, ty
+        self.invulnerable_until = pygame.time.get_ticks() + self.TELEPORT_INVULN_TIME
+
+        from entities import TeleportFlash
+        flash = TeleportFlash(self.world_x, self.world_y, color=(255, 50, 50))
+        config.effects.append(flash)
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(12, 14)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        self.draw_alert(screen, screen_x, screen_y)
+
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+class Enemy7(AIBase):
+    rank = 1
+    HP_MAX = 150
+    SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.05
+
+    FIREBALL_DAMAGE = 10
+    FIREBALL_BURN_DMG = 5
+    FIREBALL_BURN_DURATION = 1000
+    FIREBALL_COOLDOWN = 2200
+
+    MIN_SAFE_DIST = 400
+    CAST_TIME = 1000
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.SPEED,
+            near_threshold=0,
+            far_threshold=9999,
+            radius=40,
+            push_strength=0.0,
+            alert_duration=500,
+            damage_player_fn=damage_player_fn
+        )
+        self.image_original = images["enemy7"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP_MAX
+
+        now = pygame.time.get_ticks()
+        self.next_fireball_time = now + 1000
+        self.casting = False
+        self.cast_start_time = 0
+        self.show_alert = False
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 플레이어와 일정 거리 유지, 랜덤 무빙 + 화염구 시전
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx = px - self.world_x
+        dy = py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        now = pygame.time.get_ticks()
+
+        if self.casting:
+            if now - self.cast_start_time >= self.CAST_TIME:
+                self.cast_fireball((px, py))
+                self.casting = False
+                self.show_alert = False
+                self.next_fireball_time = now + self.FIREBALL_COOLDOWN
+            return
+
+        if now >= self.next_fireball_time:
+            self.casting = True
+            self.cast_start_time = now
+            self.show_alert = True
+            return
+
+        if dist_to_player < self.MIN_SAFE_DIST:
+            angle = math.atan2(self.world_y - py, self.world_x - px) + random.uniform(-0.5, 0.5)
+            move_dist = random.randint(100, 200)
+        else:
+            angle = random.uniform(0, math.pi * 2)
+            move_dist = random.randint(150, 300)
+
+        target_x = px + math.cos(angle) * move_dist
+        target_y = py + math.sin(angle) * move_dist
+        target_x = max(0, min(target_x, self.map_width))
+        target_y = max(0, min(target_y, self.map_height))
+
+        self.goal_pos = (target_x, target_y)
+
+    def cast_fireball(self, player_pos):
+        # 단일 화염구 발사
+        px, py = player_pos
+        angle = math.atan2(py - self.world_y, px - self.world_x)
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+        from entities import Fireball
+        fb = Fireball(
+            x=self.world_x,
+            y=self.world_y,
+            vx=vx * 6,
+            vy=vy * 6,
+            damage=self.FIREBALL_DAMAGE,
+            burn_damage=self.FIREBALL_BURN_DMG,
+            burn_duration=self.FIREBALL_BURN_DURATION,
+            image=self.images["fireball"]
+        )
+        fb.owner = self
+        config.global_enemy_bullets.append(fb)
+        self.sounds["fireball"].play()
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 4)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        if self.show_alert:
+            self.draw_alert(screen, screen_x, screen_y)
+
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
 class Boss1(AIBase):
     rank=10
 

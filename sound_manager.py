@@ -59,12 +59,17 @@ def load_sounds():
         "gun16_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun16Fire.mp3")),
         "gun17_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun17Fire.mp3")),
         "gun18_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun18Fire.mp3")),
+        "gun19_defend": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun19Defend.mp3")),
+        "gun20_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun20Fire.mp3")),
+        "gun20_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun20Explosion.mp3")),
     }
 
     entity_sounds = {
         "drone_spawn": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneSpawn.mp3")),
         "drone_warning": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneWarning.mp3")),
         "drone_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
+        "fireball": pygame.mixer.Sound(path_sound("Sound", "Entity", "Fireball.mp3")),
+        "flame_pillar": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlamePillar.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)
@@ -99,6 +104,8 @@ def load_sounds():
     entity_sounds["drone_spawn"].set_volume(0.5)
     entity_sounds["drone_warning"].set_volume(1)
     entity_sounds["drone_explosion"].set_volume(0.5)
+    entity_sounds["fireball"].set_volume(0.5)
+    entity_sounds["flame_pillar"].set_volume(0.5)
 
     return {
         # 모든 사운드 딕셔너리 반환
