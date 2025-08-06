@@ -277,6 +277,7 @@ damage_flash_fade_speed = 5
 blood_effects = []
 config.blood_effects = blood_effects
 config.effects = []
+config.active_dots = []
 
 kill_count = 0
 
@@ -1414,6 +1415,17 @@ while running:
             effect.update()
         if getattr(effect, "finished", False):
             config.effects.remove(effect)
+        if hasattr(effect, "alive") and not effect.alive:
+            config.effects.remove(effect)
+
+    now = pygame.time.get_ticks()
+    for dot in config.active_dots[:]:
+        if now >= dot["end_time"]:
+            config.active_dots.remove(dot)
+        else:
+            # 초당 피해
+            if now % 1000 < 16:  # 약 1초 간격
+                config.damage_player(dot["damage"])
 
     if changing_weapon:
         change_animation_timer += clock.get_time() / 1000.0
@@ -1851,6 +1863,13 @@ while running:
     for bullet in config.global_enemy_bullets[:]:
         # 적 발사체 업데이트 및 플레이어 충돌 체크
         bullet.update(obstacle_manager)
+
+        from entities import GrenadeProjectile
+        if isinstance(bullet, GrenadeProjectile):
+            if pygame.time.get_ticks() - bullet.start_time < bullet.explosion_delay:
+                # 아직 폭발 전이면 충돌 판정 스킵
+                bullet.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+                continue
         
         # Gun19 방패 판정
         from weapon import Gun19
@@ -1871,7 +1890,11 @@ while running:
             from entities import HomingMissile
             if isinstance(bullet, HomingMissile):
                 bullet.explode()
+            elif isinstance(bullet, GrenadeProjectile):
+                # 🔹 수류탄 폭발 시에만 피해 적용 (explode()에서 처리)
+                pass
             else:
+                # 일반 탄환 데미지
                 player_hp -= bullet.damage
                 damage_flash_alpha = 255
                 shake_timer = shake_timer_max

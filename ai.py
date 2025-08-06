@@ -1601,6 +1601,231 @@ class Enemy7(AIBase):
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
+class Enemy8(AIBase):
+    rank = 2
+
+    HP = 220
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
+    RETREAT_SPEED = BASE_SPEED * 1.2
+
+    GRENADE_SPEED = 4
+    GRENADE_EXPLOSION_RADIUS = 150
+    GRENADE_DAMAGE = 30
+    GRENADE_KNOCKBACK = 120
+    GRENADE_EXPLOSION_DELAY = 1500  # ms
+    THROW_COOLDOWN = 2500
+    PREPARE_TIME = 500
+    NEAR_DISTANCE = 300 * PLAYER_VIEW_SCALE
+    FAR_DISTANCE = 600 * PLAYER_VIEW_SCALE
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=30 * PLAYER_VIEW_SCALE,
+            push_strength=0.0,
+            alert_duration=self.PREPARE_TIME,
+            damage_player_fn=damage_player_fn
+        )
+        self.image_original = images["enemy8"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.last_throw_time = -self.THROW_COOLDOWN
+        self.prepare_start_time = None
+        self.is_preparing_throw = False
+        self.show_alert = False
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx = px - self.world_x
+        dy = py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        now = pygame.time.get_ticks()
+
+        if self.is_preparing_throw:
+            if now - self.prepare_start_time >= self.PREPARE_TIME:
+                self.is_preparing_throw = False
+                self.show_alert = False
+                self.shoot(px, py)
+                self.last_throw_time = now
+            self.goal_pos = (self.world_x, self.world_y)
+            return
+
+        if now - self.last_throw_time >= self.THROW_COOLDOWN:
+            self.is_preparing_throw = True
+            self.prepare_start_time = now
+            self.show_alert = True
+            self.goal_pos = (self.world_x, self.world_y)
+            return
+
+        if dist_to_player < self.NEAR_DISTANCE:
+            angle = self.direction_angle + math.pi
+            self.goal_pos = (
+                self.world_x + math.cos(angle) * 150,
+                self.world_y + math.sin(angle) * 150
+            )
+            self.speed = self.RETREAT_SPEED
+        elif dist_to_player > self.FAR_DISTANCE:
+            self.goal_pos = (px, py)
+            self.speed = self.BASE_SPEED
+        else:
+            if self.goal_pos is None or self.move_timer <= 0:
+                angle = random.uniform(0, 2 * math.pi)
+                dist = random.randint(50, 150)
+                self.goal_pos = (
+                    self.world_x + math.cos(angle) * dist,
+                    self.world_y + math.sin(angle) * dist
+                )
+                self.move_timer = random.randint(500, 1000)
+            self.speed = self.BASE_SPEED
+
+        if not self.aware_of_player and dist_to_player < self.FAR_DISTANCE:
+            self.aware_of_player = True
+
+    def shoot(self, target_x, target_y):
+        from entities import GrenadeProjectile
+        angle = math.atan2(target_y - self.world_y, target_x - self.world_x)
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+
+        grenade = GrenadeProjectile(
+            x=self.world_x,
+            y=self.world_y,
+            vx=vx,
+            vy=vy,
+            speed=self.GRENADE_SPEED,
+            image=self.images["hand_grenade"],
+            explosion_radius=self.GRENADE_EXPLOSION_RADIUS,
+            max_damage=self.GRENADE_DAMAGE,
+            min_damage=self.GRENADE_DAMAGE,
+            explosion_image=self.images["explosion1"],
+            explosion_sound=self.sounds["gun20_explosion"],
+            explosion_delay=self.GRENADE_EXPLOSION_DELAY,
+            owner=self
+        )
+        config.global_enemy_bullets.append(grenade)
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        if self.show_alert:
+            self.draw_alert(screen, screen_x, screen_y)
+
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+class Enemy9(AIBase):
+    rank = 5
+    HP = 480
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+    RANGED_COOLDOWN = 1800
+    RANGED_RANGE = 1000
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0,
+            far_threshold=self.RANGED_RANGE,
+            radius=30 * PLAYER_VIEW_SCALE,
+            push_strength=0.0,
+            alert_duration=500,
+            damage_player_fn=damage_player_fn
+        )
+        self.image_original = images["enemy9"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+        self.last_ranged_attack = 0
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 플레이어 위치 추적 및 사거리 내 진입 시 공격
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx = px - self.world_x
+        dy = py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        now = pygame.time.get_ticks()
+
+        if self.goal_pos is None or self.move_timer <= 0:
+            angle = random.uniform(0, 2 * math.pi)
+            dist = random.randint(50, 200)
+            self.goal_pos = (
+                self.world_x + math.cos(angle) * dist,
+                self.world_y + math.sin(angle) * dist
+            )
+            self.move_timer = random.randint(500, 1000)
+
+        if dist_to_player <= self.RANGED_RANGE and now - self.last_ranged_attack >= self.RANGED_COOLDOWN:
+            self.shoot_ranged(px, py)
+            self.last_ranged_attack = now
+
+    def shoot_ranged(self, tx, ty):
+        # 산성 투사체 발사
+        from entities import AcidProjectile
+        angle = math.atan2(ty - self.world_y, tx - self.world_x)
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+        if "acid" in self.sounds:
+            self.sounds["acid"].play()
+        proj = AcidProjectile(
+            self.world_x, self.world_y, vx, vy, 9,
+            config.images["acid_projectile"], config.images["acid_pool"],
+            max_damage=15, dot_damage=5, dot_duration=3000,
+            owner=self, sounds=self.sounds
+        )
+        config.global_enemy_bullets.append(proj)
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE)
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
 class Boss1(AIBase):
     rank=10
 

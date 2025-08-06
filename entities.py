@@ -791,18 +791,25 @@ class TeleportFlash:
 
 class GrenadeProjectile:
     # 발사 후 일정 시간 뒤 폭발하는 수류탄 투사체
-    def __init__(self, x, y, vx, vy, speed, image, explosion_radius, max_damage, min_damage, explosion_image, explosion_sound, explosion_delay=1500):
+    def __init__(self, x, y, vx, vy, speed, image, explosion_radius, max_damage, min_damage,
+                 explosion_image, explosion_sound, explosion_delay=1500, owner=None):
         self.x = x
         self.y = y
         self.vx = vx * speed * config.PLAYER_VIEW_SCALE
         self.vy = vy * speed * config.PLAYER_VIEW_SCALE
-        self.image = image
+        if owner is not None:
+            self.image = image.copy()
+            self.image.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        else:
+            self.image = image
         self.start_time = pygame.time.get_ticks()
         self.explosion_delay = explosion_delay
+        self.owner = owner
         self.scale = 1.0
         self.explosion_radius = explosion_radius
         self.max_damage = max_damage
         self.min_damage = min_damage
+        self.damage = max_damage
         self.explosion_image = explosion_image
         self.explosion_sound = explosion_sound
         self.collider = Collider("circle", center=(x, y), size=image.get_width() // 2)
@@ -813,24 +820,33 @@ class GrenadeProjectile:
         if not self.alive:
             return
 
+        elapsed = pygame.time.get_ticks() - self.start_time
+
         self.x += self.vx
         self.y += self.vy
         self.collider.center = (self.x, self.y)
 
-        if not getattr(self, "ignore_enemy_collision", False):
-            for enemy in config.all_enemies:
-                if not getattr(enemy, "alive", True):
-                    continue
-                dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
-                if dist <= self.collider.size:
-                    self.explode()
-                    return
-
-        elapsed = pygame.time.get_ticks() - self.start_time
         t = (elapsed % 500) / 500
         self.scale = 1.0 + 0.3 * math.sin(t * math.pi)
 
         if elapsed >= self.explosion_delay:
+            if not getattr(self, "ignore_enemy_collision", False):
+                for enemy in config.all_enemies:
+                    if enemy is self.owner:
+                        continue
+                    if not getattr(enemy, "alive", True):
+                        continue
+                    dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+                    if dist <= self.collider.size:
+                        self.explode()
+                        return
+            if obstacle_manager:
+                for obs in obstacle_manager.placed_obstacles + obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+                    for c in obs.colliders:
+                        if c.check_collision_circle((self.x, self.y), self.collider.size, (obs.world_x, obs.world_y)):
+                            if not getattr(c, "bullet_passable", False):
+                                self.explode()
+                                return
             self.explode()
 
     def explode(self):
@@ -843,6 +859,14 @@ class GrenadeProjectile:
 
         if not config.combat_state:
             return
+        
+        px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+        dist_player = math.hypot(px - self.x, py - self.y)
+        if dist_player <= self.explosion_radius:
+            factor = max(0, min(1, 1 - dist_player / self.explosion_radius))
+            damage = self.min_damage + (self.max_damage - self.min_damage) * factor
+            if hasattr(config, "damage_player"):
+                config.damage_player(damage)
 
         for enemy in config.all_enemies[:]:
             if not getattr(enemy, "alive", True):
@@ -865,6 +889,114 @@ class GrenadeProjectile:
         img_scaled = pygame.transform.smoothscale(self.image, (size, size))
         rect = img_scaled.get_rect(center=(self.x - world_x, self.y - world_y))
         screen.blit(img_scaled, rect)
+
+class AcidPool:
+    # 일정 시간 동안 DOT 피해를 주는 산성 웅덩이
+    def __init__(self, x, y, image, radius, dot_damage, duration, sounds=None):
+        self.x = x
+        self.y = y
+        self.base_image = image
+        self.radius = radius
+        self.dot_damage = dot_damage
+        self.start_time = pygame.time.get_ticks()
+        self.duration = duration
+        self.alive = True
+        self.sounds = sounds
+        self.last_dot_time = 0
+
+    def update(self):
+        # DOT 적용 주기 체크 및 플레이어 범위 판정
+        elapsed = pygame.time.get_ticks() - self.start_time
+        if elapsed > self.duration:
+            self.alive = False
+            return
+        px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+        if math.hypot(px - self.x, py - self.y) <= self.radius:
+            now = pygame.time.get_ticks()
+            if now - self.last_dot_time >= 100:
+                config.active_dots.append({"damage": self.dot_damage, "end_time": now + 100})
+                self.last_dot_time = now
+
+    def draw(self, screen, world_x, world_y):
+        # 페이드 인/아웃 + 크기 변화 이펙트로 웅덩이 렌더링
+        elapsed = pygame.time.get_ticks() - self.start_time
+        progress = elapsed / self.duration
+        if progress < 0.2:
+            alpha = int(255 * (progress / 0.2))
+            scale_factor = 0.5 + 0.5 * (progress / 0.2)
+        elif progress > 0.8:
+            alpha = int(255 * ((1 - progress) / 0.2))
+            scale_factor = 1.0 - 0.5 * ((progress - 0.8) / 0.2)
+        else:
+            alpha = 255
+            scale_factor = 1.0
+
+        new_width = int(self.base_image.get_width() * scale_factor)
+        new_height = int(self.base_image.get_height() * scale_factor)
+        scaled_img = pygame.transform.smoothscale(self.base_image, (new_width, new_height)).copy()
+        scaled_img.set_alpha(alpha)
+
+        rect = scaled_img.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(scaled_img, rect)
+
+class AcidProjectile:
+    # 비행 후 충돌 시 산성 웅덩이를 생성하는 투사체
+    def __init__(self, x, y, vx, vy, speed, image, pool_image, max_damage, dot_damage, dot_duration, owner=None, sounds=None):
+        self.x = x
+        self.y = y
+        self.vx = vx * speed * PLAYER_VIEW_SCALE
+        self.vy = vy * speed * PLAYER_VIEW_SCALE
+        self.image = image.copy()
+        self.image.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        self.pool_image = pool_image.copy()
+        self.pool_image.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        self.max_damage = max_damage
+        self.damage = max_damage
+        self.dot_damage = dot_damage
+        self.dot_duration = dot_duration
+        self.owner = owner
+        self.sounds = sounds
+        self.radius = image.get_width() // 2
+        self.collider = Collider("circle", center=(x, y), size=self.radius)
+        self.to_remove = False
+        self.direction_angle = math.atan2(vy, vx)
+
+    def update(self, obstacle_manager):
+        # 이동 및 충돌 처리
+        if self.to_remove:
+            return
+        self.x += self.vx
+        self.y += self.vy
+        self.collider.center = (self.x, self.y)
+
+        # 플레이어 명중 시 피해 + DOT 부여 + 웅덩이 생성
+        px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+        if math.hypot(px - self.x, py - self.y) <= self.radius:
+            config.damage_player(self.max_damage)
+            config.active_dots.append({"damage": self.dot_damage, "end_time": pygame.time.get_ticks() + self.dot_duration})
+            pool = AcidPool(self.x, self.y, self.pool_image, 150, self.dot_damage, 3000)
+            if self.sounds:
+                pool.sounds = self.sounds
+            config.effects.append(pool)
+            self.to_remove = True
+            return
+
+        # 장애물 충돌 시 웅덩이 생성
+        for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
+            for c in obs.colliders:
+                if c.compute_penetration_circle((self.x, self.y), self.radius, (obs.world_x, obs.world_y)):
+                    pool = AcidPool(self.x, self.y, self.pool_image, 150, self.dot_damage, 3000)
+                    if self.sounds:
+                        pool.sounds = self.sounds
+                    config.effects.append(pool)
+                    self.to_remove = True
+                    return
+
+    # 진행 방향 회전 이미지로 투사체 렌더링
+    def draw(self, screen, world_x, world_y):
+        rotated_img = pygame.transform.rotate(self.image, -math.degrees(self.direction_angle))
+        rect = rotated_img.get_rect(center=(self.x - world_x, self.y - world_y))
+        screen.blit(rotated_img, rect)
 
 class ExplosionEffectPersistent:
     # 일정 시간 지속되는 폭발 시각 효과

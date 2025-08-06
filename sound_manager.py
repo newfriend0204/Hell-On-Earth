@@ -70,6 +70,7 @@ def load_sounds():
         "drone_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
         "fireball": pygame.mixer.Sound(path_sound("Sound", "Entity", "Fireball.mp3")),
         "flame_pillar": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlamePillar.mp3")),
+        "acid": pygame.mixer.Sound(path_sound("Sound", "Entity", "Acid.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)
@@ -106,6 +107,7 @@ def load_sounds():
     entity_sounds["drone_explosion"].set_volume(0.5)
     entity_sounds["fireball"].set_volume(0.5)
     entity_sounds["flame_pillar"].set_volume(0.5)
+    entity_sounds["acid"].set_volume(0.2)
 
     return {
         # 모든 사운드 딕셔너리 반환

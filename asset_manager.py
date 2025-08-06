@@ -196,6 +196,12 @@ def load_images():
     enemy7_img = pygame.image.load(path_image("image", "character", "Enemy7.png")).convert_alpha()
     enemy7_img = pygame.transform.smoothscale(enemy7_img, (120, 120))
 
+    enemy8_img = pygame.image.load(path_image("image", "character", "Enemy8.png")).convert_alpha()
+    enemy8_img = pygame.transform.smoothscale(enemy8_img, (90, 90))
+
+    enemy9_img = pygame.image.load(path_image("image", "character", "Enemy9.png")).convert_alpha()
+    enemy9_img = pygame.transform.smoothscale(enemy9_img, (90, 90))
+
     boss1_img = pygame.image.load(path_image("image", "character", "Boss1.png")).convert_alpha()
     boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
 
@@ -210,6 +216,12 @@ def load_images():
 
     flame_pillar_img = pygame.image.load(path_image("image", "entity", "FirePillar.png")).convert_alpha()
     flame_pillar_img = pygame.transform.smoothscale(flame_pillar_img, (300, 300))
+
+    acid_projectile_img = fireball_img.copy()
+    acid_projectile_img.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
+    acid_pool_img = flame_pillar_img.copy()
+    acid_pool_img.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
     ammo_gauge_up_img = pygame.image.load(path_image("Image", "AmmoGaugeUp.png")).convert_alpha()
     ammo_gauge_up_img = pygame.transform.smoothscale(ammo_gauge_up_img, (16, 16))
@@ -258,11 +270,15 @@ def load_images():
         "enemy5": enemy5_img,
         "enemy6": enemy6_img,
         "enemy7": enemy7_img,
+        "enemy8": enemy8_img,
+        "enemy9": enemy9_img,
         "boss1": boss1_img,
         "boss2": boss2_img,
         "drone": drone_img,
         "fireball": fireball_img,
         "flame_pillar": flame_pillar_img,
+        "acid_projectile": acid_projectile_img,
+        "acid_pool": acid_pool_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,
