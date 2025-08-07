@@ -1,7 +1,7 @@
 START_MAP = {
     "obstacles": [],
-    "enemy_infos": [{"x": 300, "y": 300, "enemy_type": "enemy9"}],
-    "crop_rect": {"x_ratio": 0.8, "y_ratio": 0.8}
+    "enemy_infos": [],
+    "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
 
 END_MAP = {
@@ -232,6 +232,15 @@ FIGHT_MAP_8 = {
     "crop_rect": {"x_ratio": 0.6, "y_ratio": 1.5}
 }
 
+FIGHT_MAP_9 = { # 디버그
+    "obstacles": [
+    ],
+    "enemy_infos": [
+
+    ],
+    "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
+}
+
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
 BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3]
-FIGHT_MAPS = [FIGHT_MAP_1, FIGHT_MAP_2, FIGHT_MAP_3, FIGHT_MAP_4, FIGHT_MAP_5, FIGHT_MAP_6, FIGHT_MAP_7, FIGHT_MAP_8]
+FIGHT_MAPS = [FIGHT_MAP_9]#[FIGHT_MAP_1, FIGHT_MAP_2, FIGHT_MAP_3, FIGHT_MAP_4, FIGHT_MAP_5, FIGHT_MAP_6, FIGHT_MAP_7, FIGHT_MAP_8]

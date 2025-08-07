@@ -5,15 +5,17 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon
+from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_dialogue_box_with_choices
 import world
 from maps import MAPS, FIGHT_MAPS, BOSS_MAPS
+from dialogue_manager import DialogueManager
+from dialogue_data import merchant_dialogue
 
 # 맵 상태 초기화
 CURRENT_MAP = MAPS[0]
@@ -33,7 +35,9 @@ DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
 BASE_DIR = os.path.dirname(__file__)
 ASSET_DIR = os.path.join(BASE_DIR, "Asset")
 FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Regular.ttf")
+BOLD_FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Bold.ttf")
 KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
+KOREAN_FONT_BOLD_20 = pygame.font.Font(BOLD_FONT_PATH, 20)
 
 pygame.mouse.set_visible(False)
 
@@ -49,8 +53,8 @@ weapon_assets = load_weapon_assets(images)
 START_WEAPONS = [
     WEAPON_CLASSES[3],
     WEAPON_CLASSES[4],
-    WEAPON_CLASSES[13],
-    WEAPON_CLASSES[19],
+    WEAPON_CLASSES[14],
+    WEAPON_CLASSES[16],
 ]
 
 original_player_image = images["player"]
@@ -59,6 +63,13 @@ original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
 background_image = images["background"]
 background_rect = background_image.get_rect()
+
+dialogue_manager = DialogueManager()
+mouse_left_released_after_dialogue = False
+# 상점 상인 위치 변수 (상점방 생성시 좌표 지정)
+MERCHANT_OFFSET_Y = -130    # "조금 위"로 띄우는 용도
+merchant_pos = None         # (x, y), 상점방 진입시 위치 계산
+npcs = []
 
 obstacle_manager = ObstacleManager(
     # 장애물 관리자 초기화
@@ -158,15 +169,6 @@ else:
 
 field_weapons = []
 room_field_weapons = {}
-#디버그-필드에 무기 놓는 코드
-# start_weapon = FieldWeapon(
-#     WEAPON_CLASSES[1],
-#     SCREEN_WIDTH//2,
-#     SCREEN_HEIGHT//2,
-#     weapon_assets,
-#     sounds
-# )
-# field_weapons.append(start_weapon)
 
 world_x = player_world_x - SCREEN_WIDTH // 2
 world_y = player_world_y - SCREEN_HEIGHT // 2
@@ -307,7 +309,46 @@ weapon_ui_cache = {
     "resized_images": {}
 }
 
+class ShopItem:
+    def __init__(self, weapon_class, price, x, y):
+        self.weapon_class = weapon_class
+        self.price = price
+        self.x = x
+        self.y = y
+        self.purchased = False
+
+# 방별 상점 상품 리스트 저장
+room_shop_items = {}
+shop_items = []
+
+def spawn_room_npcs():
+    npcs.clear()
+    room_type = grid[current_room_pos[1]][current_room_pos[0]]
+    if room_type == 'A' and shop_items:
+        # 상점방 MerchantNPC 배치
+        center_x = world_instance.effective_bg_width / 2
+        center_y = world_instance.effective_bg_height / 2 + MERCHANT_OFFSET_Y
+        npcs.append(
+            MerchantNPC(
+                images["merchant1"],
+                center_x,
+                center_y,
+                merchant_dialogue
+            )
+        )
+
+def on_dialogue_close():
+    global mouse_left_released_after_dialogue
+    mouse_left_released_after_dialogue = True
+
 space_pressed_last_frame = False
+
+def apply_effect(effect):
+    global player_hp, player_hp_max, ammo_gauge, ammo_gauge_max
+    if effect["type"] == "hp_recover":
+        player_hp = min(player_hp + effect["amount"], player_hp_max)
+    elif effect["type"] == "ammo_recover":
+        ammo_gauge = min(ammo_gauge + effect["amount"], ammo_gauge_max)
 
 def try_pickup_weapon():
     # 스페이스 무기 줍기 단발 입력을 이벤트로 처리
@@ -449,8 +490,7 @@ def advance_to_next_stage():
             
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y
-    global enemies, changing_room, effective_bg_width, effective_bg_height, current_boss
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items
 
     WIDTH, HEIGHT = world.get_map_dimensions()
     changing_room = True
@@ -544,7 +584,7 @@ def change_room(direction):
     )
 
     if new_room_type == 'A':
-        acquire_index = random.randint(2, 2)
+        acquire_index = random.randint(3, 3)  # 2면 무기방, 3이면 상점방
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
@@ -552,28 +592,90 @@ def change_room(direction):
         world.reveal_neighbors(new_x, new_y, grid)
 
         room_key = (new_x, new_y)
-        if room_key not in room_field_weapons:
-            center_x = new_world.effective_bg_width / 2
-            center_y = new_world.effective_bg_height / 2
-            spacing = 150 * PLAYER_VIEW_SCALE
 
-            weapon_classes = random.sample(WEAPON_CLASSES, 2)
-            weapons_in_room = []
-            for i, weapon_class in enumerate(weapon_classes):
-                fw = FieldWeapon(
-                    weapon_class,
-                    center_x + (i - 0.5) * spacing * 2,
-                    center_y,
-                    weapon_assets,
-                    sounds
-                )
-                weapons_in_room.append(fw)
-            room_field_weapons[room_key] = weapons_in_room
+        if acquire_index == 2:
+            # ------------------- 무기방 -------------------
+            if room_key not in room_field_weapons:
+                center_x = new_world.effective_bg_width / 2
+                center_y = new_world.effective_bg_height / 2
+                spacing = 150 * PLAYER_VIEW_SCALE
 
-        field_weapons.clear()
-        field_weapons.extend(room_field_weapons[room_key])
+                # ----- 티어별 등장 확률에 따라 2개(중복 X) 뽑기 -----
+                stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
+                tier_to_weapons = {}
+                for weapon_class in WEAPON_CLASSES:
+                    tier = getattr(weapon_class, "TIER", 1)
+                    if tier in stage_weights:
+                        tier_to_weapons.setdefault(tier, []).append(weapon_class)
+                selected_weapons = []
+                attempt_count = 0
+                while len(selected_weapons) < 2 and attempt_count < 10:
+                    tiers = list(stage_weights.keys())
+                    weights = list(stage_weights.values())
+                    chosen_tier = random.choices(tiers, weights=weights, k=1)[0]
+                    candidates = [w for w in tier_to_weapons[chosen_tier] if w not in selected_weapons]
+                    if candidates:
+                        weapon_class = random.choice(candidates)
+                        selected_weapons.append(weapon_class)
+                    attempt_count += 1
+                weapons_in_room = []
+                for i, weapon_class in enumerate(selected_weapons):
+                    fw = FieldWeapon(
+                        weapon_class,
+                        center_x + (i - 0.5) * spacing * 2,
+                        center_y,
+                        weapon_assets,
+                        sounds
+                    )
+                    weapons_in_room.append(fw)
+                room_field_weapons[room_key] = weapons_in_room
+
+            field_weapons.clear()
+            field_weapons.extend(room_field_weapons[room_key])
+            shop_items = []  # 상점 없음
+
+        else:  # ------------------- 상점방 (acquire_index == 3) -------------------
+            if room_key not in room_shop_items:
+                center_x = new_world.effective_bg_width / 2
+                center_y = new_world.effective_bg_height / 2
+                spacing = 170 * PLAYER_VIEW_SCALE
+
+                # ----- 티어별 등장 확률에 따라 3개(중복 X) 뽑기 -----
+                stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
+                tier_to_weapons = {}
+                for weapon_class in WEAPON_CLASSES:
+                    tier = getattr(weapon_class, "TIER", 1)
+                    if tier in stage_weights:
+                        tier_to_weapons.setdefault(tier, []).append(weapon_class)
+                selected_weapons = []
+                attempt_count = 0
+                while len(selected_weapons) < 3 and attempt_count < 12:
+                    tiers = list(stage_weights.keys())
+                    weights = list(stage_weights.values())
+                    chosen_tier = random.choices(tiers, weights=weights, k=1)[0]
+                    candidates = [w for w in tier_to_weapons[chosen_tier] if w not in selected_weapons]
+                    if candidates:
+                        weapon_class = random.choice(candidates)
+                        selected_weapons.append(weapon_class)
+                    attempt_count += 1
+                items_in_room = []
+                for i, weapon_class in enumerate(selected_weapons):
+                    price = config.TIER_PRICES.get(getattr(weapon_class, "TIER", 1), 40)
+                    shop_item = ShopItem(
+                        weapon_class,
+                        price,
+                        center_x + (i - 1) * spacing,
+                        center_y
+                    )
+                    items_in_room.append(shop_item)
+                room_shop_items[room_key] = items_in_room
+
+            shop_items = room_shop_items[room_key]
+            field_weapons.clear()  # 상점에선 일반 무기 없음
+
     else:
         field_weapons.clear()
+        shop_items = []
 
     map_width = new_world.effective_bg_width
     map_height = new_world.effective_bg_height
@@ -708,6 +810,8 @@ def change_room(direction):
     else:
         config.combat_state = False
         config.combat_enabled = True
+
+    spawn_room_npcs()
 
     sounds["room_move"].play()
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {world.room_states[new_y][new_x]}")
@@ -1251,6 +1355,13 @@ while running:
     current_time = pygame.time.get_ticks()
     events = pygame.event.get()
 
+    if mouse_left_released_after_dialogue:
+        if pygame.mouse.get_pressed()[0]:
+            clock.tick(60)
+            continue
+        else:
+            mouse_left_released_after_dialogue = False
+
     for event in events:
         # 이벤트 처리
         if event.type == pygame.QUIT:
@@ -1268,13 +1379,25 @@ while running:
             elif event.key == pygame.K_d:
                 move_right = True
             elif event.key == pygame.K_SPACE:
-                if grid[current_room_pos[1]][current_room_pos[0]] == 'E' and not config.combat_state:
-                    advance_to_next_stage()
-                else:
-                    print("[DEBUG] 스페이스 전환 조건 불충족: E방이 아니거나 전투 중")
+                # NPC 상호작용(가까이서 스페이스)
+                player_cx = world_x + player_rect.centerx
+                player_cy = world_y + player_rect.centery
+                for npc in npcs:
+                    if npc.is_player_near(player_cx, player_cy):
+                        old_surface = screen.copy()
+                        def on_dialogue():
+                            dialogue_manager.start(
+                                npc.dialogue,
+                                on_effect_callback=apply_effect,
+                                close_callback=on_dialogue_close
+                            )
+                        swipe_curtain_transition(
+                            screen, old_surface, on_dialogue, direction="up", duration=0.45
+                        )
+                        break  # 여러 NPC가 있을 경우 첫 번째만
+                # 무기줍기 등 기존 기능은 아래에 둠
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
-                print(f"[DEBUG] Player world position: ({player_world_x:.2f}, {player_world_y:.2f})")
                 try_pickup_weapon()
             elif event.key == pygame.K_TAB:
                 paused = not paused
@@ -1354,6 +1477,13 @@ while running:
                 mouse_left_button_down = False
             elif event.button == 3:
                 mouse_right_button_down = False
+
+    if dialogue_manager.active:
+        dialogue_manager.update(events)
+        dialogue_manager.draw(screen, draw_dialogue_box_with_choices)
+        pygame.display.flip()
+        clock.tick(60)
+        continue
 
     if paused:
         # 일시정지 상태일 때 UI 처리
@@ -1801,6 +1931,75 @@ while running:
         near = fw.is_player_near(player_center_x, player_center_y)
         fw.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_near=near)
 
+    if shop_items:
+        for shop_item in shop_items:
+            if shop_item.purchased:
+               continue
+            # --- 월드좌표 → 화면좌표 변환
+            screen_x = shop_item.x - world_x + shake_offset_x
+            screen_y = shop_item.y - world_y + shake_offset_y
+
+            # --- 무기 이미지 비율 유지 리사이즈 (최대 높이 48)
+            weapon_img = weapon_assets[shop_item.weapon_class.__name__.lower()]["front"]
+            max_height = 48
+            scale_factor = max_height / weapon_img.get_height()
+            scaled_width = int(weapon_img.get_width() * scale_factor)
+            scaled_height = int(weapon_img.get_height() * scale_factor)
+            weapon_img_scaled = pygame.transform.smoothscale(weapon_img, (scaled_width, scaled_height))
+            screen.blit(weapon_img_scaled, (screen_x - scaled_width//2, screen_y - scaled_height//2))
+
+            dist = math.hypot(shop_item.x - player_center_x, shop_item.y - player_center_y)
+            # --- 근접시만 텍스트/상호작용
+            if dist < 100:
+                text_color = (100,255,100) if shop_item.purchased else (160,60,255)
+                # 무기 이름 표시 (예: "M1911" 등)
+                key = shop_item.weapon_class.__name__.lower()
+                weapon_name = weapon_stats.get(key, {}).get("name", key)
+                price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, text_color)
+                name_text = KOREAN_FONT_BOLD_20.render(f"{weapon_name}", True, text_color)
+                info_text = KOREAN_FONT_BOLD_20.render("구매완료" if shop_item.purchased else "구매 (Space)", True, text_color)
+                # --- 무기 이미지 "위"에 "가운데 정렬"
+                y_cursor = screen_y - scaled_height//2 - price_text.get_height() - name_text.get_height() - 12
+                screen.blit(price_text, (screen_x - price_text.get_width()//2, y_cursor))
+                screen.blit(name_text, (screen_x - name_text.get_width()//2, y_cursor + price_text.get_height() + 2))
+                screen.blit(info_text, (screen_x - info_text.get_width()//2, y_cursor + price_text.get_height() + name_text.get_height() + 6))
+
+                # --- 상호작용 판정(근처+스페이스)
+                if not shop_item.purchased and keys[pygame.K_SPACE]:
+                    if config.player_score >= shop_item.price:
+                        config.player_score -= shop_item.price
+                        shop_item.purchased = True
+                        # --- 무기 지급 코드 (복붙)
+                        if len(weapons) < 4:
+                            new_weapon = shop_item.weapon_class.create_instance(
+                                weapon_assets, sounds, lambda: ammo_gauge,
+                                consume_ammo, get_player_world_position
+                            )
+                            weapons.append(new_weapon)
+                            current_weapon_index = len(weapons) - 1
+                        else:
+                            current_weapon_class = weapons[current_weapon_index].__class__
+                            dropped_fw = FieldWeapon(
+                                current_weapon_class,
+                                player_center_x, player_center_y,
+                                weapon_assets, sounds
+                            )
+                            field_weapons.append(dropped_fw)
+                            new_weapon = shop_item.weapon_class.create_instance(
+                                weapon_assets, sounds, lambda: ammo_gauge,
+                                consume_ammo, get_player_world_position
+                            )
+                            weapons[current_weapon_index] = new_weapon
+                        sounds["swap_gun"].play()
+                    else:
+                        # 포인트 부족 경고(사운드/메시지 등)
+                        pass
+            else:
+                # 멀리 있을 때: 가격만 연하게(선택)
+                gray = (180,180,180)
+                price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, gray)
+                screen.blit(price_text, (screen_x - price_text.get_width()//2, screen_y - scaled_height//2 - price_text.get_height() - 4))
+
     for scatter in scattered_bullets[:]:
         # 탄피 이펙트 업데이트
         scatter.update()
@@ -2045,6 +2244,51 @@ while running:
         old_surface = screen.copy()
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
         continue
+
+    # 반투명 흰색 배경 (모서리 둥글게)
+    score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
+    pygame.draw.rect(score_box, (255, 255, 255, 120), score_box.get_rect(), border_radius=14)
+    screen.blit(score_box, (80, SCREEN_HEIGHT - 120 - 30 + 30))  # = screen.blit(..., (80, 660)) if height==780
+
+    # 악의 정수 텍스트 (보라색)
+    score_text = KOREAN_FONT_BOLD_20.render(f"악의 정수: {config.player_score}", True, (63, 0, 153))
+    screen.blit(score_text, (90, SCREEN_HEIGHT - 120 - 30 + 30 + 2))  # = (90, 662)
+
+    # 최대 스택 수
+    max_stack = 3
+    stack_gap = 24  # 한 스택당 간격(px)
+
+    # 각 텍스트 처리
+    for i, entry in enumerate(config.score_gain_texts[:]):
+        font = KOREAN_FONT_BOLD_20
+        surface = font.render(entry["text"], True, (63, 0, 153))
+        surface.set_alpha(entry["alpha"])
+
+        # 스택 오프셋 계산 (최대 3개까지)
+        y_offset = i * stack_gap
+        draw_y = entry["y"] - y_offset
+        screen.blit(surface, (200, draw_y))
+
+        # 지연 시간 경과 전이면 대기
+        if entry.get("delay", 0) > 0:
+            entry["delay"] -= 1
+            continue
+
+        # 이동 + 알파 감소
+        entry["y"] -= 1
+        entry["alpha"] -= 5
+        entry["lifetime"] -= 1
+
+        # 삭제 조건
+        if entry["lifetime"] <= 0 or entry["alpha"] <= 0:
+            config.score_gain_texts.remove(entry)
+
+    # 초과된 텍스트 제거 (스택 3개 초과 시)
+    if len(config.score_gain_texts) > max_stack:
+        del config.score_gain_texts[0:len(config.score_gain_texts) - max_stack]
+
+    for npc in npcs:
+        npc.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     if weapon:
         render_weapon = weapon

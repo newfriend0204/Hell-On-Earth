@@ -1,5 +1,7 @@
 import pygame
+import config
 import os
+import textwrap
 
 pygame.init()
 
@@ -102,10 +104,201 @@ weapon_stats = {
         "rank": "4",
         "desc": "NOMAD라고 불리는 대원이 애용하는 돌격소총입니다. 우클릭으로 적을 밀치는 기압탄을 발사합니다.",
         "usage": "좌클릭\n연사\n\n우클릭\n기압탄 발사"
+    },
+    "gun10": {
+        "name": "Mx4 Storm",
+        "power": "좌: 16 / 우: 20",
+        "spread": "좌: 12 / 우: 8",
+        "cost": "좌: 5 / 우: 6",
+        "rank": "2",
+        "desc": "가벼운 무게와 빠른 연사력을 가진 기관단총입니다. 우클릭 시 정밀 사격(ADS) 모드로 전환되어 탄퍼짐과 반동이 줄어듭니다.",
+        "usage": "좌클릭\n기본 연사 사격\n\n우클릭\n정밀 사격(ADS) 모드 전환"
+    },
+    "gun11": {
+        "name": "SPAS-15",
+        "power": "8 x 6발",
+        "spread": 60,
+        "cost": 10,
+        "rank": "3",
+        "desc": "반자동으로 빠르게 쏠 수 있는 산탄총입니다. 근거리에서 여러 적에게 강한 위력을 발휘합니다.",
+        "usage": "좌클릭\n6발의 산탄을 한 번에 발사"
+    },
+    "gun12": {
+        "name": "DP-27",
+        "power": 80,
+        "spread": 6,
+        "cost": 8,
+        "rank": "3",
+        "desc": "구 소련의 경기관총을 개조한 중화기입니다. 한 발 한 발 강력한 위력을 자랑합니다.",
+        "usage": "좌클릭\n단발 사격\n(한 번에 강한 데미지)"
+    },
+    "gun13": {
+        "name": "MPX",
+        "power": "좌: 18 / 우: 22",
+        "spread": "좌: 10 / 우: 8",
+        "cost": "좌: 4 / 우: 5",
+        "rank": "1",
+        "desc": "경량 SMG로, 연사력과 휴대성이 뛰어납니다. 우클릭 시 정밀 사격(ADS) 모드로 더욱 정확하게 공격할 수 있습니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n정밀 사격(ADS) 모드"
+    },
+    "gun14": {
+        "name": "MP5",
+        "power": "좌: 20 / 우: 24",
+        "spread": "좌: 9 / 우: 8",
+        "cost": "좌: 4 / 우: 5",
+        "rank": "2",
+        "desc": "전통적인 NF 코퍼레이션의 기관단총입니다. ADS 모드에서는 반동이 줄고 명중률이 올라갑니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n정밀 사격(ADS) 모드"
+    },
+    "gun15": {
+        "name": "플라즈마 라이플",
+        "power": "좌: 24 / 우: 최대 150",
+        "spread": 10,
+        "cost": 10,
+        "rank": "5",
+        "desc": "UAC의 군사 기술 부서에서 설계한 첨단 무기이며, 악마를 찣고 죽이는 남자가 애용합니다. 차지(충전) 후 우클릭 시 광역 플라즈마 공격을 펼칠 수 있습니다.",
+        "usage": "좌클릭\n플라즈마 에너지 발사(차지 증가, 최대 50차지)\n\n우클릭\n차지된 에너지를 광역 공격으로 방출"
+    },
+    "gun16": {
+        "name": "P90",
+        "power": "좌: 12 / 우: 14",
+        "spread": "좌: 15 / 우: 9",
+        "cost": "좌: 3 / 우: 4",
+        "rank": "1",
+        "desc": "50발 대용량 탄창의 소형 PDW. 우클릭 시 조준 사격(ADS) 모드로 명중률이 향상됩니다.",
+        "usage": "좌클릭\n연사\n\n우클릭\n조준 사격(ADS) 모드"
+    },
+    "gun17": {
+        "name": "FAMAS",
+        "power": "3점사: 30",
+        "spread": 0,
+        "cost": 5,
+        "rank": "3",
+        "desc": "프랑스산 돌격소총. 트리거 한 번에 3발의 점사로 공격합니다.",
+        "usage": "좌클릭\n3점사 사격(짧은 시간에 3발 발사)"
+    },
+    "gun18": {
+        "name": "SMG-11",
+        "power": 13,
+        "spread": 30,
+        "cost": 7,
+        "rank": "1",
+        "desc": "초소형 기관단총으로, 매우 빠른 연사력과 넓은 탄퍼짐을 지녔습니다.",
+        "usage": "좌클릭\n고속 연사 사격"
+    },
+    "gun19": {
+        "name": "방패",
+        "power": "-",
+        "spread": "-",
+        "cost": "-",
+        "rank": "4",
+        "desc": "강력한 내구성의 방패로, 전방에서 오는 공격을 막아냅니다. 방어 시 탄약 게이지가 감소합니다. 다만, 폭팔 혹은 장판은 막지 못합니다.",
+        "usage": "좌클릭\n방패 전개 및 방어 상태 유지(계속 누르기)"
+    },
+    "gun20": {
+        "name": "수류탄",
+        "power": "최대 80 / 최소 30",
+        "spread": 0,
+        "cost": 35,
+        "rank": "4",
+        "desc": "일정 시간 후 폭발하며 넓은 범위에 피해를 입히는 투척 무기입니다. 3발이 동시에 부채꼴로 발사됩니다.",
+        "usage": "좌클릭\n핀 뽑은 후 잠시 뒤 3발 부채꼴 투척\n0.8초 후 폭발"
     }
 }
 
+def wrap_text(text, font, max_width):
+    words = text.split(' ')
+    lines = []
+    current_line = ''
+    for word in words:
+        test_line = current_line + (' ' if current_line else '') + word
+        if font.size(test_line)[0] <= max_width:
+            current_line = test_line
+        else:
+            lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
+    return lines
 
+def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=None):
+    screen_w, screen_h = screen.get_size()
+
+    # 1. 배경
+    overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 215))
+    screen.blit(overlay, (0, 0))
+
+    box_w = int(screen_w * 0.7)
+    box_h = int(screen_h * 0.18)
+    box_x = (screen_w - box_w) // 2 - 60
+    base_y = screen_h - box_h - 140
+
+    # 2. 이전 히스토리
+    if history:
+        for i, entry in enumerate(history):
+            h_y = base_y - (len(history) - i) * (box_h - 50) + entry.get("anim_y", 0)
+            h_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+            pygame.draw.rect(h_surface, (60, 60, 70, 175), (0, 0, box_w, box_h), border_radius=18)
+            pygame.draw.rect(h_surface, (150, 150, 180, 70), (0, 0, box_w, box_h), width=2, border_radius=18)
+
+            name = entry.get("speaker", "")
+            if name:
+                name_surf = KOREAN_FONT_BOLD_28.render(f"[{name}]", True, (140, 140, 180))
+                h_surface.blit(name_surf, (24, 14))
+
+            text = entry.get("text", "")
+            lines = wrap_text(text, KOREAN_FONT_18, box_w - 48)
+            for j, line in enumerate(lines):
+                line_surf = KOREAN_FONT_18.render(line, True, (200, 200, 200))
+                h_surface.blit(line_surf, (24, 56 + j * 24))
+
+            screen.blit(h_surface, (box_x, h_y))
+
+    # 3. 현재 대사
+    box_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+    pygame.draw.rect(box_surface, (34, 34, 34, 245), (0, 0, box_w, box_h), border_radius=22)
+    pygame.draw.rect(box_surface, (120, 255, 120, 110), (0, 0, box_w, box_h), width=4, border_radius=22)
+
+    name = node.get("speaker", "")
+    if name:
+        name_surf = KOREAN_FONT_BOLD_28.render(f"[{name}]", True, (180, 120, 255))
+        box_surface.blit(name_surf, (24, 18))
+
+    text = node.get("text", "")
+    lines = wrap_text(text, KOREAN_FONT_18, box_w - 48)
+    for j, line in enumerate(lines):
+        line_surf = KOREAN_FONT_18.render(line, True, (255, 255, 255))
+        box_surface.blit(line_surf, (24, 60 + j * 24))
+
+    screen.blit(box_surface, (box_x, base_y))
+
+    # 4. 선택지 UI
+    choices = node.get("choices")
+    if choices:
+        slot_w = 300
+        slot_h = 54
+        slot_gap = 14
+        base_x = screen_w - slot_w - 20
+        choice_base_y = screen_h - (slot_h + slot_gap) * len(choices) - 30
+
+        for i, choice in enumerate(choices):
+            slot_rect = pygame.Rect(base_x, choice_base_y + i * (slot_h + slot_gap), slot_w, slot_h)
+            color_bg = (42, 42, 48, 210) if i != selected_choice_idx else (130, 70, 210, 225)
+            color_border = (120, 255, 120) if i == selected_choice_idx else (120, 120, 120)
+            pygame.draw.rect(screen, color_bg, slot_rect, border_radius=13)
+            pygame.draw.rect(screen, color_border, slot_rect, width=3, border_radius=13)
+            text_surf = KOREAN_FONT_28.render(choice["text"], True, (255, 255, 255) if i != selected_choice_idx else (255, 255, 140))
+            screen.blit(text_surf, (slot_rect.x + 22, slot_rect.y + 8))
+
+        # 5. 힌트 텍스트 왼쪽 아래
+        hint_font = pygame.font.Font(FONT_PATH, 18)
+        hint_surf = hint_font.render("W/S: 선택  좌클릭: 결정  ESC: 나가기", True, (200, 200, 255, 180))
+        screen.blit(hint_surf, (20, screen_h - 30))
+    else:
+        hint_font = pygame.font.Font(FONT_PATH, 18)
+        hint_surf = hint_font.render("좌클릭: 다음/종료  ESC: 대화 종료", True, (200, 200, 255, 180))
+        screen.blit(hint_surf, (20, screen_h - 30))
 def load_ui_image(filename):
     return pygame.image.load(os.path.join(ASSET_UI_DIR, filename))
 
@@ -330,6 +523,10 @@ def draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max
     ammo_bg_rect = pygame.Rect(info_x + bar_margin, ammo_bar_y, bar_w, bar_h)
     pygame.draw.rect(screen, (30, 50, 30), ammo_bg_rect.inflate(8,8), border_radius=10)
     pygame.draw.rect(screen, (255,200,80), (ammo_bg_rect.x, ammo_bg_rect.y, int(bar_w * ammo_gauge / ammo_gauge_max), bar_h), border_radius=10)
+
+    evil_font = KOREAN_FONT_BOLD_28
+    evil_text = evil_font.render(f"악의 정수: {config.player_score}", True, (200, 100, 255))
+    screen.blit(evil_text, (info_x + 24, ammo_bar_y + 80))
 
     panel_width = (screen_width // 2) - margin_x * 2
     panel_height = screen_height - margin_y * 2

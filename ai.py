@@ -28,7 +28,6 @@ class AIBase(metaclass=EnemyMeta):
         self.map_width = map_width
         self.map_height = map_height
         self.damage_player = damage_player_fn
-        self.rank = rank
 
         self.alive = True
         self._already_dropped = False
@@ -131,6 +130,19 @@ class AIBase(metaclass=EnemyMeta):
             blood_effects.append(blood)
         if self.kill_callback:
             self.kill_callback()
+
+        import config
+        config.player_score += getattr(self, "rank", 1)
+
+        # 🟣 점수 시각 효과 추가
+        config.score_gain_texts.append({
+            "text": f"+{getattr(self, 'rank', 1)}",
+            "x": 100,  # 실제 좌표는 UI 위치 기준으로 조정
+            "y":  SCREEN_HEIGHT - 118,
+            "alpha": 255,
+            "lifetime": 60,  # frame 단위 (1초 = 60fps)
+            "delay": 60 
+        })
 
     def spawn_dropped_items(self, health_count, ammo_count):
         # 아이템 드랍 생성
@@ -351,7 +363,7 @@ class AIBase(metaclass=EnemyMeta):
 
 class Enemy1(AIBase):
     rank=1
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None, rank=rank):
         # 플레이어와의 거리 기반 목표 위치 설정
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
@@ -362,6 +374,7 @@ class Enemy1(AIBase):
             push_strength=0.18,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.hp = 120
         self.image_original = images["enemy1"]
@@ -485,7 +498,7 @@ class Enemy1(AIBase):
 
 class Enemy2(AIBase):
     rank=2
-    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None):
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height, damage_player_fn=None, kill_callback=None, rank=rank):
         # 플레이어와의 거리 기반 목표 위치 및 원거리 공격 준비
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
@@ -496,6 +509,7 @@ class Enemy2(AIBase):
             push_strength=0.18,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy2"]
         self.gun_image_original = pygame.transform.flip(images["gun2"], True, False)
@@ -687,7 +701,7 @@ class Enemy3(AIBase):
     CLOSE_ATTACK_SPEED_PENALTY = 0.7
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         self.base_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
@@ -698,6 +712,7 @@ class Enemy3(AIBase):
             push_strength=0.0,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy3"]
         self.kill_callback = kill_callback
@@ -893,7 +908,7 @@ class Enemy4(AIBase):
     PREHEAT_SOUND_DELAY = 1000
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         # 기본 속성 초기화 (이동 속도, 사거리, 경고 지속시간)
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
@@ -904,6 +919,7 @@ class Enemy4(AIBase):
             push_strength=0.0,
             alert_duration=self.MIN_ATTACK_PREPARE_TIME,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
 
         self.image_original = images["enemy4"]
@@ -1140,7 +1156,7 @@ class Enemy5(AIBase):
     MIN_DISTANCE = 100 * PLAYER_VIEW_SCALE
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         # 기본 속성 초기화 (속도, 사거리, 경고 시간, 충돌 반경 등)
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
@@ -1151,6 +1167,7 @@ class Enemy5(AIBase):
             push_strength=0.0,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy5"]
         self.gun_image_original = pygame.transform.flip(images["gun3"], True, False)
@@ -1328,7 +1345,7 @@ class Enemy6(AIBase):
     ENRAGE_TELEPORT_REDUCE = 1000
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.SPEED,
@@ -1337,7 +1354,8 @@ class Enemy6(AIBase):
             radius=55,
             push_strength=0.0,
             alert_duration=800,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy6"]
         self.kill_callback = kill_callback
@@ -1493,7 +1511,7 @@ class Enemy7(AIBase):
     CAST_TIME = 1000
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.SPEED,
@@ -1502,7 +1520,8 @@ class Enemy7(AIBase):
             radius=40,
             push_strength=0.0,
             alert_duration=500,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy7"]
         self.kill_callback = kill_callback
@@ -1619,7 +1638,7 @@ class Enemy8(AIBase):
     FAR_DISTANCE = 600 * PLAYER_VIEW_SCALE
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED,
@@ -1628,7 +1647,8 @@ class Enemy8(AIBase):
             radius=30 * PLAYER_VIEW_SCALE,
             push_strength=0.0,
             alert_duration=self.PREPARE_TIME,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy8"]
         self.kill_callback = kill_callback
@@ -1747,7 +1767,7 @@ class Enemy9(AIBase):
     RANGED_RANGE = 1000
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED,
@@ -1756,7 +1776,8 @@ class Enemy9(AIBase):
             radius=30 * PLAYER_VIEW_SCALE,
             push_strength=0.0,
             alert_duration=500,
-            damage_player_fn=damage_player_fn
+            damage_player_fn=damage_player_fn,
+            rank=rank,
         )
         self.image_original = images["enemy9"]
         self.kill_callback = kill_callback
@@ -1836,7 +1857,7 @@ class Boss1(AIBase):
     GUN1_SAFE_MAX = MID_DISTANCE + 150
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None):
+                 damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=0.0,
@@ -1846,6 +1867,7 @@ class Boss1(AIBase):
             push_strength=0.0,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
+            rank=rank,
         )
 
         self.image_original = images["boss1"]
@@ -2165,11 +2187,11 @@ class Boss2(AIBase):
     INITIAL_DRONES = 2
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None):
+                 damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=300, far_threshold=700,
                          radius=50, push_strength=0.0, alert_duration=0,
-                         damage_player_fn=damage_player_fn)
+                         damage_player_fn=damage_player_fn,rank=rank,)
 
         self.hp = self.HP_MAX
         self.max_hp = self.HP_MAX

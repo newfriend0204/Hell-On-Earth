@@ -67,6 +67,7 @@ class WeaponBase:
 
 
 class Gun1(WeaponBase):
+    TIER = 1
     AMMO_COST = 5
     DAMAGE = 28
     SPREAD = 8
@@ -86,7 +87,7 @@ class Gun1(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun1.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=1,
+            tier=Gun1.TIER,
             sounds_dict={
                 "fire": sounds["gun1_fire"],
             },
@@ -160,6 +161,7 @@ class Gun1(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun2(WeaponBase):
+    TIER = 1
     AMMO_COST = 3
     DAMAGE = 18
     SPREAD = 9
@@ -179,7 +181,7 @@ class Gun2(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun2.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=1,
+            tier=Gun2.TIER,
             sounds_dict={
                 "fire": sounds["gun2_fire"],
             },
@@ -250,6 +252,7 @@ class Gun2(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun3(WeaponBase):
+    TIER = 2
     AMMO_COST = 8
     DAMAGE = 6
     FIRE_DELAY = 750
@@ -270,7 +273,7 @@ class Gun3(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun3.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=2,
+            tier=Gun3.TIER,
             sounds_dict={
                 "fire": sounds["gun3_fire"],
             },
@@ -343,6 +346,7 @@ class Gun3(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun4(WeaponBase):
+    TIER = 3
     AMMO_COST = 15
     DAMAGE_MAX = 80
     DAMAGE_MIN = 15
@@ -365,7 +369,7 @@ class Gun4(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun4.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=3,
+            tier=Gun4.TIER,
             sounds_dict={
                 "fire": sounds["gun4_fire"],
                 "explosion": sounds["gun4_explosion"],
@@ -428,6 +432,7 @@ class Gun4(WeaponBase):
             config.bullets.append(grenade)
 
 class Gun5(WeaponBase):
+    TIER = 2
     AMMO_COST = 6
     DAMAGE = 14
     FIRE_INTERVAL = 80
@@ -448,7 +453,7 @@ class Gun5(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun5.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=2,
+            tier=Gun5.TIER,
             sounds_dict={
                 "preheat": sounds["gun5_preheat"],
                 "fire": sounds["gun5_fire"],
@@ -572,6 +577,7 @@ class Gun5(WeaponBase):
         self.speed_penalty = self.base_speed_penalty
 
 class Gun6(WeaponBase):
+    TIER = 3
     LEFT_AMMO_COST = 7
     RIGHT_AMMO_COST = 15
     LEFT_FIRE_DELAY = 150
@@ -596,7 +602,7 @@ class Gun6(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun6.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun6.RIGHT_AMMO_COST,
-            tier=3,
+            tier=Gun6.TIER,
             sounds_dict={
                 "left_fire": sounds["gun6_leftfire"],
                 "right_fire": sounds["gun6_rightfire"],
@@ -727,6 +733,7 @@ class Gun6(WeaponBase):
         config.bullets.append(grenade)
 
 class Gun7(WeaponBase):
+    TIER = 2
     NAME = "C8-SFW"
     LEFT_FIRE_DELAY = 110
     RIGHT_FIRE_DELAY = 700
@@ -748,7 +755,7 @@ class Gun7(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun7.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun7.RIGHT_AMMO_COST,
-            tier=2,
+            tier=Gun7.TIER,
             sounds_dict={
                 "left_fire": sounds["gun7_leftfire"],
                 "right_fire": sounds["gun7_rightfire"]
@@ -891,6 +898,7 @@ class Gun7(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun8(WeaponBase):
+    TIER = 3
     AMMO_COST = 29
     DAMAGE_MAX = 120
     DAMAGE_MIN = 40
@@ -914,7 +922,7 @@ class Gun8(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun8.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=3,
+            tier=Gun8.TIER,
             sounds_dict={
                 "fire": sounds["gun8_fire"],
                 "explosion": sounds["gun8_explosion"],
@@ -987,6 +995,7 @@ class Gun8(WeaponBase):
             config.bullets.append(grenade)
 
 class Gun9(WeaponBase):
+    TIER = 4
     LEFT_AMMO_COST = 8
     RIGHT_AMMO_COST = 18
     LEFT_FIRE_DELAY = 150
@@ -1012,7 +1021,7 @@ class Gun9(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun9.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun9.RIGHT_AMMO_COST,
-            tier=4,
+            tier=Gun9.TIER,
             sounds_dict={
                 "left_fire": sounds["gun9_leftfire"],
                 "right_fire": sounds["gun9_rightfire"],
@@ -1139,6 +1148,7 @@ class Gun9(WeaponBase):
         config.bullets.append(bullet)
 
 class Gun10(WeaponBase):
+    TIER = 2
     LEFT_AMMO_COST = 5
     RIGHT_AMMO_COST = 6
     LEFT_FIRE_DELAY = 120
@@ -1164,7 +1174,7 @@ class Gun10(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun10.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun10.RIGHT_AMMO_COST,
-            tier=2,
+            tier=Gun10.TIER,
             sounds_dict={
                 "fire": sounds["gun10_fire"],
             },
@@ -1263,6 +1273,7 @@ class Gun10(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun11(WeaponBase):
+    TIER = 3
     AMMO_COST = 10
     DAMAGE = 8
     FIRE_DELAY = 350
@@ -1285,7 +1296,7 @@ class Gun11(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun11.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=3,
+            tier=Gun11.TIER,
             sounds_dict={
                 "fire": sounds["gun11_fire"],
             },
@@ -1360,6 +1371,7 @@ class Gun11(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun12(WeaponBase):
+    TIER = 3
     AMMO_COST = 8
     DAMAGE = 80
     FIRE_DELAY = 200
@@ -1386,7 +1398,7 @@ class Gun12(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun12.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=3,
+            tier=Gun12.TIER,
             sounds_dict={
                 "fire": sounds["gun12_fire"],
             },
@@ -1448,6 +1460,7 @@ class Gun12(WeaponBase):
         config.bullets.append(bullet)
 
 class Gun13(WeaponBase):
+    TIER = 1
     LEFT_AMMO_COST = 4
     RIGHT_AMMO_COST = 5
     LEFT_FIRE_DELAY = 170
@@ -1473,7 +1486,7 @@ class Gun13(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun13.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun13.RIGHT_AMMO_COST,
-            tier=1,
+            tier=Gun13.TIER,
             sounds_dict={
                 "fire": sounds["gun13_fire"],
             },
@@ -1572,6 +1585,7 @@ class Gun13(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun14(WeaponBase):
+    TIER = 2
     LEFT_AMMO_COST = 4
     RIGHT_AMMO_COST = 5
     LEFT_FIRE_DELAY = 140
@@ -1597,7 +1611,7 @@ class Gun14(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun14.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun14.RIGHT_AMMO_COST,
-            tier=2,
+            tier=Gun14.TIER,
             sounds_dict={
                 "fire": sounds["gun14_fire"],
             },
@@ -1696,166 +1710,7 @@ class Gun14(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun15(WeaponBase):
-    LEFT_AMMO_COST = 8
-    LEFT_FIRE_DELAY = 120
-    LEFT_DAMAGE = 24
-    LEFT_SPREAD = 10
-    LEFT_RANGE = 2000
-    LEFT_SPEED = 14 * config.PLAYER_VIEW_SCALE
-
-    RIGHT_FIRE_DELAY = 1000
-    RIGHT_CONE_ANGLE = 120
-    RIGHT_RANGE = 500
-    BASE_DAMAGE = 30
-    MAX_DAMAGE = 150
-    BASE_KNOCKBACK = 100
-    MAX_KNOCKBACK = 500
-    MAX_CHARGE = 50
-
-    @staticmethod
-    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position, get_enemies_fn):
-        return Gun15(
-            name="플라즈마 라이플",
-            front_image=weapon_assets["gun15"]["front"],
-            topdown_image=weapon_assets["gun15"]["topdown"],
-            uses_bullets=True,
-            bullet_images=weapon_assets["gun15"]["bullets"],
-            uses_cartridges=False,
-            cartridge_images=[],
-            can_left_click=True,
-            can_right_click=True,
-            left_click_ammo_cost=Gun15.LEFT_AMMO_COST,
-            right_click_ammo_cost=0,
-            tier=5,
-            sounds_dict={
-                "left_fire": sounds["gun15_leftfire"],
-                "right_fire": sounds["gun15_rightfire"],
-            },
-            get_ammo_gauge_fn=ammo_gauge,
-            reduce_ammo_fn=consume_ammo,
-            bullet_has_trail=False,
-            get_player_world_position_fn=get_player_world_position,
-            get_enemies_fn=get_enemies_fn
-        )
-
-    def __init__(self, name, front_image, topdown_image, get_enemies_fn, **kwargs):
-        super().__init__(name, front_image, topdown_image, **kwargs)
-        self.fire_delay = Gun15.LEFT_FIRE_DELAY
-        self.right_fire_delay = Gun15.RIGHT_FIRE_DELAY
-        self.last_right_click_time = 0
-        self.plasma_charge = 0
-        self.recoil_strength = 3
-        self.speed_penalty = 0.08
-        self.distance_from_center = config.PLAYER_VIEW_SCALE * 55
-        self.shake_strength = 7
-        self.get_enemies = get_enemies_fn
-
-    def on_update(self, mouse_left_down, mouse_right_down):
-        now = pygame.time.get_ticks()
-
-        if self.can_left_click and mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
-                self.on_left_click()
-                self.last_shot_time = now
-
-        if self.can_right_click and mouse_right_down and now - self.last_right_click_time >= self.RIGHT_FIRE_DELAY:
-            if self.plasma_charge >= 1:
-                self.on_right_click()
-                self.last_right_click_time = now
-
-    def on_left_click(self):
-        # 좌클릭: 플라즈마 탄환 발사 및 차지 카운트 증가
-        self.reduce_ammo(self.left_click_ammo_cost)
-        self.sounds["left_fire"].play()
-
-        config.shake_timer = 5
-        config.shake_strength = self.shake_strength
-
-        self.plasma_charge += 1
-
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        px, py = self.get_player_world_position()
-
-        dx = mouse_x - config.player_rect.centerx
-        dy = mouse_y - config.player_rect.centery
-        angle = math.atan2(dy, dx)
-        spread = math.radians(random.uniform(-self.LEFT_SPREAD / 2, self.LEFT_SPREAD / 2))
-        angle += spread
-
-        vx = math.cos(angle)
-        vy = math.sin(angle)
-        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
-        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
-        bullet_x = px + offset_x
-        bullet_y = py + offset_y
-
-        bullet = Bullet(
-            bullet_x,
-            bullet_y,
-            bullet_x + vx * self.LEFT_RANGE,
-            bullet_y + vy * self.LEFT_RANGE,
-            spread_angle_degrees=self.LEFT_SPREAD,
-            bullet_image=self.bullet_images[0],
-            speed=self.LEFT_SPEED,
-            max_distance=self.LEFT_RANGE * config.PLAYER_VIEW_SCALE,
-            damage=self.LEFT_DAMAGE
-        )
-        bullet.trail_enabled = self.bullet_has_trail
-        config.bullets.append(bullet)
-
-    def on_right_click(self):
-        # 우클릭: 전방 원뿔 범위 내 모든 적에게 데미지와 넉백 적용
-        self.sounds["right_fire"].play()
-
-        config.shake_timer = 8
-        config.shake_strength = self.shake_strength + 3
-
-        # 충격파 강도 계산 (차지 비율 기반)
-        charge_ratio = min(self.plasma_charge, self.MAX_CHARGE) / self.MAX_CHARGE
-        damage = self.BASE_DAMAGE + (self.MAX_DAMAGE - self.BASE_DAMAGE) * charge_ratio
-        knockback = self.BASE_KNOCKBACK + (self.MAX_KNOCKBACK - self.BASE_KNOCKBACK) * charge_ratio
-
-        px, py = self.get_player_world_position()
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        dir_angle = math.atan2(mouse_y - config.player_rect.centery, mouse_x - config.player_rect.centerx)
-
-        # 전방 원뿔 범위 판정 및 처리
-        enemies = list(self.get_enemies())
-        for enemy in enemies:
-            if not getattr(enemy, "alive", True):
-                continue
-
-            dx = enemy.world_x - px
-            dy = enemy.world_y - py
-            dist = math.hypot(dx, dy)
-            if dist <= self.RIGHT_RANGE:
-                angle_to_enemy = math.degrees(math.atan2(dy, dx) - dir_angle)
-                angle_to_enemy = (angle_to_enemy + 360) % 360
-                if angle_to_enemy > 180:
-                    angle_to_enemy -= 360
-                if abs(angle_to_enemy) <= self.RIGHT_CONE_ANGLE / 2:
-                    enemy.hit(damage, None)
-
-                    if enemy.hp <= 0:
-                        enemy.alive = False
-                        enemy.radius = 0
-                        if hasattr(enemy, "colliders"):
-                            enemy.colliders = []
-                        self.get_enemies().remove(enemy)
-                        continue
-
-                    if dist > 0:
-                        nx = dx / dist
-                        ny = dy / dist
-                    else:
-                        nx, ny = 0, 0
-                    enemy.knockback_velocity_x = nx * (knockback / 10)
-                    enemy.knockback_velocity_y = ny * (knockback / 10)
-                    enemy.knockback_steps = 10
-
-        self.plasma_charge = 0
-
-class Gun15(WeaponBase):
+    TIER = 5
     LEFT_AMMO_COST = 10
     LEFT_FIRE_DELAY = 120
     LEFT_DAMAGE = 24
@@ -1886,7 +1741,7 @@ class Gun15(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun15.LEFT_AMMO_COST,
             right_click_ammo_cost=0,
-            tier=5,
+            tier=Gun15.TIER,
             sounds_dict={
                 "left_fire": sounds["gun15_leftfire"],
                 "right_fire": sounds["gun15_rightfire"],
@@ -2010,6 +1865,7 @@ class Gun15(WeaponBase):
         self.plasma_charge = 0
 
 class Gun16(WeaponBase):
+    TIER = 1
     LEFT_AMMO_COST = 3
     RIGHT_AMMO_COST = 4
     LEFT_FIRE_DELAY = 100
@@ -2035,7 +1891,7 @@ class Gun16(WeaponBase):
             can_right_click=True,
             left_click_ammo_cost=Gun16.LEFT_AMMO_COST,
             right_click_ammo_cost=Gun16.RIGHT_AMMO_COST,
-            tier=1,
+            tier=Gun16.TIER,
             sounds_dict={
                 "fire": sounds["gun16_fire"],
             },
@@ -2134,6 +1990,7 @@ class Gun16(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun17(WeaponBase):
+    TIER = 3
     AMMO_COST = 5
     BULLETS_PER_BURST = 3
     BURST_INTERVAL = 70
@@ -2157,7 +2014,7 @@ class Gun17(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun17.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=3,
+            tier=Gun17.TIER,
             sounds_dict={
                 "fire": sounds["gun17_fire"],
             },
@@ -2242,6 +2099,7 @@ class Gun17(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun18(WeaponBase):
+    TIER = 1
     AMMO_COST = 7
     FIRE_DELAY = 80
     DAMAGE = 13
@@ -2263,7 +2121,7 @@ class Gun18(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun18.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=1,
+            tier=Gun18.TIER,
             sounds_dict={
                 "fire": sounds["gun18_fire"],
             },
@@ -2337,6 +2195,7 @@ class Gun18(WeaponBase):
             config.scattered_bullets.append(scatter)
 
 class Gun19(WeaponBase):
+    TIER = 4
     AMMO_COST_DEFEND = 8
     DEFEND_ANGLE = 120
     DEFEND_DISTANCE = 80 * config.PLAYER_VIEW_SCALE
@@ -2356,7 +2215,7 @@ class Gun19(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=0,
             right_click_ammo_cost=0,
-            tier=4,
+            tier=Gun19.TIER,
             sounds_dict={
                 "defend": sounds["gun19_defend"],
             },
@@ -2447,6 +2306,7 @@ class Gun19(WeaponBase):
         return False
 
 class Gun20(WeaponBase):
+    TIER = 4
     FIRE_DELAY = 300
     AMMO_COST = 35
     GRENADE_SPEED = 2.5
@@ -2471,7 +2331,7 @@ class Gun20(WeaponBase):
             can_right_click=False,
             left_click_ammo_cost=Gun20.AMMO_COST,
             right_click_ammo_cost=0,
-            tier=4,
+            tier=Gun20.TIER,
             sounds_dict={
                 "fire": sounds["gun20_fire"],
                 "explosion": sounds["gun20_explosion"],

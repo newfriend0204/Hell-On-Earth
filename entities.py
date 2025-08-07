@@ -14,6 +14,24 @@ PARTICLE_SPEED_MAX = 12
 PARTICLE_LIFETIME = 2000
 PARTICLE_FADE_TIME = 500
 
+class MerchantNPC:
+    def __init__(self, image, x, y, dialogue):
+        self.image = image
+        self.x = x
+        self.y = y
+        self.dialogue = dialogue
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def draw(self, screen, world_x, world_y):
+        screen_x = self.x - world_x
+        screen_y = self.y - world_y
+        screen.blit(self.image, (screen_x - self.rect.width // 2, screen_y - self.rect.height // 2))
+
+    def is_player_near(self, player_center_x, player_center_y, distance=80):
+        dx = self.x - player_center_x
+        dy = self.y - player_center_y
+        return (dx * dx + dy * dy) <= distance * distance
+    
 class FieldWeapon:
     # 필드에 놓여있는 무기
     def __init__(self, weapon_class, world_x, world_y, weapon_assets, sounds, max_width=80):

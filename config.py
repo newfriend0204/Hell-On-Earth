@@ -24,37 +24,62 @@ WALK_VOLUME = 0.5
 
 STAGE_DATA = {
     "1-1": {
-        "boss_map": 0,  # BOSS_MAPS[0] == BOSS_MAP_1
+        "boss_map": 0,
         "enemy_rank_range": (1, 3),
         "min_f_rooms": 5,
         "max_f_rooms": 6,
-        "acquire_rooms": 2
+        "acquire_rooms": 2,
+        "weapon_tier_weights": {
+            1: 60,
+            2: 30,
+            3: 10
+        }
     },
     "1-2": {
         "boss_map": 1,
         "enemy_rank_range": (1, 4),
         "min_f_rooms": 5,
         "max_f_rooms": 6,
-        "acquire_rooms": 2
+        "acquire_rooms": 2,
+        "weapon_tier_weights": {
+            1: 50,
+            2: 40,
+            3: 10
+        }
     },
     "1-3": {
         "boss_map": 2,
         "enemy_rank_range": (2, 5),
         "min_f_rooms": 6,
         "max_f_rooms": 7,
-        "acquire_rooms": 3
+        "acquire_rooms": 3,
+        "weapon_tier_weights": {
+            1: 40,
+            2: 40,
+            3: 20
+        }
     }
 }
 CURRENT_STAGE = "1-1"
 
+TIER_PRICES = {
+    1: 20,
+    2: 40,
+    3: 80,
+    4: 120,
+    5: 200
+}
+
 combat_state = False
 combat_enabled = True
 images = None
+player_score = 10000
 
 global_enemy_bullets = []
 all_enemies = []
 blood_effects = []
 dropped_items = []
+score_gain_texts = []
 effects = []
 
 # Gun1, Gun2, Gun3 zoom level 초기값
