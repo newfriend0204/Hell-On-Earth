@@ -1,6 +1,9 @@
 START_MAP = {
     "obstacles": [],
     "enemy_infos": [],
+    "npc_infos": [
+        {"x": 200, "y": 200, "npc_type": "doctorNF_npc"}
+    ],
     "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
 

@@ -5,7 +5,7 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC
+from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
@@ -15,7 +15,7 @@ from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_
 import world
 from maps import MAPS, FIGHT_MAPS, BOSS_MAPS
 from dialogue_manager import DialogueManager
-from dialogue_data import merchant_dialogue
+from dialogue_data import merchant_dialogue, doctorNF_dialogue
 
 # 맵 상태 초기화
 CURRENT_MAP = MAPS[0]
@@ -66,9 +66,7 @@ background_rect = background_image.get_rect()
 
 dialogue_manager = DialogueManager()
 mouse_left_released_after_dialogue = False
-# 상점 상인 위치 변수 (상점방 생성시 좌표 지정)
-MERCHANT_OFFSET_Y = -130    # "조금 위"로 띄우는 용도
-merchant_pos = None         # (x, y), 상점방 진입시 위치 계산
+merchant_pos = None
 npcs = []
 
 obstacle_manager = ObstacleManager(
@@ -285,6 +283,9 @@ kill_count = 0
 
 changing_room = False
 visited_f_rooms = {}
+room_portals = {}        # {(x,y): True} — 해당 보스방에 포탈이 활성화 상태
+current_portal = None    # 현재 방에 표시되는 포탈 인스턴스
+portal_spawn_at_ms = None  # 보스 처치 후 0.5초 뒤 스폰 예약 시간(ms)
 DIRECTION_OFFSET = {
     "north": (0, -1),
     "south": (0, 1),
@@ -317,17 +318,16 @@ class ShopItem:
         self.y = y
         self.purchased = False
 
-# 방별 상점 상품 리스트 저장
 room_shop_items = {}
 shop_items = []
 
 def spawn_room_npcs():
+    # NPC 소환
     npcs.clear()
     room_type = grid[current_room_pos[1]][current_room_pos[0]]
     if room_type == 'A' and shop_items:
-        # 상점방 MerchantNPC 배치
         center_x = world_instance.effective_bg_width / 2
-        center_y = world_instance.effective_bg_height / 2 + MERCHANT_OFFSET_Y
+        center_y = world_instance.effective_bg_height / 2 - 130
         npcs.append(
             MerchantNPC(
                 images["merchant1"],
@@ -336,6 +336,18 @@ def spawn_room_npcs():
                 merchant_dialogue
             )
         )
+
+    if "npc_infos" in CURRENT_MAP:
+        for npc_info in CURRENT_MAP["npc_infos"]:
+            if npc_info["npc_type"] == "doctorNF_npc":
+                npcs.append(
+                    DoctorNFNPC(
+                        images["doctorNF"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        doctorNF_dialogue
+                    )
+                )
 
 def on_dialogue_close():
     global mouse_left_released_after_dialogue
@@ -450,6 +462,11 @@ init_weapon_ui_cache(weapons)
 
 def advance_to_next_stage():
     # 현재 스테이지를 다음 스테이지로 전환하고 시작방으로 이동
+    # 포탈/전투 기록 리셋
+    global room_portals, current_portal, portal_spawn_at_ms
+    room_portals.clear()
+    current_portal = None; portal_spawn_at_ms = None
+
     visited_f_rooms.clear()
 
     import config
@@ -490,8 +507,9 @@ def advance_to_next_stage():
             
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items
-
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal
+    
+    current_portal = None
     WIDTH, HEIGHT = world.get_map_dimensions()
     changing_room = True
 
@@ -551,9 +569,21 @@ def change_room(direction):
 
     elif new_room_type == 'E':
         stage_boss_index = STAGE_DATA[config.CURRENT_STAGE]["boss_map"]
-        CURRENT_MAP = BOSS_MAPS[stage_boss_index]
-        config.combat_state = True
-        config.combat_enabled = True
+        base_boss_map = BOSS_MAPS[stage_boss_index]
+
+        # 보스방이 이미 클리어(9)면 적 제거/전투 비활성화 + 포탈 표시
+        if world.room_states[new_y][new_x] == 9:
+            CURRENT_MAP = {
+                "obstacles": base_boss_map["obstacles"],
+                "enemy_infos": [],
+                "crop_rect": base_boss_map["crop_rect"]
+            }
+            config.combat_state = False
+            config.combat_enabled = False
+        else:
+            CURRENT_MAP = base_boss_map
+            config.combat_state = True
+            config.combat_enabled = True
     else:
         CURRENT_MAP = MAPS[0]
 
@@ -594,13 +624,11 @@ def change_room(direction):
         room_key = (new_x, new_y)
 
         if acquire_index == 2:
-            # ------------------- 무기방 -------------------
             if room_key not in room_field_weapons:
                 center_x = new_world.effective_bg_width / 2
                 center_y = new_world.effective_bg_height / 2
                 spacing = 150 * PLAYER_VIEW_SCALE
 
-                # ----- 티어별 등장 확률에 따라 2개(중복 X) 뽑기 -----
                 stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
                 tier_to_weapons = {}
                 for weapon_class in WEAPON_CLASSES:
@@ -632,15 +660,13 @@ def change_room(direction):
 
             field_weapons.clear()
             field_weapons.extend(room_field_weapons[room_key])
-            shop_items = []  # 상점 없음
-
-        else:  # ------------------- 상점방 (acquire_index == 3) -------------------
+            shop_items = []
+        else:
             if room_key not in room_shop_items:
                 center_x = new_world.effective_bg_width / 2
                 center_y = new_world.effective_bg_height / 2
                 spacing = 170 * PLAYER_VIEW_SCALE
 
-                # ----- 티어별 등장 확률에 따라 3개(중복 X) 뽑기 -----
                 stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
                 tier_to_weapons = {}
                 for weapon_class in WEAPON_CLASSES:
@@ -671,7 +697,7 @@ def change_room(direction):
                 room_shop_items[room_key] = items_in_room
 
             shop_items = room_shop_items[room_key]
-            field_weapons.clear()  # 상점에선 일반 무기 없음
+            field_weapons.clear()
 
     else:
         field_weapons.clear()
@@ -712,6 +738,19 @@ def change_room(direction):
 
     effective_bg_width = world_instance.effective_bg_width
     effective_bg_height = world_instance.effective_bg_height
+
+    if new_room_type == 'E' and world.room_states[new_y][new_x] == 9:
+        room_key = (new_x, new_y)
+        if room_portals.get(room_key, False):
+            center_x = world_instance.effective_bg_width / 2
+            center_y = world_instance.effective_bg_height / 2
+            # 즉시 생성(재입장 시엔 대기 없이)
+            # 등장 애니메이션은 그대로 적용됨(등장 시각을 지금으로 잡으므로 부드럽게 보임)
+            try:
+                img = images["portal"]
+                current_portal = Portal(center_x, center_y, img)
+            except KeyError:
+                current_portal = None
 
     walls = world_instance.generate_walls(
         map_width=map_width,
@@ -1343,6 +1382,8 @@ for idx, info in enumerate(CURRENT_MAP["enemy_infos"]):
         )
         enemies.append(enemy)
 
+spawn_room_npcs()
+
 if len(enemies) == 0:
     config.combat_enabled = False
     print("[DEBUG] No enemies in map. Combat disabled.")
@@ -1378,8 +1419,22 @@ while running:
                 move_left = True
             elif event.key == pygame.K_d:
                 move_right = True
-            elif event.key == pygame.K_SPACE:
-                # NPC 상호작용(가까이서 스페이스)
+            elif event.key == pygame.K_SPACE and not dialogue_manager.active:
+                # 1) 포탈 근접 시 다음 스테이지 전환(커튼: 아래->위)
+                if current_portal is not None:
+                    player_cx = world_x + player_rect.centerx
+                    player_cy = world_y + player_rect.centery
+                    if current_portal.is_player_near(player_cx, player_cy):
+                        old_surface = screen.copy()
+                        def go_next_stage():
+                            advance_to_next_stage()
+                            # 스테이지 바뀌면 즉시 한 프레임 렌더(커튼 복귀용)
+                            render_game_frame()
+                        swipe_curtain_transition(
+                            screen, old_surface, go_next_stage, direction="up", duration=0.5
+                        )
+                        # 포탈은 스테이지 전환과 함께 리셋됨(advance_to_next_stage에서 정리)
+                        continue
                 player_cx = world_x + player_rect.centerx
                 player_cy = world_y + player_rect.centery
                 for npc in npcs:
@@ -1394,8 +1449,7 @@ while running:
                         swipe_curtain_transition(
                             screen, old_surface, on_dialogue, direction="up", duration=0.45
                         )
-                        break  # 여러 NPC가 있을 경우 첫 번째만
-                # 무기줍기 등 기존 기능은 아래에 둠
+                        break
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
                 try_pickup_weapon()
@@ -1436,6 +1490,11 @@ while running:
                         enemy.hit(9999, blood_effects)  # 강제로 사망시킴
                         enemies.remove(enemy)
                 room_key = (cx, cy)
+
+                if grid[cy][cx] == 'E':
+                    room_portals[room_key] = True
+                    portal_spawn_at_ms = pygame.time.get_ticks() + 500
+                    print("[DEBUG] Boss room cleared via cheat. Portal will spawn in 0.5s.")
 
                 if room_key in visited_f_rooms:
                     visited_f_rooms[room_key]["cleared"] = True
@@ -1882,6 +1941,22 @@ while running:
         shake_offset_x = 0
         shake_offset_y = 0
 
+    if portal_spawn_at_ms is not None:
+        now_ms = pygame.time.get_ticks()
+        if now_ms >= portal_spawn_at_ms:
+            portal_spawn_at_ms = None
+            # 현재 방이 보스방이고, 포탈 표시한 적 없을 때만 생성
+            cx, cy = current_room_pos
+            if grid[cy][cx] == 'E':
+                try:
+                    center_x = world_instance.effective_bg_width / 2
+                    center_y = world_instance.effective_bg_height / 2
+                    img = images["portal"]
+                    current_portal = Portal(center_x, center_y, img)
+                    print("[DEBUG] Portal spawned.")
+                except Exception as e:
+                    print("[WARN] Portal spawn failed:", e)
+
     bullets = [
         b for b in bullets
         if not getattr(b, "to_remove", False) or (hasattr(b, "drawn_at_least_once") and not b.drawn_at_least_once)
@@ -1897,6 +1972,12 @@ while running:
             visited_f_rooms[room_key]["cleared"] = True
 
         world.update_room_state_after_combat(cy, cx)
+
+        if grid[cy][cx] == 'E':
+            room_portals[room_key] = True
+            # 현재 방에 머무는 중이면 0.5초 뒤 스폰
+            portal_spawn_at_ms = pygame.time.get_ticks() + 500
+            print("[DEBUG] Boss room cleared. Portal will spawn in 0.5s.")
 
         config.combat_state = False
         config.combat_enabled = False
@@ -1927,6 +2008,19 @@ while running:
     # 필드 무기 표시 및 습득 처리
     player_center_x = player_rect.centerx + world_x
     player_center_y = player_rect.centery + world_y
+
+    if current_portal is not None:
+        # dt 계산(회전용)
+        dt_seconds = clock.get_time() / 1000.0
+        near_portal = current_portal.is_player_near(player_center_x, player_center_y)
+        current_portal.update(dt_seconds)
+        current_portal.draw(
+            screen,
+            world_x - shake_offset_x,
+            world_y - shake_offset_y,
+            player_near=near_portal
+        )
+
     for fw in field_weapons[:]:
         near = fw.is_player_near(player_center_x, player_center_y)
         fw.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_near=near)
@@ -1935,11 +2029,9 @@ while running:
         for shop_item in shop_items:
             if shop_item.purchased:
                continue
-            # --- 월드좌표 → 화면좌표 변환
             screen_x = shop_item.x - world_x + shake_offset_x
             screen_y = shop_item.y - world_y + shake_offset_y
 
-            # --- 무기 이미지 비율 유지 리사이즈 (최대 높이 48)
             weapon_img = weapon_assets[shop_item.weapon_class.__name__.lower()]["front"]
             max_height = 48
             scale_factor = max_height / weapon_img.get_height()
@@ -1949,27 +2041,22 @@ while running:
             screen.blit(weapon_img_scaled, (screen_x - scaled_width//2, screen_y - scaled_height//2))
 
             dist = math.hypot(shop_item.x - player_center_x, shop_item.y - player_center_y)
-            # --- 근접시만 텍스트/상호작용
             if dist < 100:
                 text_color = (100,255,100) if shop_item.purchased else (160,60,255)
-                # 무기 이름 표시 (예: "M1911" 등)
                 key = shop_item.weapon_class.__name__.lower()
                 weapon_name = weapon_stats.get(key, {}).get("name", key)
                 price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, text_color)
                 name_text = KOREAN_FONT_BOLD_20.render(f"{weapon_name}", True, text_color)
                 info_text = KOREAN_FONT_BOLD_20.render("구매완료" if shop_item.purchased else "구매 (Space)", True, text_color)
-                # --- 무기 이미지 "위"에 "가운데 정렬"
                 y_cursor = screen_y - scaled_height//2 - price_text.get_height() - name_text.get_height() - 12
                 screen.blit(price_text, (screen_x - price_text.get_width()//2, y_cursor))
                 screen.blit(name_text, (screen_x - name_text.get_width()//2, y_cursor + price_text.get_height() + 2))
                 screen.blit(info_text, (screen_x - info_text.get_width()//2, y_cursor + price_text.get_height() + name_text.get_height() + 6))
 
-                # --- 상호작용 판정(근처+스페이스)
                 if not shop_item.purchased and keys[pygame.K_SPACE]:
                     if config.player_score >= shop_item.price:
                         config.player_score -= shop_item.price
                         shop_item.purchased = True
-                        # --- 무기 지급 코드 (복붙)
                         if len(weapons) < 4:
                             new_weapon = shop_item.weapon_class.create_instance(
                                 weapon_assets, sounds, lambda: ammo_gauge,
@@ -1992,10 +2079,8 @@ while running:
                             weapons[current_weapon_index] = new_weapon
                         sounds["swap_gun"].play()
                     else:
-                        # 포인트 부족 경고(사운드/메시지 등)
                         pass
             else:
-                # 멀리 있을 때: 가격만 연하게(선택)
                 gray = (180,180,180)
                 price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, gray)
                 screen.blit(price_text, (screen_x - price_text.get_width()//2, screen_y - scaled_height//2 - price_text.get_height() - 4))
@@ -2245,45 +2330,35 @@ while running:
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
         continue
 
-    # 반투명 흰색 배경 (모서리 둥글게)
     score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
     pygame.draw.rect(score_box, (255, 255, 255, 120), score_box.get_rect(), border_radius=14)
-    screen.blit(score_box, (80, SCREEN_HEIGHT - 120 - 30 + 30))  # = screen.blit(..., (80, 660)) if height==780
-
-    # 악의 정수 텍스트 (보라색)
+    screen.blit(score_box, (80, SCREEN_HEIGHT - 120 - 30 + 30))
     score_text = KOREAN_FONT_BOLD_20.render(f"악의 정수: {config.player_score}", True, (63, 0, 153))
-    screen.blit(score_text, (90, SCREEN_HEIGHT - 120 - 30 + 30 + 2))  # = (90, 662)
+    screen.blit(score_text, (90, SCREEN_HEIGHT - 120 - 30 + 30 + 2))
 
-    # 최대 스택 수
     max_stack = 3
-    stack_gap = 24  # 한 스택당 간격(px)
+    stack_gap = 24
 
-    # 각 텍스트 처리
     for i, entry in enumerate(config.score_gain_texts[:]):
         font = KOREAN_FONT_BOLD_20
         surface = font.render(entry["text"], True, (63, 0, 153))
         surface.set_alpha(entry["alpha"])
 
-        # 스택 오프셋 계산 (최대 3개까지)
         y_offset = i * stack_gap
         draw_y = entry["y"] - y_offset
         screen.blit(surface, (200, draw_y))
 
-        # 지연 시간 경과 전이면 대기
         if entry.get("delay", 0) > 0:
             entry["delay"] -= 1
             continue
 
-        # 이동 + 알파 감소
         entry["y"] -= 1
         entry["alpha"] -= 5
         entry["lifetime"] -= 1
 
-        # 삭제 조건
         if entry["lifetime"] <= 0 or entry["alpha"] <= 0:
             config.score_gain_texts.remove(entry)
 
-    # 초과된 텍스트 제거 (스택 3개 초과 시)
     if len(config.score_gain_texts) > max_stack:
         del config.score_gain_texts[0:len(config.score_gain_texts) - max_stack]
 

@@ -136,6 +136,9 @@ def load_images():
     cursor_img = pygame.image.load(path_image("image", "MouseCursor.png")).convert_alpha()
     cursor_img = pygame.transform.smoothscale(cursor_img, (32, 32))
 
+    portal_img = pygame.image.load(path_image("Image", "Entity", "Portal.png")).convert_alpha()
+    portal_img = pygame.transform.smoothscale(portal_img, (64, 64))
+
     bg_img = pygame.image.load(path_image("Image", "Map1.png")).convert()
     bg_img = pygame.transform.smoothscale(bg_img, (BG_WIDTH, BG_HEIGHT))
 
@@ -290,6 +293,7 @@ def load_images():
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,
+        "portal": portal_img,
         "background": bg_img,
         "obstacles": obstacle_images,
         "obstacle_masks": obstacle_masks,

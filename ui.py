@@ -207,6 +207,7 @@ weapon_stats = {
 }
 
 def wrap_text(text, font, max_width):
+    # 자동 줄바꿈
     words = text.split(' ')
     lines = []
     current_line = ''
@@ -222,9 +223,9 @@ def wrap_text(text, font, max_width):
     return lines
 
 def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=None):
+    # 대화창 띄우기
     screen_w, screen_h = screen.get_size()
 
-    # 1. 배경
     overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 215))
     screen.blit(overlay, (0, 0))
@@ -234,7 +235,6 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
     box_x = (screen_w - box_w) // 2 - 60
     base_y = screen_h - box_h - 140
 
-    # 2. 이전 히스토리
     if history:
         for i, entry in enumerate(history):
             h_y = base_y - (len(history) - i) * (box_h - 50) + entry.get("anim_y", 0)
@@ -255,7 +255,6 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
 
             screen.blit(h_surface, (box_x, h_y))
 
-    # 3. 현재 대사
     box_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
     pygame.draw.rect(box_surface, (34, 34, 34, 245), (0, 0, box_w, box_h), border_radius=22)
     pygame.draw.rect(box_surface, (120, 255, 120, 110), (0, 0, box_w, box_h), width=4, border_radius=22)
@@ -273,7 +272,6 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
 
     screen.blit(box_surface, (box_x, base_y))
 
-    # 4. 선택지 UI
     choices = node.get("choices")
     if choices:
         slot_w = 300
@@ -291,7 +289,6 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
             text_surf = KOREAN_FONT_28.render(choice["text"], True, (255, 255, 255) if i != selected_choice_idx else (255, 255, 140))
             screen.blit(text_surf, (slot_rect.x + 22, slot_rect.y + 8))
 
-        # 5. 힌트 텍스트 왼쪽 아래
         hint_font = pygame.font.Font(FONT_PATH, 18)
         hint_surf = hint_font.render("W/S: 선택  좌클릭: 결정  ESC: 나가기", True, (200, 200, 255, 180))
         screen.blit(hint_surf, (20, screen_h - 30))
@@ -299,6 +296,7 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
         hint_font = pygame.font.Font(FONT_PATH, 18)
         hint_surf = hint_font.render("좌클릭: 다음/종료  ESC: 대화 종료", True, (200, 200, 255, 180))
         screen.blit(hint_surf, (20, screen_h - 30))
+
 def load_ui_image(filename):
     return pygame.image.load(os.path.join(ASSET_UI_DIR, filename))
 

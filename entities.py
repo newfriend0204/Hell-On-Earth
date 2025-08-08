@@ -32,6 +32,27 @@ class MerchantNPC:
         dy = self.y - player_center_y
         return (dx * dx + dy * dy) <= distance * distance
     
+class DoctorNFNPC:
+    def __init__(self, image, x, y, dialogue):
+        self.image = image
+        self.x = x
+        self.y = y
+        self.dialogue = dialogue
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def draw(self, screen, world_x, world_y):
+        screen_x = self.x - world_x
+        screen_y = self.y - world_y
+        screen.blit(self.image, (screen_x - self.rect.width // 2, screen_y - self.rect.height // 2))
+
+    def is_player_near(self, player_center_x, player_center_y, distance=80):
+        dx = self.x - player_center_x
+        dy = self.y - player_center_y
+        return (dx * dx + dy * dy) <= distance * distance
+
+    def get_dialogue(self):
+        return self.dialogue
+    
 class FieldWeapon:
     # 필드에 놓여있는 무기
     def __init__(self, weapon_class, world_x, world_y, weapon_assets, sounds, max_width=80):
@@ -94,6 +115,72 @@ class FieldWeapon:
                 (tri_x + 10, tri_y - 15)
             ]
             pygame.draw.polygon(screen, (255, 255, 255), points)
+
+class Portal:
+    # 보스 처치 후 등장하는 포탈
+    def __init__(self, x, y, image):
+        self.x = x
+        self.y = y
+        self.image = image
+        self.spawn_ms = pygame.time.get_ticks()
+        self.appear_duration = 600  # ms: 등장 연출 시간
+        self.scale_start = 0.2
+        self.scale_end = 1.0
+        self.alpha_target = 200     # 완전히 불투명(255) 대신 은은한 반투명
+        self.angle = 0.0            # 회전 각도(도)
+        self.rot_speed = 120.0      # 도/초, 시계방향(그림 회전은 -각도)
+        self.near_radius = 100 * PLAYER_VIEW_SCALE
+
+    def is_player_near(self, player_x, player_y):
+        dx = player_x - self.x
+        dy = player_y - self.y
+        return (dx * dx + dy * dy) <= (self.near_radius * self.near_radius)
+
+    def _appear_lerp(self):
+        # 0~1로 보간 비율 반환
+        elapsed = pygame.time.get_ticks() - self.spawn_ms
+        if elapsed <= 0:
+            return 0.0
+        if elapsed >= self.appear_duration:
+            return 1.0
+        return elapsed / self.appear_duration
+
+    def update(self, dt_seconds):
+        # 회전만 지속
+        self.angle = (self.angle + self.rot_speed * dt_seconds) % 360.0
+
+    def draw(self, screen, world_offset_x, world_offset_y, player_near=False):
+        t = self._appear_lerp()
+        scale = self.scale_start + (self.scale_end - self.scale_start) * t
+        alpha = int(self.alpha_target * t)
+
+        # 스케일 → 회전
+        base = self.image
+        w = max(1, int(base.get_width() * scale))
+        h = max(1, int(base.get_height() * scale))
+        scaled = pygame.transform.smoothscale(base, (w, h))
+        rotated = pygame.transform.rotate(scaled, -self.angle)  # 시계 방향
+        rotated.set_alpha(alpha)
+
+        screen_x = int(self.x - world_offset_x)
+        screen_y = int(self.y - world_offset_y)
+        rect = rotated.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated, rect)
+
+        if player_near:
+            # 안내 텍스트: "다음 스테이지 이동\n(Space)"
+            line1 = KOREAN_FONT_28.render("다음 스테이지 이동", True, (255, 255, 255))
+            line2 = KOREAN_FONT_28.render("(Space)", True, (200, 200, 255))
+            padding_x, padding_y = 8, 6
+            width = max(line1.get_width(), line2.get_width()) + padding_x * 2
+            height = line1.get_height() + line2.get_height() + padding_y * 3
+            bg = pygame.Surface((width, height), pygame.SRCALPHA)
+            pygame.draw.rect(bg, (0, 0, 0, 160), bg.get_rect(), border_radius=6)
+            # 텍스트 배치
+            bg.blit(line1, ( (width - line1.get_width())//2, padding_y ))
+            bg.blit(line2, ( (width - line2.get_width())//2, padding_y + line1.get_height() + 6 ))
+            # 포탈 위로 살짝 띄워서 표기
+            screen.blit(bg, (screen_x - width//2, screen_y - h//2 - height - 10))
 
 class ParticleBlood:
     # 피가 튀는 파티클 이펙트

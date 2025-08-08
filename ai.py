@@ -134,13 +134,12 @@ class AIBase(metaclass=EnemyMeta):
         import config
         config.player_score += getattr(self, "rank", 1)
 
-        # 🟣 점수 시각 효과 추가
         config.score_gain_texts.append({
             "text": f"+{getattr(self, 'rank', 1)}",
-            "x": 100,  # 실제 좌표는 UI 위치 기준으로 조정
+            "x": 100,
             "y":  SCREEN_HEIGHT - 118,
             "alpha": 255,
-            "lifetime": 60,  # frame 단위 (1초 = 60fps)
+            "lifetime": 60,
             "delay": 60 
         })
 
