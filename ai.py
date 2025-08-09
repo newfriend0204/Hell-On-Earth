@@ -3,7 +3,6 @@ import math
 import random
 from config import *
 import config
-import asset_manager
 from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile
 
 ENEMY_CLASSES = []

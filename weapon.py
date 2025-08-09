@@ -1,18 +1,17 @@
 import pygame
 import random
 import math
-from entities import Bullet, ScatteredBullet, ExplosionEffectPersistent
+from entities import Bullet, ScatteredBullet
 import config
-import time
 
 class MeleeController:
     # V키로 발동하는 근접 공격. 총기와 별도(현재 무기 유지).
     DAMAGE = 20
-    ARC_DEG = 30            # 총각(=±15°)
+    ARC_DEG = 30
     RANGE = int(100 * config.PLAYER_VIEW_SCALE)
-    DURATION = 220          # ms
-    HIT_MOMENT = 0.45       # 진행률 45% 지점에서 1회 판정
-    OUT_OFFSET = 42         # 칼 스프라이트 전진 최대 오프셋(px)
+    DURATION = 220
+    HIT_MOMENT = 0.45
+    OUT_OFFSET = 42
 
     def __init__(self, images, sounds, get_player_world_pos_fn):
         import pygame

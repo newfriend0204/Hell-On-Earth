@@ -1,7 +1,6 @@
 import pygame
 import config
 import os
-import textwrap
 import re
 
 pygame.init()
@@ -315,7 +314,6 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
 
 def draw_field_status_mini(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, x=18, y=None):
     # 대화 중 좌하단에 간이 체력/탄약/악의 정수 표시
-    import math
     sw, sh = screen.get_size()
     panel_w, panel_h = 300, 120
     if y is None:

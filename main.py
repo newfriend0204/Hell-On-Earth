@@ -5,13 +5,12 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal, Obstacle, DroneNPC
+from entities import ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal, Obstacle, DroneNPC
 from collider import Collider
-from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES, MeleeController
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_dialogue_box_with_choices, draw_combat_banner, draw_enemy_counter
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS
 from dialogue_manager import DialogueManager
@@ -273,8 +272,6 @@ tab_rects = []
 fade_in_after_resume = False
 selected_tab = 1
 weapon_tab_open = True
-
-renderer = Renderer3D(screen)
 
 clock = pygame.time.Clock()
 running = True

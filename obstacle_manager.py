@@ -1,9 +1,7 @@
 import pygame
-import random
 from entities import Obstacle
 from collider import Collider
 from config import PLAYER_VIEW_SCALE
-import os
 
 class ObstacleManager:
     def __init__(self, obstacle_images, obstacle_masks, map_width, map_height,

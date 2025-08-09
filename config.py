@@ -133,7 +133,7 @@ TIER_PRICES = {
 combat_state = False
 combat_enabled = True
 images = None
-player_score = 10000
+player_score = 10000 # 디버그, 원래는 0
 
 ESSENCE_COST_PER_HP = 0.30
 ESSENCE_COST_PER_AMMO = 0.20
@@ -146,36 +146,3 @@ blood_effects = []
 dropped_items = []
 score_gain_texts = []
 effects = []
-
-# Gun1, Gun2, Gun3 zoom level 초기값
-GUN1_ZOOM_LEVEL = -1.0
-GUN2_ZOOM_LEVEL = -300.0
-GUN3_ZOOM_LEVEL = -7.0
-
-# Gun1 zoom limits
-GUN1_MIN_ZOOM = -5.0
-GUN1_MAX_ZOOM = -0.001
-
-# Gun2 zoom limits
-GUN2_MIN_ZOOM = -500.0
-GUN2_MAX_ZOOM = -250.0
-
-# Gun3 zoom limits
-GUN3_MIN_ZOOM = -20.0
-GUN3_MAX_ZOOM = -4.0
-
-# 무기별 zoom 비율 (10%로 설정)
-GUN1_ZOOM_RATIO = 0.10
-GUN2_ZOOM_RATIO = 0.10
-GUN3_ZOOM_RATIO = 0.10
-
-# 폰트
-pygame.font.init()
-DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
-
-# OBJ 경로
-OBJ_PATHS = {
-    1: os.path.join(ASSET_DIR, "3DObject", "Gun13DObject.obj"),
-    2: os.path.join(ASSET_DIR, "3DObject", "Gun23DObject.obj"),
-    3: os.path.join(ASSET_DIR, "3DObject", "Gun33DObject.obj"),
-}
