@@ -172,17 +172,139 @@ class ObstacleManager:
                     bullet_passable=False
                 )
             )
-        else:
-            r = min(w, h) * 0.4
+        elif "Vehicle1" in filename:
+            width  = w * 0.65
+            height = h * 0.9
             colliders.append(
                 Collider(
-                    shape="circle",
+                    shape="rectangle",
                     center=(w / 2, h / 2),
-                    size=r
+                    size=(width, height),
+                    bullet_passable=False
                 )
             )
+        elif "Vehicle2" in filename:
+            width  = w * 0.95
+            height = h * 0.7
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Vehicle3" in filename:
+            width  = w * 0.4
+            height = h * 0.8
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Vehicle4" in filename:
+            width  = w * 0.82
+            height = h * 0.36
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Barricade1" in filename:
+            width  = w * 0.90
+            height = h * 0.45
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Dump1" in filename:
+            width  = w * 0.40   # ellipse rx
+            height = h * 0.36   # ellipse ry
+            colliders.append(
+                Collider(
+                    shape="ellipse",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Dump2" in filename:
+            width  = w * 0.35
+            height = h * 0.35
+            colliders.append(
+                Collider(
+                    shape="ellipse",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "ElectricBox1" in filename:
+            width  = w * 0.70
+            height = h * 0.70
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "FirePlug1" in filename:
+            width  = w * 0.28
+            height = h * 0.28
+            colliders.append(
+                Collider(
+                    shape="ellipse",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        elif "Hole1" in filename:
+            width  = w * 0.23
+            height = h * 0.23
+            colliders.append(
+                Collider(
+                    shape="ellipse",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=True
+                )
+            )
+        elif "TrashCan1" in filename:
+            width  = w * 0.70
+            height = h * 0.70
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(width, height),
+                    bullet_passable=False
+                )
+            )
+        else:
+            colliders.append(
+                Collider(
+                    shape="rectangle",
+                    center=(w / 2, h / 2),
+                    size=(w * 0.80, h * 0.80),
+                    bullet_passable=False
+                )
+            )
+
         return colliders
-    
+
     def draw_non_trees(self, screen, world_offset_x, world_offset_y):
         # 나무가 아닌 장애물 그리기
         for obs in self.static_obstacles + self.combat_obstacles:

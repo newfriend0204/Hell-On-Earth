@@ -58,9 +58,45 @@ STAGE_DATA = {
             2: 40,
             3: 20
         }
-    }
+    },
+    "2-1": {
+        "boss_map": 0,
+        "enemy_rank_range": (2, 5),
+        "min_f_rooms": 5,
+        "max_f_rooms": 6,
+        "acquire_rooms": 2,
+        "weapon_tier_weights": { 1: 30, 2: 50, 3: 20 }
+    },
+    "2-2": {
+        "boss_map": 1,
+        "enemy_rank_range": (3, 6),
+        "min_f_rooms": 6,
+        "max_f_rooms": 7,
+        "acquire_rooms": 2,
+        "weapon_tier_weights": { 1: 25, 2: 55, 3: 20 }
+    },
+    "2-3": {
+        "boss_map": 2,
+        "enemy_rank_range": (3, 6),
+        "min_f_rooms": 6,
+        "max_f_rooms": 8,
+        "acquire_rooms": 3,
+        "weapon_tier_weights": { 1: 20, 2: 55, 3: 25 }
+    },
 }
 CURRENT_STAGE = "1-1"
+
+STAGE_THEME = {
+    "1-1": "map1", "1-2": "map1", "1-3": "map1",
+    "2-1": "map2", "2-2": "map2", "2-3": "map2",
+}
+
+# Stage2에서 사용할 장애물 파일 세트
+STAGE2_OBSTACLE_FILES = [
+    "Vehicle1.png","Vehicle2.png","Vehicle3.png","Vehicle4.png",
+    "Barricade1.png","Dump1.png","Dump2.png",
+    "ElectricBox1.png","FirePlug1.png","Hole1.png","TrashCan1.png"
+]
 
 TIER_PRICES = {
     1: 20,
@@ -74,6 +110,11 @@ combat_state = False
 combat_enabled = True
 images = None
 player_score = 10000
+
+ESSENCE_COST_PER_HP = 0.30
+ESSENCE_COST_PER_AMMO = 0.20
+
+MERCHANT_COOLDOWN_MS = 180
 
 global_enemy_bullets = []
 all_enemies = []

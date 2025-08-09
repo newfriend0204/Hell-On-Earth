@@ -49,7 +49,7 @@ ACQUIRE_MAP_3 = {
     "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
 
-FIGHT_MAP_1 = {
+S1_FIGHT_MAP_1 = {
     "obstacles": [
         {"filename": "Pond1.png", "x": 768.90, "y": 523.05, "scale": 1.0},
         {"filename": "Rock2.png", "x": 320.05, "y": 191.50, "scale": 0.2},
@@ -70,7 +70,7 @@ FIGHT_MAP_1 = {
     "crop_rect": {"x_ratio": 1.0, "y_ratio": 1.0}
 }
 
-FIGHT_MAP_2 = {
+S1_FIGHT_MAP_2 = {
     "obstacles": [
         {"filename": "FallenLog2.png", "x": 233.51, "y": 157.60, "scale": 0.2},
         {"filename": "Tree1.png", "x": 907.00, "y": 175.11, "scale": 0.3},
@@ -92,7 +92,7 @@ FIGHT_MAP_2 = {
     "crop_rect": {"x_ratio": 0.9, "y_ratio": 0.9}
 }
 
-FIGHT_MAP_3 = {
+S1_FIGHT_MAP_3 = {
     "obstacles": [
         {"filename": "FallenLog1.png", "x": 173.70, "y": 350.98, "scale": 0.2},
         {"filename": "Rock2.png", "x": 448.72, "y": 305.88, "scale": 0.2},
@@ -113,7 +113,7 @@ FIGHT_MAP_3 = {
     "crop_rect": {"x_ratio": 1.0, "y_ratio": 0.5}
 }
 
-FIGHT_MAP_4 = {
+S1_FIGHT_MAP_4 = {
     "obstacles": [
         {"filename": "Tree1.png", "x": 200.00, "y": 150.00, "scale": 0.25},
         {"filename": "Tree1.png", "x": 500.00, "y": 100.00, "scale": 0.20},
@@ -135,7 +135,7 @@ FIGHT_MAP_4 = {
     "crop_rect": {"x_ratio": 0.7, "y_ratio": 0.7}
 }
 
-FIGHT_MAP_5 = {
+S1_FIGHT_MAP_5 = {
     "obstacles": [
         {"filename": "FallenLog2.png", "x": 134.68, "y": 181.77, "scale": 0.15},
         {"filename": "FallenLog2.png", "x": 404.07, "y": 100.94, "scale": 0.15},
@@ -153,7 +153,7 @@ FIGHT_MAP_5 = {
     "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
 
-FIGHT_MAP_6 = {
+S1_FIGHT_MAP_6 = {
     "obstacles": [
         {"filename": "Rock1.png", "x": 200.00, "y": 150.00, "scale": 0.15},
         {"filename": "Rock1.png", "x": 400.00, "y": 150.00, "scale": 0.15},
@@ -176,7 +176,7 @@ FIGHT_MAP_6 = {
     "crop_rect": {"x_ratio": 0.7, "y_ratio": 0.7}
 }
 
-FIGHT_MAP_7 = {
+S1_FIGHT_MAP_7 = {
     "obstacles": [
         {"filename": "Pond1.png", "x": 300.00, "y": 200.00, "scale": 0.3},
         {"filename": "Pond2.png", "x": 1000.00, "y": 760.00, "scale": 0.3},
@@ -204,7 +204,7 @@ FIGHT_MAP_7 = {
     "crop_rect": {"x_ratio": 0.8, "y_ratio": 0.8}
 }
 
-FIGHT_MAP_8 = {
+S1_FIGHT_MAP_8 = {
     "obstacles": [
         {"filename": "Pond1.png", "x": 560.00, "y": 900.00, "scale": 0.5},
         {"filename": "FallenLog1.png", "x": 180.00, "y": 250.00, "scale": 0.15},
@@ -235,7 +235,7 @@ FIGHT_MAP_8 = {
     "crop_rect": {"x_ratio": 0.6, "y_ratio": 1.5}
 }
 
-FIGHT_MAP_9 = { # 디버그
+S1_FIGHT_MAP_9 = { # 디버그
     "obstacles": [
     ],
     "enemy_infos": [
@@ -244,6 +244,19 @@ FIGHT_MAP_9 = { # 디버그
     "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
 }
 
+S2_FIGHT_MAP_1 = { # 디버그
+    "obstacles": [
+        {"filename": "TrashCan1.png", "x": 100.00, "y": 100.00, "scale": 0.3}
+    ],
+    "enemy_infos": [
+        {"x": 130.00, "y": 200.00},
+    ],
+    "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
+}
+
+S1_FIGHT_MAPS = [S1_FIGHT_MAP_9]#[S1_FIGHT_MAP_1, S1_FIGHT_MAP_2, S1_FIGHT_MAP_3, S1_FIGHT_MAP_4, S1_FIGHT_MAP_5, S1_FIGHT_MAP_6, S1_FIGHT_MAP_7, S1_FIGHT_MAP_8]
+S2_FIGHT_MAPS = [S2_FIGHT_MAP_1]
+
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
 BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3]
-FIGHT_MAPS = [FIGHT_MAP_9]#[FIGHT_MAP_1, FIGHT_MAP_2, FIGHT_MAP_3, FIGHT_MAP_4, FIGHT_MAP_5, FIGHT_MAP_6, FIGHT_MAP_7, FIGHT_MAP_8]
+FIGHT_MAPS = S1_FIGHT_MAPS

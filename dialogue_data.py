@@ -22,17 +22,25 @@ merchant_dialogue = [
     # 2
     {
         "speaker": "상인",
-        "text": "회복이라. 간단한 치료를 해주지. (50hp 회복)",
         "choices": None,
         "effect": {"type": "hp_recover", "amount": 50},
+        "effect_messages": {
+            "success": "좋아. 체력을 {gained} 회복해주지. (-{cost} 악의 정수)",
+            "full": "이미 최상의 컨디션이군. 치료는 필요 없지.",
+            "insufficient": "악의 정수가 부족하군. 거래는 성립되지 않는다. (부족: {need})"
+        },
         "next": 1
     },
     # 3
     {
         "speaker": "상인",
-        "text": "총알이 부족하나? 여기 여분이 있네. (50탄약 게이지 회복)",
         "choices": None,
         "effect": {"type": "ammo_recover", "amount": 50},
+        "effect_messages": {
+            "success": "보급 완료. 탄약 게이지 {gained} 회복. (-{cost} 악의 정수)",
+            "full": "탄약은 이미 충분해 보이는군.",
+            "insufficient": "악의 정수가 부족해. 이건 거래가 아니지. (부족: {need})"
+        },
         "next": 1
     },
     # 4

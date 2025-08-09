@@ -21,6 +21,15 @@ class MerchantNPC:
         self.y = y
         self.dialogue = dialogue
         self.rect = self.image.get_rect(center=(x, y))
+        iw, ih = self.rect.size
+        rx = iw * 0.30
+        ry = ih * 0.30
+        self.collider = Collider(
+            shape="ellipse",
+            center=(0.0, 0.0),
+            size=(rx, ry),
+            bullet_passable=True
+        )
 
     def draw(self, screen, world_x, world_y):
         screen_x = self.x - world_x
@@ -39,6 +48,15 @@ class DoctorNFNPC:
         self.y = y
         self.dialogue = dialogue
         self.rect = self.image.get_rect(center=(x, y))
+        iw, ih = self.rect.size
+        rx = iw * 0.30
+        ry = ih * 0.30
+        self.collider = Collider(
+            shape="ellipse",
+            center=(0.0, 0.0),
+            size=(rx, ry),
+            bullet_passable=True
+        )
 
     def draw(self, screen, world_x, world_y):
         screen_x = self.x - world_x

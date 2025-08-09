@@ -10,9 +10,12 @@ class DialogueManager:
         self.selected_choice = 0
         self.on_effect_callback = None
         self.close_callback = None
-        self.dialogue_history = []      # [(speaker, text, anim_y)]  최근 3~4개
-        self.history_anim_timer = 0     # 0: 애니메이션 없음, >0: 애니중
-        self.HISTORY_ANIM_TIME = 12     # 애니메이션 프레임 (0.2초)
+        self.dialogue_history = []
+        self.history_anim_timer = 0 
+        self.HISTORY_ANIM_TIME = 12
+        self.history_queue = []
+        self.override_text = None
+        self.override_speaker = None
 
     def start(self, dialogue_data, on_effect_callback=None, close_callback=None):
         self.active = True
@@ -21,11 +24,15 @@ class DialogueManager:
         self.selected_choice = 0
         self.on_effect_callback = on_effect_callback
         self.close_callback = close_callback
-        self.dialogue_history = []   # 대화 시작 시 히스토리 비움
+        self.dialogue_history = []
         self.history_anim_timer = 0
+        self.history_queue = []
+        self.override_text = None
+        self.override_speaker = None
 
     def update(self, event_list):
         if not self.active:
+            self._drain_history_queue()
             return
 
         node = self.dialogue_data[self.idx]
@@ -42,13 +49,11 @@ class DialogueManager:
                     elif event.key == pygame.K_ESCAPE:
                         self.close()
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    # 좌클릭 → 선택 확정
                     choice = node["choices"][self.selected_choice]
-                    # 선택지의 효과(회복 등)는 next node에서 반영
                     if "next" in choice and choice["next"] is not None:
                         self.next_dialogue(choice["next"])
                         self.selected_choice = 0
-                        self._apply_effect_if_any()  # 선택지 효과도 지원
+                        self._apply_effect_if_any()
                     else:
                         self.close()
         else:
@@ -63,50 +68,69 @@ class DialogueManager:
                         self.close()
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     self.close()
-            
+        
+        self._drain_history_queue()
         self.update_history_anim()
 
-    def next_dialogue(self, next_idx=None):
-            # 이전 대화 저장 (현재 node)
-            node = self.dialogue_data[self.idx]
+    def enqueue_history_line(self, speaker, text):
+        if not text:
+            return
+        self.history_queue.append((speaker or "", text))
+
+    def _drain_history_queue(self):
+        # 대기중인 줄을 모두 히스토리에 편입
+        while self.history_queue:
+            speaker, text = self.history_queue.pop(0)
             self.dialogue_history.append({
-                "speaker": node.get("speaker", ""),
-                "text": node.get("text", ""),
-                "anim_y": 0
+                "speaker": speaker,
+                "text": text,
+                "anim_y": 0,
             })
             if len(self.dialogue_history) > 3:
                 self.dialogue_history.pop(0)
             self.history_anim_timer = self.HISTORY_ANIM_TIME
-            # 인덱스 이동
-            if next_idx is not None:
-                self.idx = next_idx
+
+    def next_dialogue(self, next_idx=None):
+        if self.override_text:
+            self.enqueue_history_line(self.override_speaker or "", self.override_text)
+            self.override_text = None
+            self.override_speaker = None
+
+        node = self.dialogue_data[self.idx]
+        text_to_push = node.get("text", "")
+        if text_to_push:
+            self.enqueue_history_line(node.get("speaker", ""), text_to_push)
+
+        if next_idx is not None:
+            self.idx = next_idx
 
     def update_history_anim(self):
         if self.history_anim_timer > 0:
             for entry in self.dialogue_history:
-                entry["anim_y"] -= 6   # 한 프레임에 6픽셀씩 위로
+                entry["anim_y"] -= 6
             self.history_anim_timer -= 1
 
-    def draw(self, screen, ui_draw_func):
+    def draw(self, screen, draw_fn):
         if not self.active:
             return
-        node = self.dialogue_data[self.idx]
-        # draw 함수가 history를 인자로 받도록!
-        ui_draw_func(screen, node, self.selected_choice, self.dialogue_history)
+        node_src = self.dialogue_data[self.idx]
+        node = dict(node_src) if node_src else {}
+        if self.override_text is not None:
+            node["text"] = self.override_text
+        draw_fn(screen, node, self.selected_choice, history=self.dialogue_history)
 
     def _apply_effect_if_any(self):
-        """
-        HP/탄약 회복 등 효과 적용(콜백으로 메인에 전달)
-        """
         node = self.dialogue_data[self.idx]
         effect = node.get("effect")
         if effect and self.on_effect_callback:
-            self.on_effect_callback(effect)
+            as_text_only = not bool(node.get("text"))
+            line = self.on_effect_callback(effect, node.get("effect_messages"), as_text_only)
+            if as_text_only:
+                self.override_text = line or ""
+                self.override_speaker = node.get("speaker", "")
 
     def close(self):
-        """
-        대화 강제 종료(ESC, 마지막 대사, main에서 콜백 등)
-        """
+        # 대화 강제 종료(ESC, 마지막 대사, main에서 콜백 등)
         self.active = False
         self.dialogue_data = None
         self.idx = 0

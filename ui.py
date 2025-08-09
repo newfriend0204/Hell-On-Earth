@@ -231,13 +231,16 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
     screen.blit(overlay, (0, 0))
 
     box_w = int(screen_w * 0.7)
-    box_h = int(screen_h * 0.18)
+    box_h = int(screen_h * 0.22)
     box_x = (screen_w - box_w) // 2 - 60
     base_y = screen_h - box_h - 140
 
     if history:
-        for i, entry in enumerate(history):
-            h_y = base_y - (len(history) - i) * (box_h - 50) + entry.get("anim_y", 0)
+        hist = history[-3:]
+        overlap = 50
+        for i, entry in enumerate(hist):
+            idx_from_bottom = len(hist) - i
+            h_y = base_y - idx_from_bottom * (box_h - overlap) + entry.get("anim_y", 0)
             h_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
             pygame.draw.rect(h_surface, (60, 60, 70, 175), (0, 0, box_w, box_h), border_radius=18)
             pygame.draw.rect(h_surface, (150, 150, 180, 70), (0, 0, box_w, box_h), width=2, border_radius=18)

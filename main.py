@@ -13,7 +13,7 @@ from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES
 from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_dialogue_box_with_choices
 import world
-from maps import MAPS, FIGHT_MAPS, BOSS_MAPS
+from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS
 from dialogue_manager import DialogueManager
 from dialogue_data import merchant_dialogue, doctorNF_dialogue
 
@@ -57,14 +57,27 @@ START_WEAPONS = [
     WEAPON_CLASSES[16],
 ]
 
+def _apply_stage_theme_images():
+    theme = config.STAGE_THEME.get(config.CURRENT_STAGE, "map1")
+    if theme == "map2":
+        bg = images.get("background_map2", images["background"])
+        images["wall_barrier"] = images.get("wall_barrier_map2", images["wall_barrier"])
+        images["wall_barrier_rotated"] = images.get("wall_barrier_map2_rotated", images["wall_barrier_rotated"])
+    else:
+        bg = images.get("background_map1", images["background"])
+        images["wall_barrier"] = images.get("wall_barrier_map1", images["wall_barrier"])
+        images["wall_barrier_rotated"] = images.get("wall_barrier_map1_rotated", images["wall_barrier_rotated"])
+    return bg
+
 original_player_image = images["player"]
 original_bullet_image = images["bullet1"]
 original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
-background_image = images["background"]
+background_image = _apply_stage_theme_images()
 background_rect = background_image.get_rect()
 
 dialogue_manager = DialogueManager()
+last_merchant_ms = 0
 mouse_left_released_after_dialogue = False
 merchant_pos = None
 npcs = []
@@ -339,7 +352,7 @@ def spawn_room_npcs():
 
     if "npc_infos" in CURRENT_MAP:
         for npc_info in CURRENT_MAP["npc_infos"]:
-            if npc_info["npc_type"] == "doctorNF_npc":
+            if npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "1-1":
                 npcs.append(
                     DoctorNFNPC(
                         images["doctorNF"],
@@ -355,12 +368,69 @@ def on_dialogue_close():
 
 space_pressed_last_frame = False
 
-def apply_effect(effect):
-    global player_hp, player_hp_max, ammo_gauge, ammo_gauge_max
-    if effect["type"] == "hp_recover":
-        player_hp = min(player_hp + effect["amount"], player_hp_max)
-    elif effect["type"] == "ammo_recover":
-        ammo_gauge = min(ammo_gauge + effect["amount"], ammo_gauge_max)
+def apply_effect(effect, messages=None, as_text_only=False):
+    # 대화 이펙트 적용.
+    import math
+    global player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, last_merchant_ms
+
+    now = pygame.time.get_ticks()
+    cooldown = getattr(config, "MERCHANT_COOLDOWN_MS", 0)
+    if cooldown and (now - last_merchant_ms < cooldown):
+        return "" if as_text_only else None
+    last_merchant_ms = now
+
+    messages = messages or {}
+    et  = effect.get("type")
+    amt = int(effect.get("amount", 0))
+
+    def format_msg(key, **fmt):
+        txt = messages.get(key)
+        if not txt:
+            return ""
+        try:
+            return txt.format(**fmt)
+        except Exception:
+            return txt
+
+    def emit(key, **fmt):
+        line = format_msg(key, **fmt)
+        if as_text_only:
+            return line
+        if line:
+            dialogue_manager.enqueue_history_line("상인", line)
+        return None
+
+    if et == "hp_recover":
+        before = player_hp
+        after  = min(player_hp + amt, player_hp_max)
+        gained = max(0, after - before)
+        if gained <= 0:
+            return emit("full", gained=gained)
+        cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_HP))
+        if config.player_score >= cost:
+            config.player_score -= cost
+            player_hp = after
+            return emit("success", gained=gained, cost=cost)
+        else:
+            need = cost - config.player_score
+            return emit("insufficient", need=need)
+
+    elif et == "ammo_recover":
+        before = ammo_gauge
+        after  = min(ammo_gauge + amt, ammo_gauge_max)
+        gained = max(0, after - before)
+        if gained <= 0:
+            return emit("full", gained=gained)
+        cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_AMMO))
+        if config.player_score >= cost:
+            config.player_score -= cost
+            ammo_gauge = after
+            return emit("success", gained=gained, cost=cost)
+        else:
+            need = cost - config.player_score
+            return emit("insufficient", need=need)
+
+    return "" if as_text_only else None
 
 def try_pickup_weapon():
     # 스페이스 무기 줍기 단발 입력을 이벤트로 처리
@@ -507,11 +577,12 @@ def advance_to_next_stage():
             
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image
     
     current_portal = None
     WIDTH, HEIGHT = world.get_map_dimensions()
     changing_room = True
+    background_image = _apply_stage_theme_images()
 
     if direction is None:
         new_x, new_y = current_room_pos
@@ -548,15 +619,18 @@ def change_room(direction):
 
     if new_room_type == 'F':
         room_key = (new_x, new_y)
+        is_stage2 = (config.STAGE_THEME.get(config.CURRENT_STAGE, "map1") == "map2")
+        fight_pool = S2_FIGHT_MAPS if is_stage2 else S1_FIGHT_MAPS
+
         if room_key not in visited_f_rooms:
-            fight_map_index = random.randint(0, len(FIGHT_MAPS) - 1)
+            fight_map_index = random.randint(0, len(fight_pool) - 1)
             visited_f_rooms[room_key] = {
                 "fight_map_index": fight_map_index,
                 "cleared": False,
                 "enemy_types": []
             }
-        fight_map_index = visited_f_rooms[room_key].get("fight_map_index", random.randint(0, len(FIGHT_MAPS) - 1))
-        CURRENT_MAP = FIGHT_MAPS[fight_map_index]
+        fight_map_index = visited_f_rooms[room_key].get("fight_map_index", random.randint(0, len(fight_pool) - 1))
+        CURRENT_MAP = fight_pool[fight_map_index]
 
         if visited_f_rooms[room_key]["cleared"]:
             CURRENT_MAP = {
@@ -566,10 +640,12 @@ def change_room(direction):
             }
             config.combat_state = False
             config.combat_enabled = False
-
     elif new_room_type == 'E':
         stage_boss_index = STAGE_DATA[config.CURRENT_STAGE]["boss_map"]
         base_boss_map = BOSS_MAPS[stage_boss_index]
+        if config.STAGE_THEME.get(config.CURRENT_STAGE, "map1") == "map2":
+            for info in CURRENT_MAP.get("enemy_infos", []):
+                info["enemy_type"] = "Enemy2"
 
         # 보스방이 이미 클리어(9)면 적 제거/전투 비활성화 + 포탈 표시
         if world.room_states[new_y][new_x] == 9:
@@ -1788,6 +1864,16 @@ while running:
             if penetration:
                 penetration_total_x += penetration[0]
 
+    for npc in npcs:
+        if hasattr(npc, "collider"):
+            penetration = npc.collider.compute_penetration_circle(
+                (player_center_world_x, player_center_world_y),
+                player_radius,
+                (npc.x, npc.y)
+            )
+            if penetration:
+                penetration_total_x += penetration[0]
+
     for enemy in enemies:
         dx = player_center_world_x - enemy.world_x
         dy = player_center_world_y - enemy.world_y
@@ -1829,6 +1915,16 @@ while running:
                 (player_center_world_x, player_center_world_y),
                 player_radius,
                 (obs.world_x, obs.world_y)
+            )
+            if penetration:
+                penetration_total_y += penetration[1]
+
+    for npc in npcs:
+        if hasattr(npc, "collider"):
+            penetration = npc.collider.compute_penetration_circle(
+                (player_center_world_x, player_center_world_y),
+                player_radius,
+                (npc.x, npc.y)
             )
             if penetration:
                 penetration_total_y += penetration[1]
@@ -2202,10 +2298,10 @@ while running:
     )
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
-    # 빨간색 선 히트박스 보이기
-    # for obs in obstacles_to_check:
-    #     for c in obs.colliders:
-    #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
+    # 빨간색 선 히트박스 보이기 디버그
+    for obs in obstacles_to_check:
+        for c in obs.colliders:
+            c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
     ammo_bar_size = (400, 20)
