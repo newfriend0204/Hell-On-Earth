@@ -84,7 +84,31 @@ STAGE_DATA = {
         "weapon_tier_weights": { 1: 20, 2: 55, 3: 25 }
     },
 }
-CURRENT_STAGE = "1-1"
+CURRENT_STAGE = "2-1"
+
+STAGE_PRICE_MULT = {
+    "1-1": 1.00,
+    "1-2": 1.15,
+    "1-3": 1.30,
+    "2-1": 1.45,
+    "2-2": 1.60,
+    "2-3": 1.80,
+}
+
+def get_stage_price_mult(stage=None):
+    s = stage or CURRENT_STAGE
+    return STAGE_PRICE_MULT.get(s, 1.0)
+
+# 1회 업그레이드 증가량
+DRONE_HP_MAX_STEP = 20
+DRONE_AMMO_MAX_STEP = 20
+# 시작 비용(악의 정수), 업그레이드할수록 성장률로 증가
+DRONE_HP_UP_BASE_COST = 800
+DRONE_AMMO_UP_BASE_COST = 700
+DRONE_COST_GROWTH = 1.35
+# 누적 업그레이드 횟수(런타임 저장용)
+drone_hp_up_count = 0
+drone_ammo_up_count = 0
 
 STAGE_THEME = {
     "1-1": "map1", "1-2": "map1", "1-3": "map1",

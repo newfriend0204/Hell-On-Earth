@@ -25,6 +25,11 @@ def load_sounds():
     button_select = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonSelect.mp3"))
     button_select.set_volume(0.6)
 
+    knife_use = pygame.mixer.Sound(path_sound("Sound", "KnifeUse.mp3"))
+    knife_kill = pygame.mixer.Sound(path_sound("Sound", "KnifeKill.mp3"))
+    knife_use.set_volume(0.6)
+    knife_kill.set_volume(0.7)
+
     weapon_sounds = {
         "boss1_gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun1Fire.mp3")),
         "boss1_gun2_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun2Fire.mp3")),
@@ -117,6 +122,8 @@ def load_sounds():
         "swap_gun": swap_gun_sound,
         "button_click": button_click,
         "button_select": button_select,
+        "knife_use": knife_use,
+        "knife_kill": knife_kill,
         **weapon_sounds,
         **entity_sounds
     }

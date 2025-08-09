@@ -3,6 +3,140 @@ import random
 import math
 from entities import Bullet, ScatteredBullet, ExplosionEffectPersistent
 import config
+import time
+
+class MeleeController:
+    # V키로 발동하는 근접 공격. 총기와 별도(현재 무기 유지).
+    DAMAGE = 20
+    ARC_DEG = 30            # 총각(=±15°)
+    RANGE = int(100 * config.PLAYER_VIEW_SCALE)
+    DURATION = 220          # ms
+    HIT_MOMENT = 0.45       # 진행률 45% 지점에서 1회 판정
+    OUT_OFFSET = 42         # 칼 스프라이트 전진 최대 오프셋(px)
+
+    def __init__(self, images, sounds, get_player_world_pos_fn):
+        import pygame
+        self.images = images
+        self.sounds = sounds
+        self.get_player_world_pos = get_player_world_pos_fn
+        self.active = False
+        self._start_ms = 0
+        self._hit_done = False
+
+    def try_start(self, is_switching_weapon=False):
+        # 무기 교체 중엔 금지.
+        if self.active or is_switching_weapon:
+            return False
+        self.active = True
+        self._start_ms = pygame.time.get_ticks()
+        self._hit_done = False
+        s = self.sounds
+        if isinstance(s, dict) and "knife_use" in s:
+            try:
+                s["knife_use"].play()
+            except:
+                pass
+        return True
+
+    def _unit_from_mouse(self):
+        import pygame, math
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        d = math.hypot(dx, dy)
+        if d < 1e-6:
+            return (1.0, 0.0), 0.0
+        return (dx / d, dy / d), math.atan2(dy, dx)
+
+    def _hit_test(self, enemies, blood_effects):
+        # 가장 가까운 한 명만 피격.
+        import math
+        (px, py) = self.get_player_world_pos()
+        (fx, fy), aim = self._unit_from_mouse()
+        half = math.radians(self.ARC_DEG / 2)
+
+        nearest = None
+        nearest_dist = 1e9
+        for e in enemies:
+            if not getattr(e, "alive", False):
+                continue
+            ex, ey = getattr(e, "world_x", None), getattr(e, "world_y", None)
+            if ex is None:
+                continue
+            dx, dy = (ex - px), (ey - py)
+            dist = math.hypot(dx, dy)
+            if dist > self.RANGE + getattr(e, "radius", 0):
+                continue
+            ang = math.atan2(dy, dx)
+            diff = (ang - aim + math.pi * 3) % (2 * math.pi) - math.pi
+            if abs(diff) > half:
+                continue
+            if dist < nearest_dist:
+                nearest, nearest_dist = e, dist
+
+        if nearest is None:
+            return
+
+        was_alive = getattr(nearest, "alive", False)
+        if hasattr(nearest, "hit"):
+            nearest.hit(self.DAMAGE, blood_effects, force=True)
+        else:
+            hp = getattr(nearest, "hp", 20)
+            setattr(nearest, "hp", max(0, hp - self.DAMAGE))
+            if getattr(nearest, "hp", 0) <= 0:
+                setattr(nearest, "alive", False)
+
+        try:
+            if hasattr(nearest, "spawn_dropped_items"):
+                nearest.spawn_dropped_items(0, 1)
+            else:
+                from entities import DroppedItem
+                get_player_pos = lambda: (config.world_x + config.player_rect.centerx,
+                                          config.world_y + config.player_rect.centery)
+                img = config.images["ammo_gauge_up"]
+                for _ in range(2):
+                    config.dropped_items.append(
+                        DroppedItem(nearest.world_x, nearest.world_y, img, "ammo", 20, get_player_pos)
+                    )
+        except Exception:
+            pass
+
+        if was_alive and not getattr(nearest, "alive", True):
+            if isinstance(self.sounds, dict) and "knife_kill" in self.sounds:
+                try:
+                    self.sounds["knife_kill"].play()
+                except:
+                    pass
+
+    def update(self, enemies, blood_effects):
+        if not self.active:
+            return
+        import pygame
+        t = (pygame.time.get_ticks() - self._start_ms) / self.DURATION
+        if (not self._hit_done) and t >= self.HIT_MOMENT:
+            self._hit_done = True
+            self._hit_test(enemies, blood_effects)
+        if t >= 1.0:
+            self.active = False
+
+    def draw(self, screen, world_offset_xy):
+        # 칼 스프라이트를 플레이어 중심에서 마우스 방향으로 전진->복귀.
+        if not self.active:
+            return
+        import pygame, math
+        (px, py) = self.get_player_world_pos()
+        (_, _), ang = self._unit_from_mouse()
+        now = pygame.time.get_ticks()
+        t = max(0.0, min(1.0, (now - self._start_ms) / self.DURATION))
+        off = self.OUT_OFFSET * (1 - abs(2 * t - 1))
+        nx = px - world_offset_xy[0] + math.cos(ang) * off
+        ny = py - world_offset_xy[1] + math.sin(ang) * off
+        img = self.images.get("knife")
+        if img is None:
+            return
+        rot = pygame.transform.rotate(img, -math.degrees(ang) - 90)
+        rect = rot.get_rect(center=(nx, ny))
+        screen.blit(rot, rect)
 
 class WeaponBase:
     # 모든 무기 클래스의 공통 부모 클래스
@@ -64,8 +198,7 @@ class WeaponBase:
             if self.get_ammo_gauge() >= self.left_click_ammo_cost:
                 self.on_left_click()
                 self.last_shot_time = pygame.time.get_ticks()
-
-
+    
 class Gun1(WeaponBase):
     TIER = 1
     AMMO_COST = 5

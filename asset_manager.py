@@ -11,6 +11,9 @@ def load_images():
     player_img = pygame.transform.smoothscale(player_img, (90, 90))
 
     # 무기별 상단(Top-down) 이미지 로드 및 스케일
+    knife_img = pygame.image.load(path_image("image", "Gun", "Knife.png")).convert_alpha()
+    knife_img = pygame.transform.smoothscale(knife_img, (25, int(knife_img.get_height() * (25 / knife_img.get_width()))))
+
     gun1_img = pygame.image.load(path_image("image", "Gun", "Gun1Player.png")).convert_alpha()
     gun1_img = pygame.transform.smoothscale(gun1_img, (30, int(gun1_img.get_height() * (30 / gun1_img.get_width()))))
 
@@ -268,6 +271,7 @@ def load_images():
     return {
         # 로드된 모든 이미지를 딕셔너리로 반환
         "player": player_img,
+        "knife": knife_img,
         "gun1": gun1_img,
         "gun2": gun2_img,
         "gun3": gun3_img,
@@ -339,6 +343,12 @@ def load_images():
 def load_weapon_assets(images):
     # 무기별 전방(Front) 이미지, 상단(Top-down) 이미지, 탄환, 탄피, 폭발 이미지 설정
     weapons = {
+        "knife": {
+            "front": images["knife"],
+            "topdown": images["knife"],
+            "bullets": [],
+            "cartridges": [],
+        },
         "gun1": {
             "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun1.png")).convert_alpha(),
             "topdown": images["gun1"],

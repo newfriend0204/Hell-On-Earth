@@ -2,6 +2,7 @@ import pygame
 import config
 import os
 import textwrap
+import re
 
 pygame.init()
 
@@ -15,6 +16,8 @@ KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 KOREAN_FONT_28 = pygame.font.Font(FONT_PATH, 28)
 KOREAN_FONT_25 = pygame.font.Font(FONT_PATH, 25)
 KOREAN_FONT_BOLD_28 = pygame.font.Font(BOLD_FONT_PATH, 28)
+KOREAN_FONT_BOLD_28 = pygame.font.Font(BOLD_FONT_PATH, 28)
+KOREAN_FONT_BOLD_22 = pygame.font.Font(BOLD_FONT_PATH, 22)
 
 TAB_NAMES = ["내 상태", "무기1", "무기2", "무기3", "무기4"]
 TAB_SIZE = (140, 140)
@@ -156,7 +159,7 @@ weapon_stats = {
         "spread": 10,
         "cost": 10,
         "rank": "5",
-        "desc": "UAC의 군사 기술 부서에서 설계한 첨단 무기이며, 악마를 찣고 죽이는 남자가 애용합니다. 차지(충전) 후 우클릭 시 광역 플라즈마 공격을 펼칠 수 있습니다.",
+        "desc": "UAC의 군사 기술 부서에서 설계한 첨단 무기이며, 악마를 찢고 죽이는 남자가 애용합니다. 차지(충전) 후 우클릭 시 광역 플라즈마 공격을 펼칠 수 있습니다.",
         "usage": "좌클릭\n플라즈마 에너지 발사(차지 증가, 최대 50차지)\n\n우클릭\n차지된 에너지를 광역 공격으로 방출"
     },
     "gun16": {
@@ -222,7 +225,7 @@ def wrap_text(text, font, max_width):
         lines.append(current_line)
     return lines
 
-def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=None):
+def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=None, hud_status=None):
     # 대화창 띄우기
     screen_w, screen_h = screen.get_size()
 
@@ -294,11 +297,61 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
 
         hint_font = pygame.font.Font(FONT_PATH, 18)
         hint_surf = hint_font.render("W/S: 선택  좌클릭: 결정  ESC: 나가기", True, (200, 200, 255, 180))
-        screen.blit(hint_surf, (20, screen_h - 30))
+        screen.blit(hint_surf, (screen_w - hint_surf.get_width() - 20, screen_h - 30))
     else:
         hint_font = pygame.font.Font(FONT_PATH, 18)
         hint_surf = hint_font.render("좌클릭: 다음/종료  ESC: 대화 종료", True, (200, 200, 255, 180))
-        screen.blit(hint_surf, (20, screen_h - 30))
+        screen.blit(hint_surf, (screen_w - hint_surf.get_width() - 20, screen_h - 30))
+
+    if hud_status is not None:
+        try:
+            hp, hp_max, ammo, ammo_max = hud_status
+            draw_field_status_mini(screen, hp, hp_max, ammo, ammo_max)
+        except Exception:
+            # 잘못된 인자여도 대화 진행엔 영향 없게 무시
+            pass
+
+    return
+
+def draw_field_status_mini(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, x=18, y=None):
+    # 대화 중 좌하단에 간이 체력/탄약/악의 정수 표시
+    import math
+    sw, sh = screen.get_size()
+    panel_w, panel_h = 300, 120
+    if y is None:
+        y = sh - panel_h - 8
+
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (20, 20, 28, 210), panel.get_rect(), border_radius=14)
+    pygame.draw.rect(panel, (90, 90, 120), panel.get_rect(), width=2, border_radius=14)
+    screen.blit(panel, (x, y))
+
+    pad = 18
+    bar_w = panel_w - pad * 2
+    bar_h = 18
+
+    hp = max(0, int(player_hp))
+    hp_max = max(1, int(player_hp_max or 1))
+    hp_ratio = max(0.0, min(1.0, hp / hp_max))
+    hp_bg = pygame.Rect(x + pad, y + pad, bar_w, bar_h)
+    pygame.draw.rect(screen, (30, 50, 30), hp_bg, border_radius=9)
+    pygame.draw.rect(screen, (120, 255, 120), (hp_bg.x, hp_bg.y, int(bar_w * hp_ratio), bar_h), border_radius=9)
+    hp_text = KOREAN_FONT_18.render(f"{hp}/{hp_max}", True, (120, 255, 120))
+    screen.blit(hp_text, (hp_bg.x + 6, hp_bg.y - 20))
+
+    ammo = max(0, int(ammo_gauge))
+    ammo_max = max(1, int(ammo_gauge_max or 1))
+    ammo_ratio = max(0.0, min(1.0, ammo / ammo_max))
+    ammo_y = hp_bg.y + bar_h + 16
+    ammo_bg = pygame.Rect(x + pad, ammo_y, bar_w, bar_h)
+    pygame.draw.rect(screen, (30, 50, 30), ammo_bg, border_radius=9)
+    pygame.draw.rect(screen, (255, 200, 80), (ammo_bg.x, ammo_bg.y, int(bar_w * ammo_ratio), bar_h), border_radius=9)
+    ammo_text = KOREAN_FONT_18.render(f"{ammo}/{ammo_max}", True, (255, 200, 80))
+    screen.blit(ammo_text, (ammo_bg.x + 6, ammo_bg.y - 20))
+
+    evil_val = getattr(config, "player_score", 0)
+    evil_surf = KOREAN_FONT_18.render(f"악의 정수: {evil_val}", True, (200, 100, 255))
+    screen.blit(evil_surf, (x + pad, ammo_bg.bottom + 10))
 
 def load_ui_image(filename):
     return pygame.image.load(os.path.join(ASSET_UI_DIR, filename))
@@ -385,11 +438,13 @@ def draw_weapon_detail_ui(screen, selected_tab, weapons, sounds):
         return tab_rects
 
     weapon = weapons[idx]
-    weapon_id = None
-    for wid, _ in weapon_stats.items():
-        if wid.lower() in weapon.__class__.__name__.lower():
-            weapon_id = wid
-            break
+    cls_name = weapon.__class__.__name__.lower()
+    if cls_name in weapon_stats:
+        weapon_id = cls_name
+    else:
+        m = re.match(r'gun\d+$', cls_name) or re.search(r'gun(\d+)', cls_name)
+        weapon_id = (m.group(0) if m and m.re == re.match(r'gun\d+$', cls_name).re else
+                     (f"gun{m.group(1)}" if m else None))
     stat = weapon_stats.get(weapon_id, {})
 
     screen_width, screen_height = screen.get_size()
@@ -565,3 +620,81 @@ def handle_tab_click(pos, tab_rects, sounds):
             sounds["button_click"].play()
             return i
     return None
+
+def draw_combat_banner(screen, text, theme, progress):
+    # 상단 배너
+    if progress < 0: progress = 0.0
+    if progress > 1: progress = 1.0
+    sw, sh = screen.get_size()
+    banner_w = min(int(sw * 0.8), 560)
+    banner_h = 64
+    x = (sw - banner_w) // 2
+
+    if progress < 0.2:
+        t = progress / 0.2
+        y = int(-banner_h + (60 + banner_h) * t)
+    elif progress > 0.8:
+        t = (progress - 0.8) / 0.2
+        y = int(60 + (-banner_h - 60) * t)
+    else:
+        y = 60
+
+    if theme == "start":
+        bg = (200, 40, 40, 220)
+        border = (255, 120, 120)
+        fg = (255, 255, 255)
+    else:
+        bg = (40, 150, 60, 220)
+        border = (150, 255, 170)
+        fg = (255, 255, 255)
+    panel = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, bg, panel.get_rect(), border_radius=14)
+    pygame.draw.rect(panel, border, panel.get_rect(), width=2, border_radius=14)
+    screen.blit(panel, (x, y))
+
+    try:
+        font = KOREAN_FONT_BOLD_28
+    except Exception:
+        font = pygame.font.Font(None, 32)
+    surf = font.render(text, True, fg)
+    screen.blit(surf, (x + (banner_w - surf.get_width()) // 2,
+                       y + (banner_h - surf.get_height()) // 2))
+
+def draw_enemy_counter(screen, remaining, slide_progress=1.0, alpha=255, anchor_rect=None, margin_y=8, align_right=True):
+    # 우상단 '남은 적: N' 라벨.
+    if remaining is None:
+        return
+    sw, sh = screen.get_size()
+    try:
+        font = KOREAN_FONT_BOLD_22
+    except Exception:
+        font = pygame.font.Font(None, 28)
+    text = f"남은 적: {remaining}"
+    text_surf = font.render(text, True, (255, 255, 255))
+    text_surf.set_alpha(alpha)
+
+    pad_x, pad_y = 10, 6
+    panel_w = text_surf.get_width() + pad_x * 2
+    panel_h = text_surf.get_height() + pad_y * 2
+    
+    if anchor_rect is not None:
+        y = anchor_rect.bottom + margin_y
+        if align_right:
+            final_x = anchor_rect.right - panel_w
+        else:
+            final_x = anchor_rect.left
+        final_x = max(10, min(final_x, sw - panel_w - 10))
+        y = max(10, min(y, sh - panel_h - 10))
+    else:
+        final_x = sw - panel_w - 20
+        y = 20
+
+    slide_progress = max(0.0, min(1.0, slide_progress))
+    x = int(final_x + (panel_w + 24) * (1.0 - slide_progress))
+
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (20, 20, 28, 210), panel.get_rect(), border_radius=10)
+    pygame.draw.rect(panel, (120, 255, 120), panel.get_rect(), width=2, border_radius=12)
+    panel.set_alpha(alpha)
+    screen.blit(panel, (x, y))
+    screen.blit(text_surf, (x + pad_x, y + pad_y))

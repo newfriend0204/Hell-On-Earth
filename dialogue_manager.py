@@ -1,6 +1,5 @@
-# dialogue_manager.py
-
 import pygame
+import ui
 
 class DialogueManager:
     def __init__(self):
@@ -16,6 +15,11 @@ class DialogueManager:
         self.history_queue = []
         self.override_text = None
         self.override_speaker = None
+        self._hud_status = None
+
+    def set_hud_status(self, hp, hp_max, ammo, ammo_max):
+        # 대화 중 좌하단에 띄울 필드 상태값 전달
+        self._hud_status = (hp, hp_max, ammo, ammo_max)
 
     def start(self, dialogue_data, on_effect_callback=None, close_callback=None):
         self.active = True
@@ -110,14 +114,23 @@ class DialogueManager:
                 entry["anim_y"] -= 6
             self.history_anim_timer -= 1
 
-    def draw(self, screen, draw_fn):
+    def draw(self, screen):
+        # 현재 노드를 대화 박스로 그린다(좌하단 미니 HUD 포함).
         if not self.active:
             return
         node_src = self.dialogue_data[self.idx]
         node = dict(node_src) if node_src else {}
         if self.override_text is not None:
             node["text"] = self.override_text
-        draw_fn(screen, node, self.selected_choice, history=self.dialogue_history)
+            if self.override_speaker is not None:
+                node["speaker"] = self.override_speaker
+        ui.draw_dialogue_box_with_choices(
+            screen,
+            node,
+            self.selected_choice,
+            history=self.dialogue_history,
+            hud_status=self._hud_status
+        )
 
     def _apply_effect_if_any(self):
         node = self.dialogue_data[self.idx]

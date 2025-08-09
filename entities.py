@@ -40,7 +40,27 @@ class MerchantNPC:
         dx = self.x - player_center_x
         dy = self.y - player_center_y
         return (dx * dx + dy * dy) <= distance * distance
-    
+
+class DroneNPC:
+    def __init__(self, image, world_x, world_y, dialogue):
+        self.image = image
+        self.world_x = world_x
+        self.world_y = world_y
+        self.dialogue = dialogue
+        self.near_radius = 120
+
+    def is_player_near(self, player_world_x, player_world_y):
+        dx = player_world_x - self.world_x
+        dy = player_world_y - self.world_y
+        return (dx*dx + dy*dy) <= (self.near_radius * self.near_radius)
+
+    def draw(self, screen, world_offset_x, world_offset_y):
+        if not self.image:
+            return
+        rect = self.image.get_rect(center=(self.world_x - world_offset_x,
+                                           self.world_y - world_offset_y))
+        screen.blit(self.image, rect)
+        
 class DoctorNFNPC:
     def __init__(self, image, x, y, dialogue):
         self.image = image

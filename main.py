@@ -5,17 +5,17 @@ from config import *
 import config
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal
+from entities import Bullet, ScatteredBullet, ScatteredBlood, ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal, Obstacle, DroneNPC
 from collider import Collider
 from renderer_3d import Renderer3D
 from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
-from weapon import WEAPON_CLASSES
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_dialogue_box_with_choices
+from weapon import WEAPON_CLASSES, MeleeController
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_dialogue_box_with_choices, draw_combat_banner, draw_enemy_counter
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS
 from dialogue_manager import DialogueManager
-from dialogue_data import merchant_dialogue, doctorNF_dialogue
+from dialogue_data import merchant_dialogue, doctorNF_dialogue, drone_dialogue
 
 # 맵 상태 초기화
 CURRENT_MAP = MAPS[0]
@@ -45,11 +45,21 @@ pygame.mouse.set_visible(False)
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Hell On Earth")
 
+def get_player_world_position():
+    return (
+        world_x + player_rect.centerx,
+        world_y + player_rect.centery
+    )
+
 images = load_images()
 sounds = load_sounds()
 config.images = images
 config.dropped_items = []
 weapon_assets = load_weapon_assets(images)
+melee = MeleeController(
+    images, sounds,
+    get_player_world_pos_fn=get_player_world_position
+)
 START_WEAPONS = [
     WEAPON_CLASSES[3],
     WEAPON_CLASSES[4],
@@ -75,6 +85,9 @@ original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
 background_image = _apply_stage_theme_images()
 background_rect = background_image.get_rect()
+
+combat_banner_fx = {"mode": None, "t": 0.0, "duration": 1100}  # ms
+enemy_counter_fx = {"state": None, "t": 0.0, "slide_in": 300, "fade_out": 300}
 
 dialogue_manager = DialogueManager()
 last_merchant_ms = 0
@@ -296,9 +309,9 @@ kill_count = 0
 
 changing_room = False
 visited_f_rooms = {}
-room_portals = {}        # {(x,y): True} — 해당 보스방에 포탈이 활성화 상태
-current_portal = None    # 현재 방에 표시되는 포탈 인스턴스
-portal_spawn_at_ms = None  # 보스 처치 후 0.5초 뒤 스폰 예약 시간(ms)
+room_portals = {}
+current_portal = None
+portal_spawn_at_ms = None
 DIRECTION_OFFSET = {
     "north": (0, -1),
     "south": (0, 1),
@@ -333,12 +346,25 @@ class ShopItem:
 
 room_shop_items = {}
 shop_items = []
+room_drone_rooms = {}
 
 def spawn_room_npcs():
     # NPC 소환
     npcs.clear()
     room_type = grid[current_room_pos[1]][current_room_pos[0]]
-    if room_type == 'A' and shop_items:
+    room_key = (current_room_pos[0], current_room_pos[1])
+    if room_type == 'A' and room_drone_rooms.get(room_key, False):
+        center_x = world_instance.effective_bg_width / 2
+        center_y = world_instance.effective_bg_height / 2
+        npcs.append(
+            DroneNPC(
+                images["drone"],
+                center_x,
+                center_y - int(100 * PLAYER_VIEW_SCALE),
+                drone_dialogue
+            )
+        )
+    elif room_type == 'A' and shop_items:
         center_x = world_instance.effective_bg_width / 2
         center_y = world_instance.effective_bg_height / 2 - 130
         npcs.append(
@@ -367,6 +393,60 @@ def on_dialogue_close():
     mouse_left_released_after_dialogue = True
 
 space_pressed_last_frame = False
+
+def preview_effect_text(effect, messages=None):
+    # 확인 단계에서 보여줄 안내 문구를 데이터 템플릿으로 생성.
+    import math
+    messages = messages or {}
+    et  = effect.get("type")
+    amt = int(effect.get("amount", 0))
+
+    def fmt(key, **kw):
+        tpl = messages.get(key)
+        if not tpl:
+            return ""
+        try:
+            return tpl.format(**kw)
+        except Exception:
+            return tpl
+
+    if et == "hp_recover":
+        before = player_hp
+        after  = min(player_hp + amt, player_hp_max)
+        gained = max(0, after - before)
+        if gained <= 0:
+            return fmt("full")
+        cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_HP))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        return fmt("prompt", cost=cost, gained=gained)
+
+    if et == "ammo_recover":
+        before = ammo_gauge
+        after  = min(ammo_gauge + amt, ammo_gauge_max)
+        gained = max(0, after - before)
+        if gained <= 0:
+            return fmt("full")
+        cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_AMMO))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        return fmt("prompt", cost=cost, gained=gained)
+    
+    if et == "hp_max_up":
+        cnt = getattr(config, "drone_hp_up_count", 0)
+        base = getattr(config, "DRONE_HP_UP_BASE_COST", 800)
+        growth = getattr(config, "DRONE_COST_GROWTH", 1.35)
+        cost = max(1, int(round(base * (growth ** cnt))))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        return fmt("prompt", cost=cost, gained=amt)
+
+    if et == "ammo_max_up":
+        cnt = getattr(config, "drone_ammo_up_count", 0)
+        base = getattr(config, "DRONE_AMMO_UP_BASE_COST", 700)
+        growth = getattr(config, "DRONE_COST_GROWTH", 1.35)
+        cost = max(1, int(round(base * (growth ** cnt))))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        return fmt("prompt", cost=cost, gained=amt)
+
+    return ""
 
 def apply_effect(effect, messages=None, as_text_only=False):
     # 대화 이펙트 적용.
@@ -397,7 +477,12 @@ def apply_effect(effect, messages=None, as_text_only=False):
         if as_text_only:
             return line
         if line:
-            dialogue_manager.enqueue_history_line("상인", line)
+            try:
+                curr_node = dialogue_manager.dialogue_data[dialogue_manager.idx]
+                speaker = curr_node.get("speaker", "")
+            except Exception:
+                speaker = ""
+            dialogue_manager.enqueue_history_line(speaker, line)
         return None
 
     if et == "hp_recover":
@@ -407,6 +492,7 @@ def apply_effect(effect, messages=None, as_text_only=False):
         if gained <= 0:
             return emit("full", gained=gained)
         cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_HP))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
         if config.player_score >= cost:
             config.player_score -= cost
             player_hp = after
@@ -414,7 +500,6 @@ def apply_effect(effect, messages=None, as_text_only=False):
         else:
             need = cost - config.player_score
             return emit("insufficient", need=need)
-
     elif et == "ammo_recover":
         before = ammo_gauge
         after  = min(ammo_gauge + amt, ammo_gauge_max)
@@ -422,6 +507,7 @@ def apply_effect(effect, messages=None, as_text_only=False):
         if gained <= 0:
             return emit("full", gained=gained)
         cost = max(1, math.ceil(gained * config.ESSENCE_COST_PER_AMMO))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
         if config.player_score >= cost:
             config.player_score -= cost
             ammo_gauge = after
@@ -429,7 +515,44 @@ def apply_effect(effect, messages=None, as_text_only=False):
         else:
             need = cost - config.player_score
             return emit("insufficient", need=need)
+    elif et == "hp_max_up":
+        cnt = getattr(config, "drone_hp_up_count", 0)
+        base = getattr(config, "DRONE_HP_UP_BASE_COST", 800)
+        growth = getattr(config, "DRONE_COST_GROWTH", 1.35)
+        cost = max(1, int(round(base * (growth ** cnt))))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        if config.player_score >= cost:
+            config.player_score -= cost
+            prev_max = player_hp_max
+            ratio = (player_hp / prev_max) if prev_max > 0 else 0.0
 
+            player_hp_max += amt
+            player_hp = min(player_hp_max, int(round(player_hp_max * ratio)))
+
+            config.drone_hp_up_count = cnt + 1
+            return emit("success", gained=amt, cost=cost)
+        else:
+            need = cost - config.player_score
+            return emit("insufficient", need=need)
+    elif et == "ammo_max_up":
+        cnt = getattr(config, "drone_ammo_up_count", 0)
+        base = getattr(config, "DRONE_AMMO_UP_BASE_COST", 700)
+        growth = getattr(config, "DRONE_COST_GROWTH", 1.35)
+        cost = max(1, int(round(base * (growth ** cnt))))
+        cost = int(math.ceil(cost * config.get_stage_price_mult()))
+        if config.player_score >= cost:
+            config.player_score -= cost
+            prev_max = ammo_gauge_max
+            ratio = (ammo_gauge / prev_max) if prev_max > 0 else 0.0
+
+            ammo_gauge_max += amt
+            ammo_gauge = min(ammo_gauge_max, int(round(ammo_gauge_max * ratio)))
+
+            config.drone_ammo_up_count = cnt + 1
+            return emit("success", gained=amt, cost=cost)
+        else:
+            need = cost - config.player_score
+            return emit("insufficient", need=need)
     return "" if as_text_only else None
 
 def try_pickup_weapon():
@@ -487,12 +610,6 @@ def damage_player(amount):
     shake_elapsed = 0.0
     shake_magnitude = 3
 config.damage_player = damage_player
-
-def get_player_world_position():
-    return (
-        world_x + player_rect.centerx,
-        world_y + player_rect.centery
-    )
 
 def init_weapon_ui_cache(weapons):
     # 무기 UI 슬롯 이미지 캐싱
@@ -660,6 +777,7 @@ def change_room(direction):
             CURRENT_MAP = base_boss_map
             config.combat_state = True
             config.combat_enabled = True
+            trigger_combat_start()
     else:
         CURRENT_MAP = MAPS[0]
 
@@ -690,7 +808,7 @@ def change_room(direction):
     )
 
     if new_room_type == 'A':
-        acquire_index = random.randint(3, 3)  # 2면 무기방, 3이면 상점방
+        acquire_index = random.randint(4, 4)  # 2면 무기방, 3이면 상점방, 4이면 드론방
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
@@ -737,7 +855,7 @@ def change_room(direction):
             field_weapons.clear()
             field_weapons.extend(room_field_weapons[room_key])
             shop_items = []
-        else:
+        elif acquire_index == 3:
             if room_key not in room_shop_items:
                 center_x = new_world.effective_bg_width / 2
                 center_y = new_world.effective_bg_height / 2
@@ -763,6 +881,7 @@ def change_room(direction):
                 items_in_room = []
                 for i, weapon_class in enumerate(selected_weapons):
                     price = config.TIER_PRICES.get(getattr(weapon_class, "TIER", 1), 40)
+                    price = int(round(price * config.get_stage_price_mult()))
                     shop_item = ShopItem(
                         weapon_class,
                         price,
@@ -774,10 +893,47 @@ def change_room(direction):
 
             shop_items = room_shop_items[room_key]
             field_weapons.clear()
+        elif acquire_index == 4:
+            room_drone_rooms[room_key] = True
+            shop_items = []
 
-    else:
-        field_weapons.clear()
-        shop_items = []
+            center_x = new_world.effective_bg_width / 2
+            center_y = new_world.effective_bg_height / 2
+            drone_offset = int(100 * PLAYER_VIEW_SCALE)
+            weapon_offset = int(130 * PLAYER_VIEW_SCALE)
+
+            r = int(28 * PLAYER_VIEW_SCALE)
+            collider_surface = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+            colliders = [Collider("circle", (r, r), r, False)]
+            obstacle_manager.static_obstacles.append(
+                Obstacle(
+                    collider_surface,
+                    center_x - r,
+                    center_y - drone_offset - r,
+                    colliders,
+                    image_filename="drone_collider"
+                )
+            )
+
+            if room_key not in room_field_weapons:
+                stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
+                tier_to_weapons = {}
+                for weapon_class in WEAPON_CLASSES:
+                    tier = getattr(weapon_class, "TIER", 1)
+                    if tier in stage_weights:
+                        tier_to_weapons.setdefault(tier, []).append(weapon_class)
+                tiers = list(stage_weights.keys())
+                weights = list(stage_weights.values())
+                chosen_tier = random.choices(tiers, weights=weights, k=1)[0]
+                weapon_class = random.choice(tier_to_weapons[chosen_tier])
+                fw = FieldWeapon(weapon_class, center_x, center_y + weapon_offset, weapon_assets, sounds)
+                room_field_weapons[room_key] = [fw]
+
+            field_weapons.clear()
+            field_weapons.extend(room_field_weapons.get(room_key, []))
+        else:
+            field_weapons.clear()
+            shop_items = []
 
     map_width = new_world.effective_bg_width
     map_height = new_world.effective_bg_height
@@ -1151,7 +1307,8 @@ def draw_minimap(screen, grid, current_room_pos):
         background_surface.get_rect(),
         border_radius=12
     )
-    screen.blit(background_surface, (start_x - background_margin, start_y - background_margin))
+    bg_pos = (start_x - background_margin, start_y - background_margin)
+    screen.blit(background_surface, bg_pos)
 
     connectable_states = {1, 3, 5, 6}
 
@@ -1224,6 +1381,13 @@ def draw_minimap(screen, grid, current_room_pos):
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x - half, cursor_center_y + half - bar, edge, bar))
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - bar, cursor_center_y + half - edge, bar, edge))
     pygame.draw.rect(screen, (255, 0, 0), (cursor_center_x + half - edge, cursor_center_y + half - bar, edge, bar))
+
+    return pygame.Rect(
+        bg_pos[0],
+        bg_pos[1],
+        total_width + background_margin * 2,
+        total_height + background_margin * 2
+    )
 
 def draw_weapon_ui(screen, weapons, current_weapon_index):
     # 무기 UI 그리기
@@ -1403,6 +1567,60 @@ def draw_ammo_bar_remodeled(surface, current_ammo, max_ammo, pos, size, last_amm
 
     return interpolated_ammo
 
+def trigger_combat_start():
+    # 배너: 시작, 라벨: 슬라이드 인
+    combat_banner_fx["mode"] = "start"
+    combat_banner_fx["t"] = 0.0
+    enemy_counter_fx["state"] = "in"
+    enemy_counter_fx["t"] = 0.0
+
+def trigger_combat_end():
+    # 배너: 종료, 라벨: 페이드 아웃
+    combat_banner_fx["mode"] = "end"
+    combat_banner_fx["t"] = 0.0
+    enemy_counter_fx["state"] = "out"
+    enemy_counter_fx["t"] = 0.0
+
+def draw_combat_indicators(screen, delta_ms, minimap_rect=None):
+    # 상단 배너 업데이트/그리기
+    if combat_banner_fx["mode"] is not None:
+        combat_banner_fx["t"] += delta_ms
+        t = combat_banner_fx["t"]
+        dur = combat_banner_fx["duration"]
+        progress = min(1.0, max(0.0, t / dur))
+        if combat_banner_fx["mode"] == "start":
+            draw_combat_banner(screen, "전투 개시", "start", progress)
+        else:
+            draw_combat_banner(screen, "전투 종료", "end", progress)
+        if t >= dur:
+            combat_banner_fx["mode"] = None
+            combat_banner_fx["t"] = 0.0
+
+    # 우상단 남은 적 라벨
+    try:
+        remaining = sum(1 for e in enemies if getattr(e, "alive", False))
+    except Exception:
+        remaining = None
+    st = enemy_counter_fx["state"]
+    if st is None:
+        return
+    if st == "in":
+        enemy_counter_fx["t"] += delta_ms
+        sp = min(1.0, enemy_counter_fx["t"] / enemy_counter_fx["slide_in"])
+        draw_enemy_counter(screen, remaining, slide_progress=sp, alpha=255, anchor_rect=minimap_rect, margin_y=8)
+        if sp >= 1.0:
+            enemy_counter_fx["state"] = "hold"
+            enemy_counter_fx["t"] = 0.0
+    elif st == "hold":
+        draw_enemy_counter(screen, remaining, slide_progress=1.0, alpha=255, anchor_rect=minimap_rect, margin_y=8)
+    elif st == "out":
+        enemy_counter_fx["t"] += delta_ms
+        fade = max(0, 255 - int(255 * (enemy_counter_fx["t"] / enemy_counter_fx["fade_out"])))
+        draw_enemy_counter(screen, remaining, slide_progress=1.0, alpha=fade, anchor_rect=minimap_rect, margin_y=8)
+        if fade <= 0:
+            enemy_counter_fx["state"] = None
+            enemy_counter_fx["t"] = 0.0
+
 enemies = []
 rank_min, rank_max = STAGE_DATA[config.CURRENT_STAGE]["enemy_rank_range"]
 
@@ -1520,7 +1738,7 @@ while running:
                             dialogue_manager.start(
                                 npc.dialogue,
                                 on_effect_callback=apply_effect,
-                                close_callback=on_dialogue_close
+                                close_callback=on_dialogue_close,
                             )
                         swipe_curtain_transition(
                             screen, old_surface, on_dialogue, direction="up", duration=0.45
@@ -1549,7 +1767,7 @@ while running:
                             bullet.resume()
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
                 slot = event.key - pygame.K_1
-                if 0 <= slot < len(weapons) and current_weapon_index != slot:
+                if (not getattr(melee, "active", False)) and 0 <= slot < len(weapons) and current_weapon_index != slot:
                     sounds["swap_gun"].play()
                     if hasattr(weapons[current_weapon_index], "on_weapon_switch"):
                         weapons[current_weapon_index].on_weapon_switch()
@@ -1558,6 +1776,9 @@ while running:
                     change_animation_timer = 0.0
                     previous_distance = current_distance
                     target_distance = weapons[slot].distance_from_center
+            elif event.key == pygame.K_v:
+                # 무기 교체 중엔 근접 불허
+                melee.try_start(is_switching_weapon=changing_weapon)
             elif event.key == pygame.K_q:
                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
                 cx, cy = current_room_pos
@@ -1579,6 +1800,7 @@ while running:
 
                 config.combat_state = False
                 config.combat_enabled = False
+                trigger_combat_end()
 
                 for wall in combat_walls:
                     if wall in obstacle_manager.combat_obstacles:
@@ -1615,7 +1837,8 @@ while running:
 
     if dialogue_manager.active:
         dialogue_manager.update(events)
-        dialogue_manager.draw(screen, draw_dialogue_box_with_choices)
+        dialogue_manager.set_hud_status(player_hp, player_hp_max, ammo_gauge, ammo_gauge_max)
+        dialogue_manager.draw(screen)
         pygame.display.flip()
         clock.tick(60)
         continue
@@ -1669,6 +1892,8 @@ while running:
                 enemies=enemies
             )
     config.all_enemies = enemies
+
+    melee.update(enemies, blood_effects)
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -1758,6 +1983,7 @@ while running:
         if (0 <= player_center_world_x <= effective_bg_width and
             0 <= player_center_world_y <= effective_bg_height):
             config.combat_state = True
+            trigger_combat_start()
             print("[DEBUG] Combat START!")
 
             world.reveal_neighbors(current_room_pos[0], current_room_pos[1], grid)
@@ -1875,6 +2101,8 @@ while running:
                 penetration_total_x += penetration[0]
 
     for enemy in enemies:
+        if not getattr(enemy, "alive", True):
+            continue
         dx = player_center_world_x - enemy.world_x
         dy = player_center_world_y - enemy.world_y
         dist_sq = dx * dx + dy * dy
@@ -1930,6 +2158,8 @@ while running:
                 penetration_total_y += penetration[1]
 
     for enemy in enemies:
+        if not getattr(enemy, "alive", True):
+            continue
         dx = player_center_world_x - enemy.world_x
         dy = player_center_world_y - enemy.world_y
         dist_sq = dx * dx + dy * dy
@@ -2009,7 +2239,9 @@ while running:
 
     if weapon:
         if not changing_weapon:
-            weapon.on_update(mouse_left_button_down, mouse_right_button_down)
+            effective_left = mouse_left_button_down and (not melee.active) and (not changing_weapon)
+            effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
+            weapon.on_update(effective_left, effective_right)
             if weapon.last_shot_time == pygame.time.get_ticks():
                 recoil_in_progress = True
                 recoil_offset = 0
@@ -2077,6 +2309,7 @@ while running:
 
         config.combat_state = False
         config.combat_enabled = False
+        trigger_combat_end()
         print("[DEBUG] Combat END. Player can go back to tunnel.")
 
         for wall in combat_walls:
@@ -2461,7 +2694,7 @@ while running:
     for npc in npcs:
         npc.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
-    if weapon:
+    if weapon and not melee.active:
         render_weapon = weapon
         if changing_weapon and t >= 0.5:
             render_weapon = weapons[change_weapon_target]
@@ -2477,6 +2710,7 @@ while running:
             rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
             rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
             screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
+    melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
     speed = math.sqrt(world_vx ** 2 + world_vy ** 2)
@@ -2494,10 +2728,11 @@ while running:
     fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
     screen.blit(fps_surface, (10, 100))
 
-    draw_minimap(screen, grid, current_room_pos)
+    minimap_rect = draw_minimap(screen, grid, current_room_pos)
     draw_weapon_ui(screen, weapons, current_weapon_index)
     if current_boss and type(current_boss).__name__ in ("Boss1", "Boss2") and current_boss.alive:
         last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
+    draw_combat_indicators(screen, delta_time, minimap_rect)
 
     cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
     screen.blit(cursor_image, cursor_rect)

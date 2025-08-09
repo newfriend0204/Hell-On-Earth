@@ -53,6 +53,45 @@ merchant_dialogue = [
     }
 ]
 
+drone_dialogue = [
+    # 0
+    {
+        "speaker": "드론",
+        "text": "새친 박사님께서 보내주신 AI 드론입니다. 무엇을 도와드릴까요?",
+        "choices": [
+            {"text": "체력 최대치 +20", "next": 1},
+            {"text": "탄약 게이지 최대치 +20", "next": 2},
+            {"text": "나가기", "next": None}
+        ],
+        "effect": None,
+        "next": None
+    },
+    # 1 HP MAX UP
+    {
+        "speaker": "드론",
+        "choices": None,
+        "effect": {"type": "hp_max_up", "amount": 20},
+        "effect_messages": {
+            "prompt": "체력 최대치 +{gained}. 비용 {cost} 악의 정수. 진행하시겠습니까?",
+            "success": "업그레이드 완료. 체력 최대치가 +{gained} 되었습니다. (-{cost})",
+            "insufficient": "악의 정수가 부족합니다. 추가 확보 후 재시도하십시오."
+        },
+        "next": 0
+    },
+    # 2 AMMO MAX UP
+    {
+        "speaker": "드론",
+        "choices": None,
+        "effect": {"type": "ammo_max_up", "amount": 20},
+        "effect_messages": {
+            "prompt": "탄약 게이지 최대치 +{gained}. 비용 {cost} 악의 정수. 진행하시겠습니까?",
+            "success": "업그레이드 완료. 탄약 게이지 최대치가 +{gained} 되었습니다. (-{cost})",
+            "insufficient": "악의 정수가 부족합니다. 추가 확보 후 재시도하십시오."
+        },
+        "next": 0
+    }
+]
+
 doctorNF_dialogue = [
     # 0
     {
