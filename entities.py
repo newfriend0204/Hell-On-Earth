@@ -161,13 +161,13 @@ class Portal:
         self.y = y
         self.image = image
         self.spawn_ms = pygame.time.get_ticks()
-        self.appear_duration = 600  # ms: 등장 연출 시간
-        self.scale_start = 0.2
-        self.scale_end = 1.0
-        self.alpha_target = 200     # 완전히 불투명(255) 대신 은은한 반투명
-        self.angle = 0.0            # 회전 각도(도)
-        self.rot_speed = 120.0      # 도/초, 시계방향(그림 회전은 -각도)
-        self.near_radius = 100 * PLAYER_VIEW_SCALE
+        self.appear_duration = 600
+        self.scale_start = 0.6
+        self.scale_end = 3.0
+        self.alpha_target = 200
+        self.angle = 0.0
+        self.rot_speed = 120.0
+        self.near_radius = 150 * PLAYER_VIEW_SCALE
 
     def is_player_near(self, player_x, player_y):
         dx = player_x - self.x

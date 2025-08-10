@@ -25,8 +25,8 @@ def load_sounds():
     button_select = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonSelect.mp3"))
     button_select.set_volume(0.6)
 
-    knife_use = pygame.mixer.Sound(path_sound("Sound", "KnifeUse.mp3"))
-    knife_kill = pygame.mixer.Sound(path_sound("Sound", "KnifeKill.mp3"))
+    knife_use = pygame.mixer.Sound(path_sound("Sound", "Gun", "KnifeUse.mp3"))
+    knife_kill = pygame.mixer.Sound(path_sound("Sound", "Gun", "KnifeKill.mp3"))
     knife_use.set_volume(0.6)
     knife_kill.set_volume(0.7)
 
@@ -76,6 +76,7 @@ def load_sounds():
         "fireball": pygame.mixer.Sound(path_sound("Sound", "Entity", "Fireball.mp3")),
         "flame_pillar": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlamePillar.mp3")),
         "acid": pygame.mixer.Sound(path_sound("Sound", "Entity", "Acid.mp3")),
+        "portal_enter": pygame.mixer.Sound(path_sound("Sound", "Entity", "PortalEnter.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

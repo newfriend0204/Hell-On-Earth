@@ -14,7 +14,7 @@ from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS
 from dialogue_manager import DialogueManager
-from dialogue_data import merchant_dialogue, doctorNF_dialogue, drone_dialogue
+from text_data import merchant_dialogue, doctorNF_dialogue, drone_dialogue
 
 # 맵 상태 초기화
 CURRENT_MAP = MAPS[0]
@@ -37,6 +37,7 @@ FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Regular.ttf")
 BOLD_FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Bold.ttf")
 KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 KOREAN_FONT_BOLD_20 = pygame.font.Font(BOLD_FONT_PATH, 20)
+KOREAN_FONT_BOLD_18 = pygame.font.Font(BOLD_FONT_PATH, 18)
 
 pygame.mouse.set_visible(False)
 
@@ -85,7 +86,12 @@ cursor_image = images["cursor"]
 background_image = _apply_stage_theme_images()
 background_rect = background_image.get_rect()
 
-combat_banner_fx = {"mode": None, "t": 0.0, "duration": 1100}  # ms
+combat_banner_fx = {"mode": None, "t": 0.0, "duration": 1100}
+stage_banner_fx = {"text": None, "t": 0.0, "duration": 2600}
+next_room_enter_sound = "room_move"
+
+defer_combat_banner = {"pending": False, "entry_pos": (0, 0)}
+combat_banner_defer_dist_px = 0
 enemy_counter_fx = {"state": None, "t": 0.0, "slide_in": 300, "fade_out": 300}
 
 dialogue_manager = DialogueManager()
@@ -646,7 +652,6 @@ init_weapon_ui_cache(weapons)
 
 def advance_to_next_stage():
     # 현재 스테이지를 다음 스테이지로 전환하고 시작방으로 이동
-    # 포탈/전투 기록 리셋
     global room_portals, current_portal, portal_spawn_at_ms
     room_portals.clear()
     current_portal = None; portal_spawn_at_ms = None
@@ -663,6 +668,10 @@ def advance_to_next_stage():
 
     next_stage = stage_order[idx + 1]
     config.CURRENT_STAGE = next_stage
+    try:
+        trigger_stage_banner(f"스테이지 {next_stage}")
+    except Exception:
+        pass
     print(f"[DEBUG] 스테이지 전환: {config.CURRENT_STAGE} → {next_stage}")
 
     stage_settings = STAGE_DATA[next_stage]
@@ -686,14 +695,20 @@ def advance_to_next_stage():
             if cell == 'S':
                 current_room_pos[0] = x
                 current_room_pos[1] = y
+                global next_room_enter_sound
+                next_room_enter_sound = "portal_enter"
                 change_room(None)
                 return
             
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound
     
     current_portal = None
+    try:
+        room_field_weapons[tuple(current_room_pos)] = list(field_weapons)
+    except Exception:
+        pass
     WIDTH, HEIGHT = world.get_map_dimensions()
     changing_room = True
     background_image = _apply_stage_theme_images()
@@ -772,9 +787,8 @@ def change_room(direction):
             config.combat_enabled = False
         else:
             CURRENT_MAP = base_boss_map
-            config.combat_state = True
+            config.combat_state = False
             config.combat_enabled = True
-            trigger_combat_start()
     else:
         CURRENT_MAP = MAPS[0]
 
@@ -804,8 +818,13 @@ def change_room(direction):
         tunnel_length=10000 * PLAYER_VIEW_SCALE
     )
 
+    room_key = (new_x, new_y)
+    if new_room_type != 'A':
+        field_weapons.clear()
+        field_weapons.extend(room_field_weapons.get(room_key, []))
+
     if new_room_type == 'A':
-        acquire_index = random.randint(4, 4)  # 2면 무기방, 3이면 상점방, 4이면 드론방
+        acquire_index = random.randint(2, 2)  # 2면 무기방, 3이면 상점방, 4이면 드론방
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
@@ -1081,7 +1100,9 @@ def change_room(direction):
 
     spawn_room_npcs()
 
-    sounds["room_move"].play()
+    key = next_room_enter_sound if next_room_enter_sound in sounds else "room_move"
+    sounds[key].play()
+    next_room_enter_sound = "room_move"
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {world.room_states[new_y][new_x]}")
 
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
@@ -1490,48 +1511,40 @@ def draw_boss_hp_bar(screen, boss, last_boss_hp_visual):
     y = 20
     border_radius = bar_height // 3
 
-    # 배경
     bg_surface = pygame.Surface((bar_width + 6, bar_height + 4), pygame.SRCALPHA)
-    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, bar_width + 6, bar_height + 4), border_radius=border_radius + 2)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 160), (0, 0, bar_width + 6, bar_height + 4), border_radius=border_radius + 2)
     screen.blit(bg_surface, (x - 3, y - 2))
 
-    # HP 보간
     smoothing_speed = 0.5
     interpolated_hp = last_boss_hp_visual + (boss.hp - last_boss_hp_visual) * smoothing_speed
 
     ratio = max(0.0, interpolated_hp / boss.max_hp)
 
-    # 색상 조건 변경
     if ratio >= 0.75:
-        color = (0, 200, 0)       # 초록색
+        color = (0, 200, 0)
     elif ratio >= 0.50:
-        color = (200, 200, 0)     # 노란색
+        color = (200, 200, 0)
     elif ratio >= 0.25:
-        color = (255, 165, 0)     # 주황색
+        color = (255, 165, 0)
     else:
-        color = (200, 0, 0)       # 빨간색
+        color = (200, 0, 0)
 
     filled_width = int(bar_width * ratio)
     pygame.draw.rect(screen, color, (x, y, filled_width, bar_height), border_radius=border_radius)
 
-    # 텍스트 (한국어 폰트)
     text_surface = KOREAN_FONT_18.render(f"보스 HP: {int(boss.hp)}/{boss.max_hp}", True, (255, 255, 255))
     text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y + bar_height // 2))
     screen.blit(text_surface, text_rect)
 
     return interpolated_hp
+
 def draw_hp_bar_remodeled(surface, current_hp, max_hp, pos, size, last_hp_drawn):
     x, y = pos
     width, height = size
     border_radius = height // 3
 
-    bg_surface = pygame.Surface((width + 6, height + 4), pygame.SRCALPHA)
-    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, width + 6, height + 4), border_radius=border_radius + 2)
-    surface.blit(bg_surface, (x - 3, y - 2))
-
     smoothing_speed = 0.5
     interpolated_hp = last_hp_drawn + (current_hp - last_hp_drawn) * smoothing_speed
-
     ratio = max(0.0, interpolated_hp / max_hp)
     if ratio > 0.5:
         color = (0, 180, 0)
@@ -1540,8 +1553,43 @@ def draw_hp_bar_remodeled(surface, current_hp, max_hp, pos, size, last_hp_drawn)
     else:
         color = (180, 0, 0)
 
+    value_text = f"{int(current_hp)}/{int(max_hp)}"
+    text_w, text_h = KOREAN_FONT_BOLD_18.size(value_text)
+
+    icon = config.images.get("health_up")
+    if icon:
+        icon_w, icon_h = icon.get_width(), icon.get_height()
+        scale_icon_w = int(icon_w * 1.3)
+        scale_icon_h = int(icon_h * 1.3)
+        icon_scaled = pygame.transform.smoothscale(icon, (scale_icon_w, scale_icon_h))
+    else:
+        scale_icon_w = scale_icon_h = 0
+        icon_scaled = None
+
+    pad_left = 3
+    pad_right = 8
+    gap_text = 10
+    gap_icon = 6
+    extra_w = gap_text + text_w + ((gap_icon + scale_icon_w) if icon_scaled else 0) + pad_right
+
+    bg_surface = pygame.Surface((width + 6 + extra_w, height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 160),
+                     (0, 0, width + 6 + extra_w, height + 4),
+                     border_radius=border_radius + 2)
+    surface.blit(bg_surface, (x - pad_left, y - 2))
+
     filled_width = int(width * ratio)
     pygame.draw.rect(surface, color, (x, y, filled_width, height), border_radius=border_radius)
+
+    value_surf = KOREAN_FONT_BOLD_18.render(value_text, True, color)
+    value_rect = value_surf.get_rect()
+    text_x = x + width + gap_text
+    text_y = y + height // 2 - value_rect.height // 2
+    surface.blit(value_surf, (text_x, text_y))
+    if icon_scaled:
+        icon_x = text_x + value_rect.width + gap_icon
+        icon_y = y + height // 2 - scale_icon_h // 2
+        surface.blit(icon_scaled, (icon_x, icon_y))
 
     return interpolated_hp
 
@@ -1550,23 +1598,86 @@ def draw_ammo_bar_remodeled(surface, current_ammo, max_ammo, pos, size, last_amm
     width, height = size
     border_radius = height // 3
 
-    bg_surface = pygame.Surface((width + 6, height + 4), pygame.SRCALPHA)
-    pygame.draw.rect(bg_surface, (255, 255, 255, 80), (0, 0, width + 6, height + 4), border_radius=border_radius + 2)
-    surface.blit(bg_surface, (x - 3, y - 2))
-
     smoothing_speed = 0.5
     interpolated_ammo = last_ammo_drawn + (current_ammo - last_ammo_drawn) * smoothing_speed
 
     ratio = max(0, interpolated_ammo / max_ammo)
     filled_width = int(width * ratio)
     bar_color = (255, 150, 0)
+
+    value_text = f"{int(current_ammo)}/{int(max_ammo)}"
+    text_w, text_h = KOREAN_FONT_BOLD_18.size(value_text)
+    icon = config.images.get("ammo_gauge_up")
+    icon_w = icon.get_width() if icon else 0
+    icon_h = icon.get_height() if icon else 0
+    scale_icon_w = int(icon_w * 1.3)
+    scale_icon_h = int(icon_h * 1.3)
+    icon_scaled = pygame.transform.smoothscale(icon, (scale_icon_w, scale_icon_h)) if icon else None
+
+    pad_left = 3
+    pad_right = 8
+    gap_text = 10
+    gap_icon = 6
+    extra_w = gap_text + text_w + ((gap_icon + scale_icon_w) if icon_scaled else 0) + pad_right
+
+    bg_surface = pygame.Surface((width + 6 + extra_w, height + 4), pygame.SRCALPHA)
+    pygame.draw.rect(bg_surface, (255, 255, 255, 160), (0, 0, width + 6 + extra_w, height + 4), border_radius=border_radius + 2)
+    surface.blit(bg_surface, (x - pad_left, y - 2))
+
     pygame.draw.rect(surface, bar_color, (x, y, filled_width, height), border_radius=border_radius)
+
+    value_surf = KOREAN_FONT_BOLD_18.render(value_text, True, bar_color)
+    value_rect = value_surf.get_rect()
+    text_x = x + width + gap_text
+    text_y = y + height // 2 - value_rect.height // 2
+    surface.blit(value_surf, (text_x, text_y))
+    if icon_scaled:
+        icon_x = text_x + value_rect.width + gap_icon
+        icon_y = y + height // 2 - scale_icon_h // 2
+        surface.blit(icon_scaled, (icon_x, icon_y))
 
     return interpolated_ammo
 
+def draw_npc_interact_hint(screen, center_x, anchor_top_y, lines=("대화하기", "(Space)")):
+    font = KOREAN_FONT_BOLD_20
+    pad_x, pad_y = 8, 6
+    radius = 6
+    bg_alpha = 160
+    line_gap = 4
+
+    c1 = (255, 255, 255)
+    c2 = (200, 200, 255)
+    if len(lines) >= 2:
+        surf1 = font.render(lines[0], True, c1)
+        surf2 = font.render(lines[1], True, c2)
+        text_w = max(surf1.get_width(), surf2.get_width())
+        text_h = surf1.get_height() + surf2.get_height() + line_gap
+    else:
+        surf1 = font.render(lines[0], True, c1)
+        surf2 = None
+        text_w = surf1.get_width()
+        text_h = surf1.get_height()
+
+    box_w = text_w + pad_x * 2
+    box_h = text_h + pad_y * 2 + (pad_y if surf2 else 0)
+
+    box_x = int(center_x - box_w // 2)
+    box_y = int(anchor_top_y - box_h - 10)
+
+    bg = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+    pygame.draw.rect(bg, (0, 0, 0, bg_alpha), bg.get_rect(), border_radius=radius)
+    screen.blit(bg, (box_x, box_y))
+
+    y = box_y + pad_y
+    screen.blit(surf1, (box_x + (box_w - surf1.get_width()) // 2, y))
+    if surf2:
+        y += surf1.get_height() + line_gap
+        screen.blit(surf2, (box_x + (box_w - surf2.get_width()) // 2, y))
+        
 def trigger_combat_start():
-    # 배너: 시작, 라벨: 슬라이드 인
+    # 방 내부 진입이 확정된 시점에서 즉시 배너
     combat_banner_fx["mode"] = "start"
+    combat_banner_fx["t"] = 0.0
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "in"
     enemy_counter_fx["t"] = 0.0
@@ -1577,6 +1688,10 @@ def trigger_combat_end():
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "out"
     enemy_counter_fx["t"] = 0.0
+
+def trigger_stage_banner(text):
+    stage_banner_fx["text"] = text
+    stage_banner_fx["t"] = 0.0
 
 def draw_combat_indicators(screen, delta_ms, minimap_rect=None):
     # 상단 배너 업데이트/그리기
@@ -1592,6 +1707,15 @@ def draw_combat_indicators(screen, delta_ms, minimap_rect=None):
         if t >= dur:
             combat_banner_fx["mode"] = None
             combat_banner_fx["t"] = 0.0
+    
+    if stage_banner_fx["text"] is not None:
+        stage_banner_fx["t"] += delta_ms
+        t = stage_banner_fx["t"]
+        dur = stage_banner_fx["duration"]
+        draw_combat_banner(screen, stage_banner_fx["text"], "end", progress)
+        if t >= dur:
+            stage_banner_fx["text"] = None
+            stage_banner_fx["t"] = 0.0
 
     # 우상단 남은 적 라벨
     try:
@@ -1857,7 +1981,14 @@ while running:
         if selected_tab != 0:
             ui_tab_rects = draw_weapon_detail_ui(screen, selected_tab, weapons, sounds)
         else:
-            ui_tab_rects = draw_status_tab(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, selected_tab, sounds)
+            ui_tab_rects = draw_status_tab(
+                screen,
+                player_hp, player_hp_max,
+                ammo_gauge, ammo_gauge_max,
+                selected_tab, sounds,
+                kill_count,
+                len(weapons)
+            )
         pygame.display.flip()
         clock.tick(60)
         continue
@@ -2236,9 +2367,30 @@ while running:
 
     if weapon:
         if not changing_weapon:
-            effective_left = mouse_left_button_down and (not melee.active) and (not changing_weapon)
+            effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon)
             effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
-            weapon.on_update(effective_left, effective_right)
+
+            # 탄약 부족 시 자동 근접(칼) 발동
+            fallback_to_melee = False
+            if effective_left and getattr(weapon, "can_left_click", False):
+                try:
+                    needed = getattr(weapon, "left_click_ammo_cost", 0)
+                    if weapon.get_ammo_gauge() < needed:
+                        fallback_to_melee = True
+                except Exception:
+                    pass
+            elif effective_right and getattr(weapon, "can_right_click", False):
+                try:
+                    needed = getattr(weapon, "right_click_ammo_cost", 0)
+                    if weapon.get_ammo_gauge() < needed:
+                        fallback_to_melee = True
+                except Exception:
+                    pass
+
+            if fallback_to_melee:
+                melee.try_start(is_switching_weapon=changing_weapon)
+            else:
+                weapon.on_update(effective_left, effective_right)
             if weapon.last_shot_time == pygame.time.get_ticks():
                 recoil_in_progress = True
                 recoil_offset = 0
@@ -2533,10 +2685,10 @@ while running:
         for c in obs.colliders:
             c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
-    ammo_bar_pos = (80, SCREEN_HEIGHT - 80)
+    ammo_bar_pos = (30, SCREEN_HEIGHT - 80)
     ammo_bar_size = (400, 20)
     last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, ammo_gauge_max, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
-    hp_bar_pos = (80, SCREEN_HEIGHT - 50)
+    hp_bar_pos = (30, SCREEN_HEIGHT - 50)
     hp_bar_size = (400, 20)
     last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)
 
@@ -2658,9 +2810,11 @@ while running:
 
     score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
     pygame.draw.rect(score_box, (255, 255, 255, 120), score_box.get_rect(), border_radius=14)
-    screen.blit(score_box, (80, SCREEN_HEIGHT - 120 - 30 + 30))
+    score_box_x = 30
+    score_box_y = SCREEN_HEIGHT - 120 - 30 + 30
+    screen.blit(score_box, (score_box_x, score_box_y))
     score_text = KOREAN_FONT_BOLD_20.render(f"악의 정수: {config.player_score}", True, (63, 0, 153))
-    screen.blit(score_text, (90, SCREEN_HEIGHT - 120 - 30 + 30 + 2))
+    screen.blit(score_text, (score_box_x + 10, score_box_y + 2))
 
     max_stack = 3
     stack_gap = 24
@@ -2672,7 +2826,7 @@ while running:
 
         y_offset = i * stack_gap
         draw_y = entry["y"] - y_offset
-        screen.blit(surface, (200, draw_y))
+        screen.blit(surface, (score_box_x + 120, draw_y))
 
         if entry.get("delay", 0) > 0:
             entry["delay"] -= 1
@@ -2690,6 +2844,25 @@ while running:
 
     for npc in npcs:
         npc.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+    if not dialogue_manager.active and not paused:
+        for npc in npcs:
+            nx = getattr(npc, "x", getattr(npc, "world_x", None))
+            ny = getattr(npc, "y", getattr(npc, "world_y", None))
+            img = getattr(npc, "image", None)
+            if nx is None or ny is None or img is None:
+                continue
+
+            screen_x = nx - (world_x - shake_offset_x)
+            screen_y = ny - (world_y - shake_offset_y)
+            top_y = screen_y - img.get_height() // 2
+
+            draw_npc_interact_hint(
+                screen,
+                screen_x,
+                top_y,
+                lines=("대화하기", "(Space)")
+            )
 
     if weapon and not melee.active:
         render_weapon = weapon
@@ -2710,20 +2883,9 @@ while running:
     melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
     screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
 
-    speed = math.sqrt(world_vx ** 2 + world_vy ** 2)
-    text_surface = DEBUG_FONT.render(f"Speed: {speed:.2f}", True, (255, 255, 255))
-    screen.blit(text_surface, (10, 10))
-
-    weapon_name = f"gun{current_weapon}"
-    weapon_surface = DEBUG_FONT.render(f"Weapon: {weapon_name}", True, (255, 255, 255))
-    screen.blit(weapon_surface, (10, 40))
-
-    kill_surface = DEBUG_FONT.render(f"Kills: {kill_count}", True, (255, 255, 255))
-    screen.blit(kill_surface, (10, 70))
-
     fps = clock.get_fps()
     fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
-    screen.blit(fps_surface, (10, 100))
+    screen.blit(fps_surface, (10, 10))
 
     minimap_rect = draw_minimap(screen, grid, current_room_pos)
     draw_weapon_ui(screen, weapons, current_weapon_index)
