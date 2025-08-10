@@ -12,7 +12,7 @@ from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES, MeleeController
 from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter
 import world
-from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS
+from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
 from dialogue_manager import DialogueManager
 from text_data import merchant_dialogue, doctorNF_dialogue, drone_dialogue
 
@@ -73,6 +73,10 @@ def _apply_stage_theme_images():
         bg = images.get("background_map2", images["background"])
         images["wall_barrier"] = images.get("wall_barrier_map2", images["wall_barrier"])
         images["wall_barrier_rotated"] = images.get("wall_barrier_map2_rotated", images["wall_barrier_rotated"])
+    elif theme == "map3":
+        bg = images.get("background_map3", images["background"])
+        images["wall_barrier"] = images.get("wall_barrier_map3", images["wall_barrier"])
+        images["wall_barrier_rotated"] = images.get("wall_barrier_map3_rotated", images["wall_barrier_rotated"])
     else:
         bg = images.get("background_map1", images["background"])
         images["wall_barrier"] = images.get("wall_barrier_map1", images["wall_barrier"])
@@ -699,12 +703,30 @@ def advance_to_next_stage():
                 next_room_enter_sound = "portal_enter"
                 change_room(None)
                 return
-            
+
+def _collect_all_dropped_items_instant():
+    # 방 이동 직전 즉시 정산: 필드의 체력/탄약 오브를 모두 획득 처리
+    global player_hp, ammo_gauge, player_hp_max, ammo_gauge_max
+    import config
+    gained_hp = 0
+    gained_ammo = 0
+    for item in list(getattr(config, "dropped_items", [])):
+        if getattr(item, "item_type", None) == "health":
+            gained_hp += getattr(item, "value", 0)
+        elif getattr(item, "item_type", None) == "ammo":
+            gained_ammo += getattr(item, "value", 0)
+    if gained_hp or gained_ammo:
+        player_hp = min(player_hp_max, player_hp + gained_hp)
+        ammo_gauge = min(ammo_gauge_max, ammo_gauge + gained_ammo)
+    # 모두 제거
+    config.dropped_items.clear()
+
 def change_room(direction):
     # 방 전환 처리
     global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound
     
     current_portal = None
+    _collect_all_dropped_items_instant()
     try:
         room_field_weapons[tuple(current_room_pos)] = list(field_weapons)
     except Exception:
@@ -748,8 +770,13 @@ def change_room(direction):
 
     if new_room_type == 'F':
         room_key = (new_x, new_y)
-        is_stage2 = (config.STAGE_THEME.get(config.CURRENT_STAGE, "map1") == "map2")
-        fight_pool = S2_FIGHT_MAPS if is_stage2 else S1_FIGHT_MAPS
+        theme = config.STAGE_THEME.get(config.CURRENT_STAGE, "map1")
+        if theme == "map2":
+            fight_pool = S2_FIGHT_MAPS
+        elif theme == "map3":
+            fight_pool = S3_FIGHT_MAPS
+        else:
+            fight_pool = S1_FIGHT_MAPS
 
         if room_key not in visited_f_rooms:
             fight_map_index = random.randint(0, len(fight_pool) - 1)
@@ -1684,6 +1711,9 @@ def trigger_combat_start():
 
 def trigger_combat_end():
     # 배너: 종료, 라벨: 페이드 아웃
+    import config, pygame
+    config.auto_collect_ready_at = pygame.time.get_ticks() + 500
+    config.auto_collect_fired = False
     combat_banner_fx["mode"] = "end"
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "out"
@@ -1712,7 +1742,8 @@ def draw_combat_indicators(screen, delta_ms, minimap_rect=None):
         stage_banner_fx["t"] += delta_ms
         t = stage_banner_fx["t"]
         dur = stage_banner_fx["duration"]
-        draw_combat_banner(screen, stage_banner_fx["text"], "end", progress)
+        stage_progress = 1.0 if dur <= 0 else min(1.0, max(0.0, t / dur))
+        draw_combat_banner(screen, stage_banner_fx["text"], "end", stage_progress)
         if t >= dur:
             stage_banner_fx["text"] = None
             stage_banner_fx["t"] = 0.0
@@ -2587,6 +2618,23 @@ while running:
 
     for blood in blood_effects:
         blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+    
+    if not config.combat_state and getattr(config, "auto_collect_ready_at", None) is not None:
+        if not getattr(config, "auto_collect_fired", False) and current_time >= config.auto_collect_ready_at:
+            for _item in getattr(config, "dropped_items", []):
+                if hasattr(_item, "start_magnet"):
+                    _item.start_magnet(delay_ms=random.randint(0, 120))
+                else:
+                    try:
+                        _item.state = "magnet"
+                        _item.magnet_start_time = current_time
+                        _item.magnet_origin = (_item.x, _item.y)
+                        _px, _py = get_player_world_position()
+                        _item.magnet_target = (_px, _py)
+                        _item.magnet_start_dist = math.hypot(_item.x - _px, _item.y - _py)
+                    except Exception:
+                        pass
+            config.auto_collect_fired = True
 
     for item in config.dropped_items[:]:
         # 드롭 아이템 처리

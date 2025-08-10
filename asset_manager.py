@@ -146,6 +146,8 @@ def load_images():
     bg_img = pygame.transform.smoothscale(bg_img, (BG_WIDTH, BG_HEIGHT))
     bg_img2 = pygame.image.load(path_image("Image", "Map2.png")).convert()
     bg_img2 = pygame.transform.smoothscale(bg_img2, (BG_WIDTH, BG_HEIGHT))
+    bg_img3 = pygame.image.load(path_image("Image", "Map3.png")).convert()
+    bg_img3 = pygame.transform.smoothscale(bg_img3, (BG_WIDTH, BG_HEIGHT))
 
     wall_barrier_img = pygame.image.load(path_image("Image", "Map1Wall.png")).convert_alpha()
     scale_factor = 0.275 * PLAYER_VIEW_SCALE
@@ -160,6 +162,14 @@ def load_images():
         int(wall_barrier_img2.get_height() * scale_factor)
     ))
     wall_barrier_img2_rotated = pygame.transform.rotate(wall_barrier_img2, 90)
+
+    wall_barrier_img_rotated = pygame.transform.rotate(wall_barrier_img, 90)
+    wall_barrier_img3 = pygame.image.load(path_image("Image", "Map3Wall.png")).convert_alpha()
+    wall_barrier_img3 = pygame.transform.smoothscale(wall_barrier_img3, (
+        int(wall_barrier_img3.get_width() * scale_factor),
+        int(wall_barrier_img3.get_height() * scale_factor)
+    ))
+    wall_barrier_img3_rotated = pygame.transform.rotate(wall_barrier_img3, 90)
 
     obstacle_sizes = {
         "Pond1.png": (1536, 1024),
@@ -183,6 +193,17 @@ def load_images():
         "FirePlug1.png": (384, 384),
         "Hole1.png": (1024, 1024),
         "TrashCan1.png": (768, 768),
+        "Altar1.png": (1024, 1024),
+        "Altar2.png": (1024, 1024),
+        "BrokenStoneStatue1.png": (1024, 1280),
+        "Coffin1.png": (1536, 768),
+        "Coffin2.png": (1536, 768),
+        "LavaPond1.png": (1536, 1024),
+        "LavaStone1.png": (1024, 1024),
+        "LavaStone2.png": (1024, 1024),
+        "Skull1.png": (1024, 1024),
+        "Skull2.png": (1024, 1024),
+        "Skull3.png": (1024, 1024),
     }
 
     # 장애물 이미지 및 마스크 로드
@@ -196,11 +217,10 @@ def load_images():
                 img_path = os.path.join(obstacle_dir, filename)
                 orig = pygame.image.load(img_path).convert_alpha()
 
-                # ✅ 비율 유지 스케일: 지정된 박스 안으로만 '축소' (확대 금지)
                 box_w, box_h = obstacle_sizes[filename]
                 sx = box_w / orig.get_width()
                 sy = box_h / orig.get_height()
-                s = min(1.0, sx, sy)  # 원본보다 키우지 않음
+                s = min(1.0, sx, sy)
 
                 new_size = (int(orig.get_width() * s), int(orig.get_height() * s))
                 image = pygame.transform.smoothscale(orig, new_size)
@@ -330,10 +350,13 @@ def load_images():
         "wall_barrier_rotated": wall_barrier_img_rotated,
         "background_map1": bg_img,
         "background_map2": bg_img2,
+        "background_map3": bg_img3,
         "wall_barrier_map1": wall_barrier_img,
         "wall_barrier_map1_rotated": wall_barrier_img_rotated,
         "wall_barrier_map2": wall_barrier_img2,
         "wall_barrier_map2_rotated": wall_barrier_img2_rotated,
+        "wall_barrier_map3": wall_barrier_img3,
+        "wall_barrier_map3_rotated": wall_barrier_img3_rotated,
         "portal": portal_img,
         "background": bg_img,
         "obstacles": obstacle_images,

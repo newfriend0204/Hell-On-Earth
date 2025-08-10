@@ -254,8 +254,18 @@ S2_FIGHT_MAP_1 = { # 디버그
     "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
 }
 
+S3_FIGHT_MAP_1 = { # 디버그
+    "obstacles": [
+        {"filename": "LavaPond1.png", "x": 100.00, "y": 100.00, "scale": 0.3}
+    ],
+    "enemy_infos": [
+    ],
+    "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
+}
+
 S1_FIGHT_MAPS = [S1_FIGHT_MAP_9]#[S1_FIGHT_MAP_1, S1_FIGHT_MAP_2, S1_FIGHT_MAP_3, S1_FIGHT_MAP_4, S1_FIGHT_MAP_5, S1_FIGHT_MAP_6, S1_FIGHT_MAP_7, S1_FIGHT_MAP_8]
 S2_FIGHT_MAPS = [S2_FIGHT_MAP_1]
+S3_FIGHT_MAPS = [S3_FIGHT_MAP_1]
 
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
 BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3]

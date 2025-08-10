@@ -305,37 +305,54 @@ class DroppedItem:
         self.magnet_origin = None
         self.magnet_target = None
         self.magnet_start_dist = None
+        self.magnet_duration = 0.11
+        self.magnet_delay_until = 0
 
         self.trail = []
-        self.trail_color = color
-        if color is not None:
-            if not isinstance(color, (tuple, list)) or len(color) not in (3, 4):
-                color = (255, 255, 255)
-                self.trail_color = color
-        else:
-            self.trail_color = self.get_image_average_color(self.image)
+        self.trail_color = color if (isinstance(color, (tuple, list)) and len(color) in (3, 4)) else self.get_image_average_color(self.image)
 
     def get_image_average_color(self, img):
+        # 이미지 평균색(투명 제외)
         arr = pygame.surfarray.pixels3d(img)
         mask = pygame.surfarray.pixels_alpha(img)
         valid = (mask > 0)
         if valid.sum() == 0:
-            return (255,255,255)
+            return (255, 255, 255)
         color = arr[valid].mean(axis=0)
         return tuple(int(c) for c in color)
+
+    def start_magnet(self, delay_ms=0):
+        # 자동 흡수 시작(랜덤 지연 지원)
+        now = pygame.time.get_ticks()
+        px, py = self.get_player_pos()
+        self.magnet_origin = (self.x, self.y)
+        self.magnet_target = (px, py)
+        self.magnet_start_dist = math.hypot(self.x - px, self.y - py)
+        base = 0.09
+        extra = min(0.25, 0.00035 * self.magnet_start_dist)
+        self.magnet_duration = base + extra
+
+        if delay_ms and delay_ms > 0:
+            self.state = "magnet_wait"
+            self.magnet_delay_until = now + delay_ms
+        else:
+            self.state = "magnet"
+            self.magnet_start_time = now
 
     def update(self):
         # 상태별 이동 처리 (spread, idle, magnet)
         now = pygame.time.get_ticks()
         px, py = self.get_player_pos()
 
-        if not self.trail or (abs(self.x-self.trail[-1][0]) > self.TRAIL_SPACING or abs(self.y-self.trail[-1][1]) > self.TRAIL_SPACING):
+        near = math.hypot(self.x - px, self.y - py) < 40
+        keep_ms = 50 if near else self.TRAIL_KEEP_MS
+        if (not self.trail) or (abs(self.x - self.trail[-1][0]) > self.TRAIL_SPACING or abs(self.y - self.trail[-1][1]) > self.TRAIL_SPACING):
             self.trail.append((self.x, self.y, now))
-        while self.trail and (now - self.trail[0][2]) > self.TRAIL_KEEP_MS:
+        while self.trail and (now - self.trail[0][2]) > keep_ms:
             self.trail.pop(0)
 
         if self.state == "spread":
-            t = (now - self.spawn_time) / 1000
+            t = (now - self.spawn_time) / 1000.0
             if t < self.SPREAD_DURATION:
                 self.x += self.vx
                 self.y += self.vy
@@ -348,6 +365,7 @@ class DroppedItem:
                 self.vy = 0
 
         elif self.state == "idle":
+            # 플레이어가 가까우면 즉시 마그넷
             dist = math.hypot(self.x - px, self.y - py)
             if dist < 90:
                 self.state = "magnet"
@@ -355,26 +373,42 @@ class DroppedItem:
                 self.magnet_origin = (self.x, self.y)
                 self.magnet_target = (px, py)
                 self.magnet_start_dist = dist
+                self.magnet_duration = 0.11 
+
+        elif self.state == "magnet_wait":
+            if now >= self.magnet_delay_until:
+                # 지연 끝 -> 마그넷 시작
+                self.state = "magnet"
+                self.magnet_start_time = now
+                tx, ty = self.get_player_pos()
+                self.magnet_target = (tx, ty)
 
         elif self.state == "magnet":
+            # 플레이어 위치 실시간 추적 + 이징
             elapsed = (now - self.magnet_start_time) / 1000.0
-            t = min(elapsed / 0.11, 1.0)
+            duration = max(1e-6, self.magnet_duration)
+            t = min(max(elapsed / duration, 0.0), 1.0)
+
             tx, ty = self.get_player_pos()
             self.magnet_target = (tx, ty)
             ox, oy = self.magnet_origin
             dx = tx - ox
             dy = ty - oy
 
-            def ease_out_back(t, s=1.5):
-                return 1 + s * (t-1)**3 + s * (t-1)**2 + (t-1)
+            def ease_out_back(u, s=1.5):
+                return 1 + s * (u - 1) ** 3 + s * (u - 1) ** 2 + (u - 1)
+
             overshoot = 0.13
             if t < 1.0:
                 curve_t = ease_out_back(t)
-                if curve_t < 0: curve_t = 0
-                if curve_t > 1 + overshoot: curve_t = 1 + overshoot
+                if curve_t < 0:
+                    curve_t = 0
+                if curve_t > 1 + overshoot:
+                    curve_t = 1 + overshoot
                 self.x = ox + dx * curve_t
                 self.y = oy + dy * curve_t
             else:
+                # 도착 스냅
                 self.x = tx
                 self.y = ty
 
@@ -392,13 +426,22 @@ class DroppedItem:
                 (tx2, ty2, t1) = self.trail[i + 1]
                 dt = pygame.time.get_ticks() - t0
                 alpha = int(160 * (1 - dt / self.TRAIL_KEEP_MS))
-                color = self.trail_color if isinstance(self.trail_color, (tuple, list)) and len(self.trail_color) in (3, 4) else (255,255,255) + (alpha,)
-                width = 6 * (i / n) + 2
+                if alpha < 0:
+                    alpha = 0
+                # trail_color가 (r,g,b) 또는 (r,g,b,a) 모두 대응
+                if isinstance(self.trail_color, (tuple, list)):
+                    if len(self.trail_color) == 3:
+                        color = (*self.trail_color, alpha)
+                    else:
+                        color = (self.trail_color[0], self.trail_color[1], self.trail_color[2], alpha)
+                else:
+                    color = (255, 255, 255, alpha)
+                width = int(6 * (i / n) + 2)
                 pygame.draw.line(
                     screen, color,
                     (tx - world_x, ty - world_y),
                     (tx2 - world_x, ty2 - world_y),
-                    int(width)
+                    width
                 )
         rect = self.image.get_rect(center=(self.x - world_x, self.y - world_y))
         screen.blit(self.image, rect)

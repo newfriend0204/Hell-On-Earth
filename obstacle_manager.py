@@ -83,223 +83,127 @@ class ObstacleManager:
         # 장애물 종류에 따라 충돌체 생성
         colliders = []
 
-        if "Pond1" in filename:
+        if "LavaPond1" in filename:
+            rx = w * 0.45
+            ry = h * 0.4
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=True))
+        elif "Pond1" in filename:
             rx = w * 0.27
             ry = h * 0.28
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(rx, ry),
-                    bullet_passable=True
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=True))
         elif "Pond2" in filename:
             rx = w * 0.32
             ry = h * 0.25
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(rx, ry),
-                    bullet_passable=True
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=True))
         elif "Rock1" in filename:
             rx = w * 0.35
             ry = h * 0.4
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(rx, ry),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
         elif "Rock2" in filename:
             rx = w * 0.43
             ry = h * 0.4
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(rx, ry),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
         elif "Rock3" in filename:
             rx = w * 0.34
             ry = h * 0.35
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(rx, ry),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
         elif "Tree1" in filename or "Tree2" in filename:
             radius = 0.15
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(w * radius, h * radius),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (w * radius, h * radius), bullet_passable=False))
         elif "FallenLog1" in filename:
             width = w * 0.3
             height = h * 0.7
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "FallenLog2" in filename:
             width = w * 0.7
             height = h * 0.3
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Vehicle1" in filename:
-            width  = w * 0.65
+            width = w * 0.65
             height = h * 0.9
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Vehicle2" in filename:
-            width  = w * 0.95
+            width = w * 0.95
             height = h * 0.7
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Vehicle3" in filename:
-            width  = w * 0.4
+            width = w * 0.4
             height = h * 0.8
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Vehicle4" in filename:
-            width  = w * 0.82
+            width = w * 0.82
             height = h * 0.36
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Barricade1" in filename:
-            width  = w * 0.90
+            width = w * 0.90
             height = h * 0.45
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Dump1" in filename:
-            width  = w * 0.40   # ellipse rx
-            height = h * 0.36   # ellipse ry
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            width = w * 0.40
+            height = h * 0.36
+            colliders.append(Collider("ellipse", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Dump2" in filename:
-            width  = w * 0.35
+            width = w * 0.35
             height = h * 0.35
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (width, height), bullet_passable=False))
         elif "ElectricBox1" in filename:
-            width  = w * 0.70
+            width = w * 0.70
             height = h * 0.70
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
         elif "FirePlug1" in filename:
-            width  = w * 0.28
+            width = w * 0.28
             height = h * 0.28
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (width, height), bullet_passable=False))
         elif "Hole1" in filename:
-            width  = w * 0.23
+            width = w * 0.23
             height = h * 0.23
-            colliders.append(
-                Collider(
-                    shape="ellipse",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=True
-                )
-            )
+            colliders.append(Collider("ellipse", (w/2, h/2), (width, height), bullet_passable=True))
         elif "TrashCan1" in filename:
-            width  = w * 0.70
+            width = w * 0.70
             height = h * 0.70
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(width, height),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
+        elif "Altar1" in filename:
+            width = w * 0.72
+            height = h * 0.72
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
+        elif "Altar2" in filename:
+            rx = w * 0.40
+            ry = h * 0.40
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
+        elif "BrokenStoneStatue1" in filename:
+            width = w * 0.32
+            height = h * 0.35
+            colliders.append(Collider("ellipse", (w/2, h/2), (width, height), bullet_passable=True))
+        elif "Coffin1" in filename:
+            width = w * 0.45
+            height = h * 0.78
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
+        elif "Coffin2" in filename:
+            width = w * 0.65
+            height = h * 0.6
+            colliders.append(Collider("rectangle", (w/2, h/2), (width, height), bullet_passable=False))
+        elif "LavaStone1" in filename:
+            rx = w * 0.40
+            ry = h * 0.35
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
+        elif "LavaStone2" in filename:
+            rx = w * 0.40
+            ry = h * 0.35
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
+        elif "Skull1" in filename:
+            rx = w * 0.4
+            ry = h * 0.4
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
+        elif "Skull2" in filename:
+            rx = w * 0.4
+            ry = h * 0.36
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
+        elif "Skull3" in filename:
+            rx = w * 0.35
+            ry = h * 0.4
+            colliders.append(Collider("ellipse", (w/2, h/2), (rx, ry), bullet_passable=False))
         else:
-            colliders.append(
-                Collider(
-                    shape="rectangle",
-                    center=(w / 2, h / 2),
-                    size=(w * 0.80, h * 0.80),
-                    bullet_passable=False
-                )
-            )
+            colliders.append(Collider("rectangle", (w/2, h/2), (w * 0.80, h * 0.80), bullet_passable=False))
 
         return colliders
 

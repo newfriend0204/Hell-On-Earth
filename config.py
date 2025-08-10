@@ -83,8 +83,32 @@ STAGE_DATA = {
         "acquire_rooms": 3,
         "weapon_tier_weights": { 1: 20, 2: 55, 3: 25 }
     },
+    "3-1": {
+        "boss_map": 0,
+        "enemy_rank_range": (4, 7),
+        "min_f_rooms": 6,
+        "max_f_rooms": 8,
+        "acquire_rooms": 3,
+        "weapon_tier_weights": {1: 15, 2: 50, 3: 35}
+    },
+    "3-2": {
+        "boss_map": 1,
+        "enemy_rank_range": (5, 8),
+        "min_f_rooms": 7,
+        "max_f_rooms": 8,
+        "acquire_rooms": 3,
+        "weapon_tier_weights": {1: 10, 2: 45, 3: 45}
+    },
+    "3-3": {
+        "boss_map": 2,
+        "enemy_rank_range": (6, 9),
+        "min_f_rooms": 8,
+        "max_f_rooms": 9,
+        "acquire_rooms": 4,
+        "weapon_tier_weights": {1: 5, 2: 40, 3: 55}
+    },
 }
-CURRENT_STAGE = "2-1"
+CURRENT_STAGE = "3-1"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
@@ -93,6 +117,9 @@ STAGE_PRICE_MULT = {
     "2-1": 1.45,
     "2-2": 1.60,
     "2-3": 1.80,
+    "3-1": 2.00,
+    "3-2": 2.25,
+    "3-3": 2.50,
 }
 
 def get_stage_price_mult(stage=None):
@@ -113,6 +140,7 @@ drone_ammo_up_count = 0
 STAGE_THEME = {
     "1-1": "map1", "1-2": "map1", "1-3": "map1",
     "2-1": "map2", "2-2": "map2", "2-3": "map2",
+    "3-1": "map3", "3-2": "map3", "3-3": "map3",
 }
 
 # Stage2에서 사용할 장애물 파일 세트
