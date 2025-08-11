@@ -231,10 +231,6 @@ class ObstacleManager:
         all_obs = self.static_obstacles + self.combat_obstacles
         for obs in all_obs:
             for collider in obs.colliders:
-                        collider_world_center = (
-                            obs.world_x + collider.center[0],
-                            obs.world_y + collider.center[1]
-                        )
                         if collider.check_collision_circle(circle_center_world, circle_radius, (obs.world_x, obs.world_y)):
                             return True
         return False

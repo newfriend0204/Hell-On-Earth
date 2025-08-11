@@ -928,7 +928,7 @@ class Enemy4(AIBase):
         shield_radius = int(self.radius * 1.2)
         self.shield = ShieldEffect(self, shield_radius, max_hp=200)
         self.shield_break_sound = sounds["enemy4_shield_break"]
-        self.shield_charged_sound = sounds["enemy4_shield_chared"]
+        self.shield_charged_sound = sounds["enemy4_shield_charged"]
 
         self.gun_image_original = images["gun5"]
         self.bullet_image = images["enemy_bullet"]

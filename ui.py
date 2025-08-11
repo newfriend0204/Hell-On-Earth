@@ -25,7 +25,6 @@ KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 KOREAN_FONT_28 = pygame.font.Font(FONT_PATH, 28)
 KOREAN_FONT_25 = pygame.font.Font(FONT_PATH, 25)
 KOREAN_FONT_BOLD_28 = pygame.font.Font(BOLD_FONT_PATH, 28)
-KOREAN_FONT_BOLD_28 = pygame.font.Font(BOLD_FONT_PATH, 28)
 KOREAN_FONT_BOLD_22 = pygame.font.Font(BOLD_FONT_PATH, 22)
 
 TAB_NAMES = ["내 상태", "무기1", "무기2", "무기3", "무기4"]
@@ -54,10 +53,6 @@ def wrap_text(text, font, max_width):
 def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=None, hud_status=None):
     # 대화창 띄우기
     screen_w, screen_h = screen.get_size()
-
-    overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 215))
-    screen.blit(overlay, (0, 0))
 
     box_w = int(screen_w * 0.7)
     box_h = int(screen_h * 0.22)

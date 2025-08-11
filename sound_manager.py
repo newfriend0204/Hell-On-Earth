@@ -91,7 +91,7 @@ def load_sounds():
     weapon_sounds["enemy4_fire"] = weapon_sounds["gun5_fire"]
     weapon_sounds["enemy4_preheat"] = weapon_sounds["gun5_preheat"]
     weapon_sounds["enemy4_shield_break"] = pygame.mixer.Sound(path_sound("Sound", "ShieldBreak.mp3"))
-    weapon_sounds["enemy4_shield_chared"] = pygame.mixer.Sound(path_sound("Sound", "ShieldCharged.mp3"))
+    weapon_sounds["enemy4_shield_charged"] = pygame.mixer.Sound(path_sound("Sound", "ShieldCharged.mp3"))
     weapon_sounds["enemy5_fire"] = weapon_sounds["gun3_fire"]
 
     weapon_sounds["gun1_fire_enemy"].set_volume(0.25)
@@ -100,7 +100,7 @@ def load_sounds():
     weapon_sounds["enemy4_fire"].set_volume(0.2)
     weapon_sounds["enemy4_preheat"].set_volume(0.25)
     weapon_sounds["enemy4_shield_break"].set_volume(0.25)
-    weapon_sounds["enemy4_shield_chared"].set_volume(0.1)
+    weapon_sounds["enemy4_shield_charged"].set_volume(0.1)
     weapon_sounds["enemy5_fire"].set_volume(0.25)
     weapon_sounds["boss1_gun1_fire"].set_volume(0.5)
     weapon_sounds["boss1_gun2_fire"].set_volume(0.5)

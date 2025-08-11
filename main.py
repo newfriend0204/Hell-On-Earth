@@ -38,6 +38,9 @@ BOLD_FONT_PATH = os.path.join(ASSET_DIR, "Font", "SUIT-Bold.ttf")
 KOREAN_FONT_18 = pygame.font.Font(FONT_PATH, 18)
 KOREAN_FONT_BOLD_20 = pygame.font.Font(BOLD_FONT_PATH, 20)
 KOREAN_FONT_BOLD_18 = pygame.font.Font(BOLD_FONT_PATH, 18)
+TITLE_FONT = pygame.font.Font(BOLD_FONT_PATH, 64)
+BUTTON_FONT = pygame.font.Font(BOLD_FONT_PATH, 28)
+SUB_FONT = pygame.font.Font(FONT_PATH, 18)
 
 pygame.mouse.set_visible(False)
 
@@ -98,11 +101,148 @@ defer_combat_banner = {"pending": False, "entry_pos": (0, 0)}
 combat_banner_defer_dist_px = 0
 enemy_counter_fx = {"state": None, "t": 0.0, "slide_in": 300, "fade_out": 300}
 
+TITLE_FONT  = pygame.font.Font(BOLD_FONT_PATH, 64)
+BUTTON_FONT = pygame.font.Font(BOLD_FONT_PATH, 28)
+SUB_FONT    = pygame.font.Font(FONT_PATH, 18)
+
+MENU_BUTTONS = [
+    {"id": "start",   "label": "시작하기"},
+    {"id": "howto",   "label": "조작법"},
+    {"id": "credits", "label": "크레딧"},
+    {"id": "quit",    "label": "나가기"},
+]
+_menu_scales = [1.0 for _ in MENU_BUTTONS]
+_menu_hover  = -1
+
+def _lerp(a, b, t): return a + (b - a) * t
+
+def _draw_button(surface, text, center_xy, hovered=False, scale=1.0):
+    label = BUTTON_FONT.render(text, True, (230, 230, 230))
+    pad_x, pad_y = 28, 14
+    w, h = label.get_width() + pad_x * 2, label.get_height() + pad_y * 2
+    w = int(w * scale); h = int(h * scale)
+    btn = pygame.Surface((w, h), pygame.SRCALPHA)
+    bg = (18, 18, 18, 230) if not hovered else (26, 26, 26, 240)
+    pygame.draw.rect(btn, bg, (0, 0, w, h), border_radius=14)
+    pygame.draw.rect(btn, (200, 200, 200, 90), (0, 0, w, h), width=2, border_radius=16)
+    label = pygame.transform.smoothscale(label, (int(label.get_width()*scale), int(label.get_height()*scale)))
+    btn.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
+    rect = btn.get_rect(center=center_xy)
+    surface.blit(btn, rect)
+    return rect
+
+def _draw_title(surface):
+    lines = ["Hell", "On Earth"]
+    y = 90
+    for i, t in enumerate(lines):
+        surf   = TITLE_FONT.render(t, True, (240, 240, 240))
+        shadow = TITLE_FONT.render(t, True, (0, 0, 0))
+        sx = (SCREEN_WIDTH - surf.get_width()) // 2
+        surface.blit(shadow, (sx+2, y+2))
+        surface.blit(surf,   (sx,   y))
+        y += surf.get_height() + (8 if i == 0 else 0)
+
+HOWTO_LINES = [
+    "조작법", "",
+    "이동: W/A/S/D",
+    "공격: 마우스 좌클릭",
+    "보조 발사: 마우스 우클릭",
+    "근접 공격: V",
+    "무기 교체: 숫자키 (1~0) / 마우스 휠",
+    "상호작용: Space",
+    "무기 상세/탭 UI: Tab",
+]
+
+CREDITS_LINES = [
+    "크레딧", "",
+    "Game Title: Hell On Earth",
+    "Game Design / Programming: 새친",
+    "Assistant: GPT-5 Thinking",
+    "Assets: Project internal assets",
+]
+
+def _draw_text_block(surface, lines, start_y=140):
+    y = start_y
+    for i, line in enumerate(lines):
+        font  = TITLE_FONT if i == 0 else SUB_FONT
+        color = (240, 240, 240) if i == 0 else (210, 210, 210)
+        surf = font.render(line, True, color)
+        x = (SCREEN_WIDTH - surf.get_width()) // 2
+        surface.blit(surf, (x, y))
+        y += surf.get_height() + (14 if i == 0 else 8)
+
+def init_new_game():
+    global grid, current_room_pos, visited_f_rooms, room_portals, current_portal, portal_spawn_at_ms
+    global player_hp_max, player_hp, last_hp_visual, ammo_gauge_max, ammo_gauge, last_ammo_visual
+    global bullets, scattered_bullets, enemies, field_weapons, room_field_weapons, next_room_enter_sound
+    import config, world
+
+    # 진행상황 초기화
+    config.player_score = 0
+    visited_f_rooms = {}
+    room_portals = {}
+    current_portal = None
+    portal_spawn_at_ms = None
+    bullets[:] = []
+    scattered_bullets[:] = []
+    enemies[:] = []
+    field_weapons = []
+    room_field_weapons = {}
+
+    # 스테이지를 1-1로 리셋하고 맵 재생성
+    config.CURRENT_STAGE = "1-1"
+    stage_settings = STAGE_DATA[config.CURRENT_STAGE]
+    world.MIN_F_ROOMS = stage_settings["min_f_rooms"]
+    world.MAX_F_ROOMS = stage_settings["max_f_rooms"]
+    grid = world.generate_map()
+    grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
+    world.initialize_room_states(grid)
+    world.print_grid(grid)
+
+    # 시작 방 좌표 복원
+    s_pos = None
+    for y, row in enumerate(grid):
+        for x, cell in enumerate(row):
+            if cell == 'S':
+                s_pos = (x, y); break
+        if s_pos: break
+    current_room_pos = list(s_pos)
+    world.reveal_neighbors(s_pos[0], s_pos[1], grid)
+
+    # 플레이어 수치 초기화
+    player_hp_max = 200
+    player_hp     = player_hp_max
+    last_hp_visual = float(player_hp)
+    ammo_gauge_max = 300
+    ammo_gauge     = ammo_gauge_max
+    last_ammo_visual = float(ammo_gauge)
+
+    # 현재 방을 재로딩해서 실제 오브젝트/벽/스폰 재설정
+    next_room_enter_sound = None
+    change_room(None)
+
+pause_menu_active = False
+pause_menu_hover  = -1
+pause_scales      = [1.0, 1.0]
+pause_buttons     = [{"id":"resume","label":"계속하기"},{"id":"quit","label":"나가기"}]
+pause_frozen_frame = None
+confirm_quit_active = False
+pause_request = False
+confirm_hover = -1
+confirm_scales = [1.0, 1.0]
+
 dialogue_manager = DialogueManager()
 last_merchant_ms = 0
 mouse_left_released_after_dialogue = False
+mouse_left_released_after_pause = False
+mouse_left_released_after_transition = False
 merchant_pos = None
 npcs = []
+dialogue_capture_request = False
+dialogue_frozen_frame = None
+_pending_dialogue = None
+_pending_dialogue_effect_cb = None
+_pending_dialogue_close_cb = None
 
 obstacle_manager = ObstacleManager(
     # 장애물 관리자 초기화
@@ -389,15 +529,24 @@ def spawn_room_npcs():
                 npcs.append(
                     DoctorNFNPC(
                         images["doctorNF"],
-                        npc_info["x"],
+                        npc_info["x"],  
                         npc_info["y"],
                         doctorNF_dialogue
                     )
                 )
 
 def on_dialogue_close():
-    global mouse_left_released_after_dialogue
-    mouse_left_released_after_dialogue = True
+    global mouse_left_released_after_dialogue, dialogue_frozen_frame
+    dialogue_frozen_frame = None
+    render_game_frame()
+    pygame.display.flip()
+    for b in bullets:
+        if isinstance(b, ExplosionEffectPersistent):
+            b.resume()
+    dialogue_frozen_frame = None
+    screen.set_clip(None)
+    render_game_frame()
+    pygame.display.flip()
 
 space_pressed_last_frame = False
 
@@ -1019,8 +1168,6 @@ def change_room(direction):
         if room_portals.get(room_key, False):
             center_x = world_instance.effective_bg_width / 2
             center_y = world_instance.effective_bg_height / 2
-            # 즉시 생성(재입장 시엔 대기 없이)
-            # 등장 애니메이션은 그대로 적용됨(등장 시각을 지금으로 잡으므로 부드럽게 보임)
             try:
                 img = images["portal"]
                 current_portal = Portal(center_x, center_y, img)
@@ -1127,8 +1274,9 @@ def change_room(direction):
 
     spawn_room_npcs()
 
-    key = next_room_enter_sound if next_room_enter_sound in sounds else "room_move"
-    sounds[key].play()
+    if next_room_enter_sound is not None:
+        key = next_room_enter_sound if next_room_enter_sound in sounds else "room_move"
+        sounds[key].play()
     next_room_enter_sound = "room_move"
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {world.room_states[new_y][new_x]}")
 
@@ -1842,12 +1990,76 @@ while running:
     current_time = pygame.time.get_ticks()
     events = pygame.event.get()
 
-    if mouse_left_released_after_dialogue:
-        if pygame.mouse.get_pressed()[0]:
+    if getattr(config, "game_state", 1) != config.GAME_STATE_PLAYING:
+        for e in events:
+            if e.type == pygame.QUIT:
+                running = False
+        pygame.mouse.set_visible(True)
+        screen.fill((0,0,0))
+        _draw_title(screen)
+
+        if config.game_state == config.GAME_STATE_MENU:
+            cx = SCREEN_WIDTH//2; base_y = 240; gap = 72
+            mouse_pos = pygame.mouse.get_pos()
+            hovered = -1
+            rects = []
+            for i in range(len(MENU_BUTTONS)):
+                _menu_scales[i] = _lerp(_menu_scales[i], 1.08 if _menu_hover==i else 1.0, 0.18)
+            for i, btn in enumerate(MENU_BUTTONS):
+                cy = base_y + i*gap
+                rect = _draw_button(screen, btn["label"], (cx, cy), False, _menu_scales[i])
+                rects.append(rect)
+                if rect.collidepoint(mouse_pos): hovered = i
+            if hovered != -1 and hovered != _menu_hover:
+                sounds["button_select"].play()
+            _menu_hover = hovered
+            for e in events:
+                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and _menu_hover != -1:
+                    sounds["button_click"].play()
+                    bid = MENU_BUTTONS[_menu_hover]["id"]
+                    if bid == "start":
+                        init_new_game()
+                        config.game_state = config.GAME_STATE_PLAYING
+                        pygame.mouse.set_visible(False)
+                    elif bid == "howto":
+                        config.game_state = config.GAME_STATE_HOWTO
+                    elif bid == "credits":
+                        config.game_state = config.GAME_STATE_CREDITS
+                    elif bid == "quit":
+                        running = False
+
+        elif config.game_state in (config.GAME_STATE_HOWTO, config.GAME_STATE_CREDITS):
+            lines = HOWTO_LINES if config.game_state == config.GAME_STATE_HOWTO else CREDITS_LINES
+            _draw_text_block(screen, lines, start_y=140)
+            back_rect = _draw_button(screen, "뒤로", (SCREEN_WIDTH//2, SCREEN_HEIGHT-80), False, 1.0)
+            if back_rect.collidepoint(pygame.mouse.get_pos()):
+                _draw_button(screen, "뒤로", (SCREEN_WIDTH//2, SCREEN_HEIGHT-80), True, 1.08)
+                for e in events:
+                    if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                        sounds["button_click"].play()
+                        config.game_state = config.GAME_STATE_MENU
+            for e in events:
+                if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                    sounds["button_click"].play()
+                    config.game_state = config.GAME_STATE_MENU
+
+        pygame.display.flip()
+        clock.tick(60)
+        continue
+
+    if (mouse_left_released_after_dialogue
+        or mouse_left_released_after_pause
+        or mouse_left_released_after_transition):
+        b = pygame.mouse.get_pressed()
+        if b[0] or b[2]:
             clock.tick(60)
             continue
         else:
+            mouse_left_button_down = False
+            mouse_right_button_down = False
             mouse_left_released_after_dialogue = False
+            mouse_left_released_after_pause = False
+            mouse_left_released_after_transition = False
 
     for event in events:
         # 이벤트 처리
@@ -1866,7 +2078,6 @@ while running:
             elif event.key == pygame.K_d:
                 move_right = True
             elif event.key == pygame.K_SPACE and not dialogue_manager.active:
-                # 1) 포탈 근접 시 다음 스테이지 전환(커튼: 아래->위)
                 if current_portal is not None:
                     player_cx = world_x + player_rect.centerx
                     player_cy = world_y + player_rect.centery
@@ -1874,27 +2085,22 @@ while running:
                         old_surface = screen.copy()
                         def go_next_stage():
                             advance_to_next_stage()
-                            # 스테이지 바뀌면 즉시 한 프레임 렌더(커튼 복귀용)
                             render_game_frame()
                         swipe_curtain_transition(
                             screen, old_surface, go_next_stage, direction="up", duration=0.5
                         )
-                        # 포탈은 스테이지 전환과 함께 리셋됨(advance_to_next_stage에서 정리)
+                        mouse_left_released_after_transition = True
                         continue
                 player_cx = world_x + player_rect.centerx
                 player_cy = world_y + player_rect.centery
                 for npc in npcs:
                     if npc.is_player_near(player_cx, player_cy):
-                        old_surface = screen.copy()
-                        def on_dialogue():
-                            dialogue_manager.start(
-                                npc.dialogue,
-                                on_effect_callback=apply_effect,
-                                close_callback=on_dialogue_close,
-                            )
-                        swipe_curtain_transition(
-                            screen, old_surface, on_dialogue, direction="up", duration=0.45
-                        )
+                        _pending_dialogue = npc.dialogue
+                        _pending_dialogue_effect_cb = apply_effect
+                        _pending_dialogue_close_cb = on_dialogue_close
+                        dialogue_capture_request = True 
+                        mouse_left_released_after_dialogue = True
+                        pygame.mouse.set_visible(False)
                         break
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
@@ -1905,7 +2111,9 @@ while running:
                     pygame.mouse.set_visible(True)
                     tab_menu_selected = 0
                     selected_tab = 0
-                    bullets[:] = [b for b in bullets if not isinstance(b, ExplosionEffectPersistent)]
+                    for b in bullets:
+                        if isinstance(b, ExplosionEffectPersistent):
+                            b.pause()
                     screen.fill((0, 0, 0))
                     world_instance.draw_full(
                         screen, world_x, world_y, shake_offset_x, shake_offset_y,
@@ -1917,6 +2125,32 @@ while running:
                     for bullet in bullets:
                         if isinstance(bullet, ExplosionEffectPersistent):
                             bullet.resume()
+                    mouse_left_released_after_pause = True
+                    screen.set_clip(None)
+                    render_game_frame()
+                    pygame.display.flip()
+            elif event.key == pygame.K_ESCAPE and not dialogue_manager.active:
+                if not pause_menu_active:
+                    pause_request = True
+                else:
+                    pause_menu_active = False
+                    confirm_quit_active = False
+                    pygame.mouse.set_visible(False)
+                    pause_frozen_frame = None
+                    for b in bullets:
+                        if isinstance(b, ExplosionEffectPersistent):
+                            b.resume()
+                    screen.set_clip(None)
+                    render_game_frame()
+                    pygame.display.flip()
+
+                    for b in bullets:
+                        if isinstance(b, ExplosionEffectPersistent):
+                            b.resume()
+                    mouse_left_released_after_pause = True
+                    pause_frozen_frame = None
+                    render_game_frame()
+                    pygame.display.flip()
             elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
                 slot = event.key - pygame.K_1
                 if (not getattr(melee, "active", False)) and 0 <= slot < len(weapons) and current_weapon_index != slot:
@@ -1972,24 +2206,38 @@ while running:
             elif event.key == pygame.K_d:
                 move_right = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                mouse_left_button_down = True
-                if paused:
-                    if hasattr(event, 'pos'):
-                        clicked_tab = handle_tab_click(pygame.mouse.get_pos(), ui_tab_rects, sounds)
-                        if clicked_tab is not None and clicked_tab != selected_tab:
-                            selected_tab = clicked_tab
-            elif event.button == 3:
-                mouse_right_button_down = True
+            # 일시정지 메뉴 또는 대화 중에는 게임용 마우스 플래그를 건드리지 않는다
+            if pause_menu_active or dialogue_manager.active:
+                pass
+            else:
+                if event.button == 1:
+                    mouse_left_button_down = True
+                    if paused:
+                        if hasattr(event, 'pos'):
+                            clicked_tab = handle_tab_click(pygame.mouse.get_pos(), ui_tab_rects, sounds)
+                            if clicked_tab is not None and clicked_tab != selected_tab:
+                                selected_tab = clicked_tab
+                elif event.button == 3:
+                    mouse_right_button_down = True
         elif event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1:
-                mouse_left_button_down = False
-            elif event.button == 3:
-                mouse_right_button_down = False
+            if pause_menu_active or dialogue_manager.active:
+                pass
+            else:
+                if event.button == 1:
+                    mouse_left_button_down = False
+                elif event.button == 3:
+                    mouse_right_button_down = False
 
     if dialogue_manager.active:
+        if dialogue_frozen_frame is not None:
+            screen.blit(dialogue_frozen_frame, (0, 0))
+        else:
+            render_game_frame()
         dialogue_manager.update(events)
         dialogue_manager.set_hud_status(player_hp, player_hp_max, ammo_gauge, ammo_gauge_max)
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        screen.blit(overlay, (0, 0))
         dialogue_manager.draw(screen)
         pygame.display.flip()
         clock.tick(60)
@@ -2020,6 +2268,103 @@ while running:
                 kill_count,
                 len(weapons)
             )
+        pygame.display.flip()
+        clock.tick(60)
+        continue
+
+    if pause_menu_active:
+        if not pygame.mouse.get_visible():
+            pygame.mouse.set_visible(True)
+        if pause_frozen_frame is not None:
+            screen.blit(pause_frozen_frame, (0,0))
+        else:
+            screen.fill((0,0,0))
+            world_instance.draw_full(
+                screen, world_x, world_y, shake_offset_x, shake_offset_y,
+                combat_walls_info, obstacle_manager, expansion
+            )
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0,0,0,160))
+        screen.blit(overlay, (0,0))
+
+        cx, base_y, gap = SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 10, 80
+        mouse_pos = pygame.mouse.get_pos()
+        hovered = -1
+        btn_rects = []
+        for i, btn in enumerate(pause_buttons):
+            target = 1.08 if pause_menu_hover == i else 1.0
+            pause_scales[i] = _lerp(pause_scales[i], target, 0.15)
+        for i, btn in enumerate(pause_buttons):
+            cy = base_y + i*gap
+            rect = _draw_button(screen, btn["label"], (cx, cy), False, pause_scales[i])
+            btn_rects.append(rect)
+            if rect.collidepoint(mouse_pos): hovered = i
+        if hovered != -1 and hovered != pause_menu_hover:
+            sounds["button_select"].play()
+        pause_menu_hover = hovered
+
+        for e in events:
+            if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                if confirm_quit_active:
+                    pass
+                elif pause_menu_hover != -1:
+                    sounds["button_click"].play()
+                    bid = pause_buttons[pause_menu_hover]["id"]
+                    if bid == "resume":
+                        pause_menu_active = False
+                        pygame.mouse.set_visible(False)
+                        for b in bullets:
+                            if isinstance(b, ExplosionEffectPersistent):
+                                b.resume()
+                        mouse_left_released_after_pause = True
+                        pause_frozen_frame = None
+                        render_game_frame()
+                        pygame.display.flip()
+                    elif bid == "quit":
+                        confirm_quit_active = True
+                        confirm_hover = -1
+
+        if confirm_quit_active:
+            popup_w, popup_h = 520, 220
+            popup = pygame.Surface((popup_w, popup_h), pygame.SRCALPHA)
+            pygame.draw.rect(popup, (18,18,18,240), (0,0,popup_w,popup_h), border_radius=16)
+            pygame.draw.rect(popup, (200,200,200,90), (0,0,popup_w,popup_h), width=2, border_radius=18)
+
+            warn = SUB_FONT.render("현재 진행상황이 모두 초기화됩니다!", True, (255, 80, 80))
+            popup.blit(warn, ((popup_w-warn.get_width())//2, 32))
+
+            yes_rect = _draw_button(popup, "예",   (popup_w//2 - 100, popup_h - 60), False, confirm_scales[0])
+            no_rect  = _draw_button(popup, "아니오",(popup_w//2 + 100, popup_h - 60), False, confirm_scales[1])
+            pr = popup.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+            screen.blit(popup, pr.topleft)
+
+            mouse_pos_local = (mouse_pos[0]-pr.left, mouse_pos[1]-pr.top)
+            h = -1
+            if yes_rect.collidepoint(mouse_pos_local): h = 0
+            elif no_rect.collidepoint(mouse_pos_local): h = 1
+            if h != -1 and h != confirm_hover:
+                sounds["button_select"].play()
+            confirm_hover = h
+            for i in range(2):
+                confirm_scales[i] = _lerp(confirm_scales[i], 1.08 if i==confirm_hover else 1.0, 0.16)
+
+            for e in events:
+                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                    if confirm_hover == 0:  # 예
+                        sounds["button_click"].play()
+                        old = screen.copy()
+                        def go_menu():
+                            init_new_game()
+                            import config as _c
+                            _c.game_state = _c.GAME_STATE_MENU
+                            pygame.mouse.set_visible(True)
+                        swipe_curtain_transition(screen, old, go_menu, direction="up", duration=0.5)
+                        pause_menu_active = False
+                        confirm_quit_active = False
+                    elif confirm_hover == 1:
+                        sounds["button_click"].play()
+                        confirm_quit_active = False
+
         pygame.display.flip()
         clock.tick(60)
         continue
@@ -2501,6 +2846,7 @@ while running:
             info["state"] = "hiding"
             info["target_pos"] = info["start_pos"]
 
+    screen.set_clip(None)
     screen.fill((0, 0, 0))
 
     world_instance.draw_full(
@@ -2827,6 +3173,7 @@ while running:
             slide_direction = None
 
     def render_game_frame():
+        screen.set_clip(None)
         screen.fill((0, 0, 0))
 
         world_instance.draw_full(
@@ -2854,6 +3201,7 @@ while running:
             render_game_frame()
         old_surface = screen.copy()
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
+        mouse_left_released_after_transition = True
         continue
 
     score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
@@ -2941,8 +3289,44 @@ while running:
         last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
     draw_combat_indicators(screen, delta_time, minimap_rect)
 
-    cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
-    screen.blit(cursor_image, cursor_rect)
+    if (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING
+        and not pause_menu_active
+        and not paused
+        and not dialogue_manager.active):
+
+        if dialogue_capture_request:
+            dialogue_frozen_frame = screen.copy()
+            for b in bullets:
+                if isinstance(b, ExplosionEffectPersistent):
+                    b.pause()
+            dialogue_manager.start(
+                _pending_dialogue,
+                on_effect_callback=_pending_dialogue_effect_cb,
+                close_callback=_pending_dialogue_close_cb,
+            )
+            _pending_dialogue = None
+            _pending_dialogue_effect_cb = None
+            _pending_dialogue_close_cb = None
+            pygame.mouse.set_visible(False)
+            dialogue_capture_request = False
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+        if pause_request:
+            pause_frozen_frame = screen.copy()
+            pause_menu_active = True
+            confirm_quit_active = False
+            pygame.mouse.set_visible(True)
+            pause_request = False
+            for b in bullets:
+                if isinstance(b, ExplosionEffectPersistent):
+                    b.pause()
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+
+        cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
+        screen.blit(cursor_image, cursor_rect)
 
     pygame.display.flip()
     clock.tick(60)

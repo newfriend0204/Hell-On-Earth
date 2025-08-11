@@ -256,7 +256,7 @@ S2_FIGHT_MAP_1 = { # 디버그
 
 S3_FIGHT_MAP_1 = { # 디버그
     "obstacles": [
-        {"filename": "LavaPond1.png", "x": 100.00, "y": 100.00, "scale": 0.3}
+        {"filename": "Altar1.png", "x": 100.00, "y": 100.00, "scale": 0.3}
     ],
     "enemy_infos": [
     ],

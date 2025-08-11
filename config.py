@@ -7,6 +7,13 @@ PLAYER_VIEW_SCALE = 0.9
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 750
 
+# 게임 메뉴
+GAME_STATE_MENU = 0
+GAME_STATE_PLAYING = 1
+GAME_STATE_HOWTO = 2
+GAME_STATE_CREDITS = 3
+game_state = 1
+
 # 배경 크기
 BG_WIDTH = int(1600 * PLAYER_VIEW_SCALE)
 BG_HEIGHT = int(1200 * PLAYER_VIEW_SCALE)
@@ -108,7 +115,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 5, 2: 40, 3: 55}
     },
 }
-CURRENT_STAGE = "3-1"
+CURRENT_STAGE = "1-1"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,

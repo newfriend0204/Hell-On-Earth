@@ -1205,8 +1205,9 @@ class ExplosionEffectPersistent:
             self._pause_start = time.time()
 
     def resume(self):
-        self._pause_start = None
-        self.finished = True
+        if self._pause_start is not None:
+            self._pause_total += (time.time() - self._pause_start)
+            self._pause_start = None
 
     def update(self):
         # 크기, 투명도 업데이트

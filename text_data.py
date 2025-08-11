@@ -20,7 +20,7 @@ weapon_stats = {
     },
     "gun3": {
         "name": "Remington 870",
-        "power": "8 x 15발",
+        "power": "6 x 12발",
         "spread": 30,
         "cost": 8,
         "rank": "2",
