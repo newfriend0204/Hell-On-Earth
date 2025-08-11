@@ -1351,6 +1351,7 @@ def swipe_transition(screen, old_surface, new_surface, direction="right", durati
     reverse = direction in ("left", "up")
     overlay = make_soft_curtain(width, height, horizontal=(direction in ("left", "right")), direction=direction)
     for i in range(frames + 1):
+        pygame.event.pump()
         t = i / frames
         offset = int((width if horizontal else height) * t)
         screen.fill((0,0,0))
@@ -1421,6 +1422,7 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
     max_offset = (curtain_width if horizontal else curtain_height) - (width if horizontal else height) // 4
 
     for i in range(frames + 1):
+        pygame.event.pump()
         t = i / frames
         t_eased = 1 - (1 - t) ** 2
         offset = int(max_offset * t_eased)
@@ -1455,6 +1457,7 @@ def swipe_curtain_transition(screen, old_surface, draw_new_room_fn, direction="r
     max_offset = (curtain_width if horizontal else curtain_height) - (width if horizontal else height) // 4
 
     for i in range(frames + 1):
+        pygame.event.pump()
         t = i / frames
         t_eased = t ** 2
         offset = int(max_offset * (1 - t_eased))
@@ -2051,12 +2054,7 @@ while running:
         or mouse_left_released_after_pause
         or mouse_left_released_after_transition):
         b = pygame.mouse.get_pressed()
-        if b[0] or b[2]:
-            clock.tick(60)
-            continue
-        else:
-            mouse_left_button_down = False
-            mouse_right_button_down = False
+        if not (b[0] or b[2]):
             mouse_left_released_after_dialogue = False
             mouse_left_released_after_pause = False
             mouse_left_released_after_transition = False
@@ -2090,7 +2088,6 @@ while running:
                             screen, old_surface, go_next_stage, direction="up", duration=0.5
                         )
                         mouse_left_released_after_transition = True
-                        continue
                 player_cx = world_x + player_rect.centerx
                 player_cy = world_y + player_rect.centery
                 for npc in npcs:
@@ -2745,6 +2742,11 @@ while running:
         if not changing_weapon:
             effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon)
             effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
+            if (mouse_left_released_after_dialogue
+                or mouse_left_released_after_pause
+                or mouse_left_released_after_transition):
+                effective_left = False
+                effective_right = False
 
             # 탄약 부족 시 자동 근접(칼) 발동
             fallback_to_melee = False
@@ -3202,7 +3204,6 @@ while running:
         old_surface = screen.copy()
         swipe_curtain_transition(screen, old_surface, draw_new_room, direction=slide_direction, duration=0.5)
         mouse_left_released_after_transition = True
-        continue
 
     score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
     pygame.draw.rect(score_box, (255, 255, 255, 120), score_box.get_rect(), border_radius=14)
