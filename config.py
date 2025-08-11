@@ -137,8 +137,8 @@ def get_stage_price_mult(stage=None):
 DRONE_HP_MAX_STEP = 20
 DRONE_AMMO_MAX_STEP = 20
 # 시작 비용(악의 정수), 업그레이드할수록 성장률로 증가
-DRONE_HP_UP_BASE_COST = 800
-DRONE_AMMO_UP_BASE_COST = 700
+DRONE_HP_UP_BASE_COST = 30
+DRONE_AMMO_UP_BASE_COST = 30
 DRONE_COST_GROWTH = 1.35
 # 누적 업그레이드 횟수(런타임 저장용)
 drone_hp_up_count = 0

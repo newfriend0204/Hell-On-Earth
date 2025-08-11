@@ -28,7 +28,7 @@ def load_sounds():
     knife_use = pygame.mixer.Sound(path_sound("Sound", "Gun", "KnifeUse.mp3"))
     knife_kill = pygame.mixer.Sound(path_sound("Sound", "Gun", "KnifeKill.mp3"))
     knife_use.set_volume(0.6)
-    knife_kill.set_volume(0.7)
+    knife_kill.set_volume(1)
 
     weapon_sounds = {
         "boss1_gun1_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Boss1Gun1Fire.mp3")),
