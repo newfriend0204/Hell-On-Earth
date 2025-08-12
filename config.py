@@ -150,13 +150,6 @@ STAGE_THEME = {
     "3-1": "map3", "3-2": "map3", "3-3": "map3",
 }
 
-# Stage2에서 사용할 장애물 파일 세트
-STAGE2_OBSTACLE_FILES = [
-    "Vehicle1.png","Vehicle2.png","Vehicle3.png","Vehicle4.png",
-    "Barricade1.png","Dump1.png","Dump2.png",
-    "ElectricBox1.png","FirePlug1.png","Hole1.png","TrashCan1.png"
-]
-
 TIER_PRICES = {
     1: 20,
     2: 40,

@@ -470,9 +470,10 @@ kill_count = 0
 boss_intro_active = False
 boss_intro_shown_this_entry = False
 boss_intro_start_ms = 0
-boss_intro_approach_ms = 900
-boss_intro_pause_ms = 3000
-boss_intro_exit_ms = 900
+boss_intro_approach_ms = 450
+boss_intro_pause_ms = 3600
+boss_intro_exit_ms = 450
+BOSS_PULSE_MS = 400
 boss_intro_duration = boss_intro_approach_ms + boss_intro_pause_ms + boss_intro_exit_ms
 _boss_left_surf = None
 _boss_right_block = None
@@ -518,6 +519,7 @@ class ShopItem:
 room_shop_items = {}
 shop_items = []
 room_drone_rooms = {}
+room_acquire_type = {}
 
 def spawn_room_npcs():
     # NPC 소환
@@ -936,7 +938,7 @@ def _collect_all_dropped_items_instant():
 
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound, boss_intro_shown_this_entry
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound, boss_intro_shown_this_entry, shop_items, room_acquire_type
     
     current_portal = None
     _collect_all_dropped_items_instant()
@@ -1060,12 +1062,15 @@ def change_room(direction):
     )
 
     room_key = (new_x, new_y)
+    shop_items = []
     if new_room_type != 'A':
         field_weapons.clear()
         field_weapons.extend(room_field_weapons.get(room_key, []))
 
     if new_room_type == 'A':
-        acquire_index = random.randint(2, 4)  # 2면 무기방, 3이면 상점방, 4이면 드론방
+        if room_key not in room_acquire_type:
+            room_acquire_type[room_key] = random.randint(2, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
+        acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
@@ -1396,7 +1401,7 @@ def _start_boss_intro():
     boss_intro_start_ms = pygame.time.get_ticks()
     left_title = "보스 등장!"
     _boss_left_surf = TITLE_FONT.render(left_title, True, (245, 245, 245))
-    header = _render_multiline(KOREAN_FONT_BOLD_20, "현재 스테이지", (240, 240, 240))
+    header = _render_multiline(KOREAN_FONT_BOLD_20, f"{config.CURRENT_STAGE}", (240, 240, 240))
     tip_text = BOSS_TIPS.get(config.CURRENT_STAGE, "데이터 없음.\n패턴을 관찰하세요.")
     tip_block = _render_multiline(KOREAN_FONT_18, tip_text, (220, 220, 220))
     w = max(header.get_width(), tip_block.get_width())
@@ -1413,21 +1418,48 @@ def _draw_boss_intro(screen):
     u = min(1.0, t / boss_intro_duration)
     k = _progress_with_pause_timebased(
         t, boss_intro_approach_ms, boss_intro_pause_ms, boss_intro_exit_ms,
-        p=0.45, q=0.55
+        p=0.495, q=0.505
     )
-    wobble = 6 * math.sin(u * math.pi * 4.0)
 
     L = _boss_left_surf.get_width()
     left_x0 = -L - 50
     left_x1 = SCREEN_WIDTH + 50
-    left_y = SCREEN_HEIGHT * 0.25 + wobble
+    left_y = int(SCREEN_HEIGHT * 0.25)
     left_x = int(_lerp(left_x0, left_x1, k))
-    screen.blit(_boss_left_surf, (left_x, left_y))
+
+    pulse_scale = 1.0
+    if boss_intro_approach_ms <= t < boss_intro_approach_ms + BOSS_PULSE_MS:
+        w = (t - boss_intro_approach_ms) / float(BOSS_PULSE_MS)
+        pulse_scale = 1.0 + 0.06 * math.sin(math.pi * w)
+
+    left_surf_to_draw = _boss_left_surf
+    if abs(pulse_scale - 1.0) > 1e-3:
+        lw, lh = _boss_left_surf.get_size()
+        sw, sh = max(1, int(lw * pulse_scale)), max(1, int(lh * pulse_scale))
+        left_surf_to_draw = pygame.transform.smoothscale(_boss_left_surf, (sw, sh))
+        screen.blit(left_surf_to_draw, (left_x, left_y - (sh - lh) // 2))
+    else:
+        screen.blit(left_surf_to_draw, (left_x, left_y))
+
+    in_pause = (boss_intro_approach_ms <= t < boss_intro_approach_ms + boss_intro_pause_ms)
+    if in_pause:
+        tw, th = left_surf_to_draw.get_size()
+        text_rect = pygame.Rect(left_x, left_y, tw, th)
+        cx, cy = text_rect.centerx, text_rect.centery
+        blink = (math.sin(now * 0.012) + 1.0) * 0.5
+        a = int(70 + 40 * blink)
+        mw, mh = 18, 14
+        left_tri = pygame.Surface((mw, mh), pygame.SRCALPHA)
+        pygame.draw.polygon(left_tri, (240, 240, 240, a), [(mw, mh // 2), (0, 0), (0, mh)])
+        right_tri = pygame.Surface((mw, mh), pygame.SRCALPHA)
+        pygame.draw.polygon(right_tri, (240, 240, 240, a), [(0, mh // 2), (mw, 0), (mw, mh)])
+        screen.blit(left_tri,  (text_rect.left  - mw - 10, cy - mh // 2))
+        screen.blit(right_tri, (text_rect.right + 10,      cy - mh // 2))
 
     R = _boss_right_block.get_width()
     right_x0 = SCREEN_WIDTH + 50
     right_x1 = -R - 50
-    right_y = SCREEN_HEIGHT * 0.58 - _boss_right_block.get_height()//2 + wobble
+    right_y = int(SCREEN_HEIGHT * 0.58 - _boss_right_block.get_height() // 2)
     right_x = int(_lerp(right_x0, right_x1, k))
     screen.blit(_boss_right_block, (right_x, right_y))
 
@@ -3064,7 +3096,7 @@ while running:
         near = fw.is_player_near(player_center_x, player_center_y)
         fw.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_near=near)
 
-    if shop_items:
+    if grid[current_room_pos[1]][current_room_pos[0]] == 'A' and shop_items:
         for shop_item in shop_items:
             if shop_item.purchased:
                continue
