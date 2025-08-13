@@ -1,6 +1,6 @@
 START_MAP = {
     "obstacles": [],
-    "enemy_infos": [{"x": 1080, "y": 810, "enemy_type": "enemy10"}],
+    "enemy_infos": [],#[{"x": 200, "y": 200, "enemy_type": "enemy10"}], 적 스폰 테스트용
     "npc_infos": [
         {"x": 100, "y": 100, "npc_type": "doctorNF_npc"}
     ],

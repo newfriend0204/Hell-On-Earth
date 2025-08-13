@@ -77,10 +77,8 @@ _retry_requested = False
 _exit_requested  = False
 
 START_WEAPONS = [
-    WEAPON_CLASSES[3],
-    WEAPON_CLASSES[4],
-    WEAPON_CLASSES[14],
-    WEAPON_CLASSES[16],
+    WEAPON_CLASSES[0],
+    WEAPON_CLASSES[1],
 ]
 
 def _apply_stage_theme_images():
@@ -1269,9 +1267,13 @@ def change_room(direction):
     config.dropped_items.clear()
     config.global_enemy_bullets.clear()
     config.effects.clear()
+    if hasattr(config, "active_mines"):
+        config.active_mines.clear()
     for enemy in enemies:
         if hasattr(enemy, "scattered_bullets"):
             enemy.scattered_bullets.clear()
+        if hasattr(enemy, "stop_sounds_on_remove"):
+            enemy.stop_sounds_on_remove()
 
     enemies = []
     rank_min, rank_max = STAGE_DATA[config.CURRENT_STAGE]["enemy_rank_range"]

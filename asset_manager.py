@@ -74,6 +74,24 @@ def load_images():
     gun20_img = pygame.image.load(path_image("image", "Gun", "Gun20Player.png")).convert_alpha()
     gun20_img = pygame.transform.smoothscale(gun20_img, (30, int(gun20_img.get_height() * (30 / gun20_img.get_width()))))
 
+    gun21_img = pygame.image.load(path_image("image", "Gun", "Gun21Player.png")).convert_alpha()
+    gun21_img = pygame.transform.smoothscale(gun21_img, (55, int(gun21_img.get_height() * (55 / gun21_img.get_width()))))
+
+    gun22_img = pygame.image.load(path_image("image", "Gun", "Gun22Player.png")).convert_alpha()
+    gun22_img = pygame.transform.smoothscale(gun22_img, (55, int(gun22_img.get_height() * (55 / gun22_img.get_width()))))
+
+    gun23_img = pygame.image.load(path_image("image", "Gun", "Gun23Player.png")).convert_alpha()
+    gun23_img = pygame.transform.smoothscale(gun23_img, (55, int(gun23_img.get_height() * (55 / gun23_img.get_width()))))
+
+    gun24_img = pygame.image.load(path_image("image", "Gun", "Gun24Player.png")).convert_alpha()
+    gun24_img = pygame.transform.smoothscale(gun24_img, (55, int(gun24_img.get_height() * (55 / gun24_img.get_width()))))
+
+    gun25_img = pygame.image.load(path_image("image", "Gun", "Gun25Player.png")).convert_alpha()
+    gun25_img = pygame.transform.smoothscale(gun25_img, (55, int(gun25_img.get_height() * (55 / gun25_img.get_width()))))
+
+    gun26_img = pygame.image.load(path_image("image", "Gun", "Gun26Player.png")).convert_alpha()
+    gun26_img = pygame.transform.smoothscale(gun26_img, (55, int(gun26_img.get_height() * (55 / gun26_img.get_width()))))
+
     boss1gun1_img = pygame.image.load(path_image("image", "Gun", "Boss1Gun1.png")).convert_alpha()
     boss1gun1_img = pygame.transform.smoothscale(boss1gun1_img, (50, int(boss1gun1_img.get_height() * (50 / boss1gun1_img.get_width()))))
 
@@ -91,6 +109,9 @@ def load_images():
 
     explosion_img = pygame.image.load(path_image("image", "Gun", "Explosion.png")).convert_alpha()
     explosion_img = pygame.transform.smoothscale(explosion_img, (200, 200))
+
+    mine_img = pygame.image.load(path_image("image", "entity", "Mine.png")).convert_alpha()
+    mine_img = pygame.transform.smoothscale(mine_img, (36, 36))
 
     # 탄환 이미지 크기 조정
     bullet1_img = pygame.image.load(path_image("image", "Gun", "Bullet1.png")).convert_alpha()
@@ -265,6 +286,9 @@ def load_images():
     enemy10_img = pygame.image.load(path_image("image", "character", "Enemy10.png")).convert_alpha()
     enemy10_img = pygame.transform.smoothscale(enemy10_img, (90, 90))
 
+    enemy11_img = pygame.image.load(path_image("image", "character", "Enemy11.png")).convert_alpha()
+    enemy11_img = pygame.transform.smoothscale(enemy11_img, (110, 110))
+
     boss1_img = pygame.image.load(path_image("image", "character", "Boss1.png")).convert_alpha()
     boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
 
@@ -315,6 +339,12 @@ def load_images():
         "gun18": gun18_img,
         "gun19": gun19_img,
         "gun20": gun20_img,
+        "gun21": gun21_img,
+        "gun22": gun22_img,
+        "gun23": gun23_img,
+        "gun24": gun24_img,
+        "gun25": gun25_img,
+        "gun26": gun26_img,
         "boss1gun1": boss1gun1_img,
         "boss1gun2": boss1gun2_img,
         "bullet1": bullet1_img,
@@ -339,6 +369,7 @@ def load_images():
         "enemy8": enemy8_img,
         "enemy9": enemy9_img,
         "enemy10": enemy10_img,
+        "enemy11": enemy11_img,
         "boss1": boss1_img,
         "boss2": boss2_img,
         "drone": drone_img,
@@ -346,6 +377,7 @@ def load_images():
         "flame_pillar": flame_pillar_img,
         "acid_projectile": acid_projectile_img,
         "acid_pool": acid_pool_img,
+        "mine": mine_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,
@@ -508,6 +540,42 @@ def load_weapon_assets(images):
             "bullets": [images["hand_grenade"]],
             "cartridges": [],
             "explosion": images["explosion1"]
+        },
+        "gun21": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun21.png")).convert_alpha(),
+            "topdown": images["gun21"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun22": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun22.png")).convert_alpha(),
+            "topdown": images["gun22"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun23": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun23.png")).convert_alpha(),
+            "topdown": images["gun23"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun24": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun24.png")).convert_alpha(),
+            "topdown": images["gun24"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun25": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun25.png")).convert_alpha(),
+            "topdown": images["gun25"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
+        },
+        "gun26": {
+            "front": pygame.image.load(os.path.join(ASSET_DIR, "image", "Gun", "Gun26.png")).convert_alpha(),
+            "topdown": images["gun26"],
+            "bullets": [images["bullet1"]],
+            "cartridges": [images["cartridge_case1"]],
         },
     }
     return weapons

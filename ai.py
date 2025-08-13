@@ -1845,6 +1845,316 @@ class Enemy9(AIBase):
         rect = rotated_img.get_rect(center=(screen_x, screen_y))
         screen.blit(rotated_img, rect)
 
+class Enemy10(AIBase):
+    rank = 6
+
+    DETECT_MIN = 0
+    DETECT_MAX = 1400 * PLAYER_VIEW_SCALE
+    LASER_TRACK_TIME = 1000
+    FIRE_DURATION = 3000
+    OVERHEAT_TIME = 1500
+    FIRE_INTERVAL = 75
+    ROT_SPEED_TRACK = math.radians(100)
+    ROT_SPEED_FIRE = math.radians(80)
+    BULLET_SPEED = 14 * PLAYER_VIEW_SCALE
+    BULLET_RANGE = 700 * PLAYER_VIEW_SCALE
+    BULLET_DAMAGE = 7
+    LASER_THICKNESS = 2
+    LASER_COLOR = (255, 0, 0)
+
+    DEATH_EXPL_RADIUS = 180 * PLAYER_VIEW_SCALE
+    DEATH_EXPL_DMG_MAX = 35
+    DEATH_EXPL_DMG_MIN = 12
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=0.0,
+            near_threshold=0,
+            far_threshold=self.DETECT_MAX,
+            radius=30,
+            push_strength=0.18,
+            alert_duration=800,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+
+        self.image_original = images.get("enemy10", images["enemy2"])
+        self.gun_image_original = images.get("gun5", None)
+
+        self.bullet_image = images["enemy_bullet"]
+        self.explosion_image = images["explosion1"]
+
+        self.fire_sound      = sounds["gun5_fire"]
+        self.preheat_sound   = sounds["gun5_preheat"]
+        self.overheat_sound  = sounds["gun5_overheat"]
+        self.alert_sound     = sounds["drone_warning"]
+        self.explosion_sound = sounds["gun6_explosion"]
+
+        self.state = "IDLE"
+        self.state_started_at = pygame.time.get_ticks()
+        self.last_update_time = self.state_started_at
+        self.last_fire_time = 0
+        self.show_alert = False
+
+        self.direction_angle = 0.0
+        self.current_distance = 36 * PLAYER_VIEW_SCALE
+        self.muzzle_extra    = 12 * PLAYER_VIEW_SCALE
+
+        self.laser_endpoint_world = None
+        self._alert_channel = None
+
+        self.smokes = []
+        self._last_smoke_time = 0
+
+        self.kill_callback = kill_callback
+        self.hp = 350
+
+    def hit(self, damage, blood_effects, force=False):
+        if not force:
+            damage = int(round(damage * 0.8))
+        super().hit(damage, [], force=force) # 기계이므로 피가 안튀김
+
+    def _muzzle_world_pos(self):
+        mx = self.world_x + math.cos(self.direction_angle) * (self.current_distance + self.muzzle_extra)
+        my = self.world_y + math.sin(self.direction_angle) * (self.current_distance + self.muzzle_extra)
+        return mx, my
+
+    @staticmethod
+    def _angle_lerp(current, target, max_delta):
+        diff = (target - current + math.pi) % (2 * math.pi) - math.pi
+        if abs(diff) <= max_delta:
+            return target
+        return current + (max_delta if diff > 0 else -max_delta)
+
+    def _compute_laser_endpoint(self, player_world_pos):
+        start = self._muzzle_world_pos()
+        angle = self.direction_angle
+        step = 8 * PLAYER_VIEW_SCALE
+        max_dist = self.BULLET_RANGE
+
+        px, py = player_world_pos
+        last_pt = start
+
+        def hit_player(pt):
+            return (pt[0]-px)**2 + (pt[1]-py)**2 <= (25*PLAYER_VIEW_SCALE)**2
+
+        def collides(pt):
+            if not hasattr(config, "obstacle_manager") or config.obstacle_manager is None:
+                return False
+            ox, oy = pt
+            r_small = 2 * PLAYER_VIEW_SCALE
+            for obs in (config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles):
+                for c in getattr(obs, "colliders", []):
+                    if getattr(c, "bullet_passable", False):
+                        continue
+                    cx = obs.world_x + getattr(c, "center", (0,0))[0]
+                    cy = obs.world_y + getattr(c, "center", (0,0))[1]
+                    shape = getattr(c, "shape", None)
+                    if shape == "circle":
+                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), c.size):
+                            return True
+                    elif shape == "ellipse":
+                        try: rx, ry = c.size
+                        except: continue
+                        if self.check_ellipse_circle_collision((ox,oy), r_small, (cx,cy), rx, ry):
+                            return True
+                    elif shape == "rectangle":
+                        try: w, h = c.size
+                        except: continue
+                        coll_r = ((w/2)**2 + (h/2)**2) ** 0.5
+                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), coll_r):
+                            return True
+            return False
+
+        dist = 0.0
+        while dist <= max_dist:
+            pt = (start[0] + math.cos(angle) * dist,
+                  start[1] + math.sin(angle) * dist)
+            if hit_player(pt):
+                return pt
+            if collides(pt):
+                return last_pt
+            last_pt = pt
+            dist += step
+        return last_pt
+
+    def _spawn_smoke(self, count=1):
+        mx, my = self._muzzle_world_pos()
+        for _ in range(count):
+            a = self.direction_angle + math.pi + random.uniform(-0.6, 0.6)
+            spd = random.uniform(0.5, 1.5) * PLAYER_VIEW_SCALE
+            self.smokes.append({
+                "x": mx, "y": my,
+                "vx": math.cos(a)*spd, "vy": math.sin(a)*spd - 0.2*PLAYER_VIEW_SCALE,
+                "r": random.uniform(5, 10) * PLAYER_VIEW_SCALE,
+                "alpha": 180,
+                "decay": random.uniform(2.0, 3.5),
+            })
+
+    def _update_smokes(self, dt_ms):
+        alive = []
+        for s in self.smokes:
+            s["x"] += s["vx"]
+            s["y"] += s["vy"]
+            s["r"] *= 1.01
+            s["alpha"] -= s["decay"]
+            if s["alpha"] > 5:
+                alive.append(s)
+        self.smokes = alive
+
+    def _fire_once(self):
+        mx, my = self._muzzle_world_pos()
+        px = mx + math.cos(self.direction_angle) * self.BULLET_RANGE
+        py = my + math.sin(self.direction_angle) * self.BULLET_RANGE
+        bullet = Bullet(
+            mx, my, px, py,
+            spread_angle_degrees=3,
+            bullet_image=self.bullet_image,
+            speed=self.BULLET_SPEED,
+            max_distance=self.BULLET_RANGE,
+            damage=self.BULLET_DAMAGE
+        )
+        bullet.trail_enabled = False
+        bullet.owner = self
+        config.global_enemy_bullets.append(bullet)
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        dt = now - getattr(self, "last_update_time", now)
+        self.last_update_time = now
+
+        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
+        dx = player_world_pos[0] - self.world_x
+        dy = player_world_pos[1] - self.world_y
+        dist = math.hypot(dx, dy)
+        target_angle = math.atan2(dy, dx)
+
+        if self.state == "IDLE":
+            self.show_alert = False
+            self.laser_endpoint_world = None
+            if dist <= self.DETECT_MAX:
+                self.state = "TRACKING"
+                self.state_started_at = now
+                self.show_alert = True
+                try: self.preheat_sound.play()
+                except: pass
+                try:
+                    if self._alert_channel is None or not self._alert_channel.get_busy():
+                        ch = pygame.mixer.find_channel()
+                        if ch:
+                            ch.play(self.alert_sound)
+                            self._alert_channel = ch
+                except: pass
+
+        if self.state == "TRACKING":
+            max_delta = self.ROT_SPEED_TRACK * (dt / 1000.0)
+            self.direction_angle = self._angle_lerp(self.direction_angle, target_angle, max_delta)
+            self.laser_endpoint_world = self._compute_laser_endpoint(player_world_pos)
+
+            if not (dist <= self.DETECT_MAX):
+                self.state = "IDLE"
+                self.show_alert = False
+                if self._alert_channel and self._alert_channel.get_busy():
+                    self._alert_channel.stop()
+                self.laser_endpoint_world = None
+
+            elif now - self.state_started_at >= self.LASER_TRACK_TIME:
+                self.state = "FIRING"
+                self.state_started_at = now
+                self.last_fire_time = now
+                self.show_alert = False
+                if self._alert_channel and self._alert_channel.get_busy():
+                    self._alert_channel.stop()
+
+        elif self.state == "FIRING":
+            max_delta = self.ROT_SPEED_FIRE * (dt / 1000.0)
+            self.direction_angle = self._angle_lerp(self.direction_angle, target_angle, max_delta)
+
+            while now - self.last_fire_time >= self.FIRE_INTERVAL:
+                self.last_fire_time += self.FIRE_INTERVAL
+                self._fire_once()
+                try: self.fire_sound.play()
+                except: pass
+
+            if now - self.state_started_at >= self.FIRE_DURATION:
+                self.state = "OVERHEAT"
+                self.state_started_at = now
+                self.laser_endpoint_world = None
+                try: self.overheat_sound.play()
+                except: pass
+                self._spawn_smoke(count=4)
+
+        elif self.state == "OVERHEAT":
+            self._update_smokes(dt)
+            if now - self._last_smoke_time >= 120:
+                self._last_smoke_time = now
+                self._spawn_smoke(count=1)
+            if now - self.state_started_at >= self.OVERHEAT_TIME:
+                self.state = "IDLE"
+                self.smokes.clear()
+                self.laser_endpoint_world = None
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+
+        base_rect = self.image_original.get_rect(center=(screen_x, screen_y))
+        screen.blit(self.image_original, base_rect)
+
+        if self.gun_image_original is not None:
+            barrel = pygame.transform.rotate(self.gun_image_original, -math.degrees(self.direction_angle) - 90)
+            bx = self.world_x + math.cos(self.direction_angle) * self.current_distance
+            by = self.world_y + math.sin(self.direction_angle) * self.current_distance
+            barrel_rect = barrel.get_rect(center=(bx - world_x + shake_offset_x, by - world_y + shake_offset_y))
+            screen.blit(barrel, barrel_rect)
+
+        if self.state == "TRACKING" and self.laser_endpoint_world is not None:
+            mx, my = self._muzzle_world_pos()
+            sx = int(mx - world_x + shake_offset_x)
+            sy = int(my - world_y + shake_offset_y)
+            ex = int(self.laser_endpoint_world[0] - world_x + shake_offset_x)
+            ey = int(self.laser_endpoint_world[1] - world_y + shake_offset_y)
+            pygame.draw.line(screen, self.LASER_COLOR, (sx, sy), (ex, ey), self.LASER_THICKNESS)
+
+        self.draw_alert(screen, screen_x, screen_y)
+
+        if self.state == "OVERHEAT" and self.smokes:
+            for s in self.smokes:
+                r = max(1, int(s["r"]))
+                surf = pygame.Surface((r*2+2, r*2+2), pygame.SRCALPHA)
+                pygame.draw.circle(surf, (80,80,80, int(max(0, min(255, s["alpha"])))), (r+1, r+1), r)
+                screen.blit(surf, (s["x"] - r - world_x + shake_offset_x, s["y"] - r - world_y + shake_offset_y))
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+
+        if self._alert_channel and self._alert_channel.get_busy():
+            self._alert_channel.stop()
+
+        try: self.explosion_sound.play()
+        except: pass
+        config.effects.append(ExplosionEffectPersistent(self.world_x, self.world_y, self.explosion_image))
+
+        if hasattr(config, "player_rect"):
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            dist = math.hypot(px - self.world_x, py - self.world_y)
+            if dist <= self.DEATH_EXPL_RADIUS and hasattr(config, "damage_player"):
+                factor = max(0.0, min(1.0, 1.0 - dist / self.DEATH_EXPL_RADIUS))
+                dmg = int(round(self.DEATH_EXPL_DMG_MIN + (self.DEATH_EXPL_DMG_MAX - self.DEATH_EXPL_DMG_MIN) * factor))
+                config.damage_player(dmg)
+
+        super().die([])
+
+    def stop_sounds_on_remove(self):
+        if self._alert_channel and self._alert_channel.get_busy():
+            self._alert_channel.stop()
+
 class Boss1(AIBase):
     rank=10
 

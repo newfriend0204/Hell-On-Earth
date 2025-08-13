@@ -67,6 +67,12 @@ def load_sounds():
         "gun19_defend": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun19Defend.mp3")),
         "gun20_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun20Fire.mp3")),
         "gun20_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun20Explosion.mp3")),
+        "gun21_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun21Fire.mp3")),
+        "gun22_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun22Fire.mp3")),
+        "gun23_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun23Fire.mp3")),
+        "gun24_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun24Fire.mp3")),
+        "gun25_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun25Fire.mp3")),
+        "gun26_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun26Fire.mp3")),
     }
 
     entity_sounds = {
@@ -77,6 +83,9 @@ def load_sounds():
         "flame_pillar": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlamePillar.mp3")),
         "acid": pygame.mixer.Sound(path_sound("Sound", "Entity", "Acid.mp3")),
         "portal_enter": pygame.mixer.Sound(path_sound("Sound", "Entity", "PortalEnter.mp3")),
+        "mine_plant": pygame.mixer.Sound(path_sound("Sound", "Entity", "MinePlant.mp3")),
+        "mine_activate": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineActivate.mp3")),
+        "mine_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineExplosion.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

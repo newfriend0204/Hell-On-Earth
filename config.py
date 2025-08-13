@@ -36,11 +36,7 @@ STAGE_DATA = {
         "min_f_rooms": 5,
         "max_f_rooms": 6,
         "acquire_rooms": 2,
-        "weapon_tier_weights": {
-            1: 60,
-            2: 30,
-            3: 10
-        }
+        "weapon_tier_weights": {1: 58, 2: 28, 3: 14}
     },
     "1-2": {
         "boss_map": 1,
@@ -48,11 +44,7 @@ STAGE_DATA = {
         "min_f_rooms": 5,
         "max_f_rooms": 6,
         "acquire_rooms": 2,
-        "weapon_tier_weights": {
-            1: 50,
-            2: 40,
-            3: 10
-        }
+        "weapon_tier_weights": {1: 55, 2: 33, 3: 12}
     },
     "1-3": {
         "boss_map": 2,
@@ -60,11 +52,7 @@ STAGE_DATA = {
         "min_f_rooms": 6,
         "max_f_rooms": 7,
         "acquire_rooms": 3,
-        "weapon_tier_weights": {
-            1: 40,
-            2: 40,
-            3: 20
-        }
+        "weapon_tier_weights": {1: 42, 2: 38, 3: 18, 4: 2}
     },
     "2-1": {
         "boss_map": 0,
@@ -72,7 +60,7 @@ STAGE_DATA = {
         "min_f_rooms": 5,
         "max_f_rooms": 6,
         "acquire_rooms": 2,
-        "weapon_tier_weights": { 1: 30, 2: 50, 3: 20 }
+        "weapon_tier_weights": {1: 22, 2: 52, 3: 22, 4: 4}
     },
     "2-2": {
         "boss_map": 1,
@@ -80,7 +68,7 @@ STAGE_DATA = {
         "min_f_rooms": 6,
         "max_f_rooms": 7,
         "acquire_rooms": 2,
-        "weapon_tier_weights": { 1: 25, 2: 55, 3: 20 }
+        "weapon_tier_weights": {1: 12, 2: 50, 3: 32, 4: 6}
     },
     "2-3": {
         "boss_map": 2,
@@ -88,7 +76,7 @@ STAGE_DATA = {
         "min_f_rooms": 6,
         "max_f_rooms": 8,
         "acquire_rooms": 3,
-        "weapon_tier_weights": { 1: 20, 2: 55, 3: 25 }
+        "weapon_tier_weights": {1: 8, 2: 45, 3: 38, 4: 9}
     },
     "3-1": {
         "boss_map": 0,
@@ -96,7 +84,7 @@ STAGE_DATA = {
         "min_f_rooms": 6,
         "max_f_rooms": 8,
         "acquire_rooms": 3,
-        "weapon_tier_weights": {1: 15, 2: 50, 3: 35}
+        "weapon_tier_weights": {1: 4, 2: 32, 3: 46, 4: 15, 5: 3}
     },
     "3-2": {
         "boss_map": 1,
@@ -104,7 +92,7 @@ STAGE_DATA = {
         "min_f_rooms": 7,
         "max_f_rooms": 8,
         "acquire_rooms": 3,
-        "weapon_tier_weights": {1: 10, 2: 45, 3: 45}
+        "weapon_tier_weights": {1: 1, 2: 22, 3: 46, 4: 24, 5: 7}
     },
     "3-3": {
         "boss_map": 2,
@@ -112,7 +100,7 @@ STAGE_DATA = {
         "min_f_rooms": 8,
         "max_f_rooms": 9,
         "acquire_rooms": 4,
-        "weapon_tier_weights": {1: 5, 2: 40, 3: 55}
+        "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
 CURRENT_STAGE = "1-1"
@@ -152,10 +140,10 @@ STAGE_THEME = {
 
 TIER_PRICES = {
     1: 20,
-    2: 40,
-    3: 80,
-    4: 120,
-    5: 200
+    2: 35,
+    3: 50,
+    4: 65,
+    5: 80
 }
 
 combat_state = False
@@ -174,3 +162,4 @@ blood_effects = []
 dropped_items = []
 score_gain_texts = []
 effects = []
+active_mines = []
