@@ -86,6 +86,7 @@ def load_sounds():
         "mine_plant": pygame.mixer.Sound(path_sound("Sound", "Entity", "MinePlant.mp3")),
         "mine_activate": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineActivate.mp3")),
         "mine_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineExplosion.mp3")),
+        "spawn_enemy": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnEnemy.mp3")), 
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

@@ -782,7 +782,7 @@ def try_pickup_weapon():
 
 def damage_player(amount):
     # 디버그, 무적
-    return
+    #return
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
     global player_dead, death_started_ms
@@ -837,7 +837,6 @@ def init_weapon_ui_cache(weapons):
     slot_height = 54
     slot_alpha = 180
 
-    surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
     surface = pygame.Surface((slot_width, slot_height), pygame.SRCALPHA)
     surface.fill((0, 0, 0, 0))
     pygame.draw.rect(surface, (200, 200, 200, slot_alpha), (0, 0, slot_width, slot_height), border_radius=10)

@@ -289,6 +289,27 @@ def load_images():
     enemy11_img = pygame.image.load(path_image("image", "character", "Enemy11.png")).convert_alpha()
     enemy11_img = pygame.transform.smoothscale(enemy11_img, (110, 110))
 
+    enemy12_img = pygame.image.load(path_image("image", "character", "Enemy12.png")).convert_alpha()
+    enemy12_img = pygame.transform.smoothscale(enemy12_img, (90, 90))
+
+    enemy13_img = pygame.image.load(path_image("image", "character", "Enemy13.png")).convert_alpha()
+    enemy13_img = pygame.transform.smoothscale(enemy13_img, (100, 100))
+
+    enemy14_img = pygame.image.load(path_image("image", "character", "Enemy14.png")).convert_alpha()
+    enemy14_img = pygame.transform.smoothscale(enemy14_img, (90, 90))
+
+    enemy15_img = pygame.image.load(path_image("image", "character", "Enemy15.png")).convert_alpha()
+    enemy15_img = pygame.transform.smoothscale(enemy15_img, (90, 90))
+
+    enemy16_img = pygame.image.load(path_image("image", "character", "Enemy16.png")).convert_alpha()
+    enemy16_img = pygame.transform.smoothscale(enemy16_img, (90, 90))
+
+    enemy17_img = pygame.image.load(path_image("image", "character", "Enemy17.png")).convert_alpha()
+    enemy17_img = pygame.transform.smoothscale(enemy17_img, (90, 90))
+
+    enemy18_img = pygame.image.load(path_image("image", "character", "Enemy18.png")).convert_alpha()
+    enemy18_img = pygame.transform.smoothscale(enemy18_img, (90, 90))
+
     boss1_img = pygame.image.load(path_image("image", "character", "Boss1.png")).convert_alpha()
     boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
 
@@ -370,6 +391,13 @@ def load_images():
         "enemy9": enemy9_img,
         "enemy10": enemy10_img,
         "enemy11": enemy11_img,
+        "enemy12": enemy12_img,
+        "enemy13": enemy13_img,
+        "enemy14": enemy14_img,
+        "enemy15": enemy15_img,
+        "enemy16": enemy16_img,
+        "enemy17": enemy17_img,
+        "enemy18": enemy18_img,
         "boss1": boss1_img,
         "boss2": boss2_img,
         "drone": drone_img,
