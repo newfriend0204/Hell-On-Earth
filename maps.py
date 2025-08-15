@@ -2,7 +2,8 @@ START_MAP = {
     "obstacles": [],
     "enemy_infos": [],# [{"x": 200, "y": 200, "enemy_type": "enemy27"}], # 적 스폰 테스트용
     "npc_infos": [
-        {"x": 100, "y": 100, "npc_type": "doctorNF_npc"}
+        {"x": 100, "y": 100, "npc_type": "doctorNF_npc"},
+        {"x": 100, "y": 100, "npc_type": "scientist1_npc"}
     ],
     "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
@@ -875,26 +876,10 @@ S1_FIGHT_MAP_40 = {
     "crop_rect": {"x_ratio": 1.0, "y_ratio": 1.0}
 }
 
-S1_FIGHT_MAP_DEBUG = { # 디버그
+S1_FIGHT_DEBUG = { # 디버그
     "obstacles": [
     ],
     "enemy_infos": [
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
-        {"x": 130.00, "y": 200.00},
     ],
     "crop_rect": {"x_ratio": 0.4, "y_ratio": 0.4}
 }
@@ -2540,16 +2525,17 @@ S3_FIGHT_DEBUG = { # 디버그
 
 
 
-S1_FIGHT_MAPS = [
-    S1_FIGHT_MAP_1, S1_FIGHT_MAP_2, S1_FIGHT_MAP_3, S1_FIGHT_MAP_4, S1_FIGHT_MAP_5,
-    S1_FIGHT_MAP_6, S1_FIGHT_MAP_7, S1_FIGHT_MAP_8, S1_FIGHT_MAP_9, S1_FIGHT_MAP_10,
-    S1_FIGHT_MAP_11, S1_FIGHT_MAP_12, S1_FIGHT_MAP_13, S1_FIGHT_MAP_14, S1_FIGHT_MAP_15,
-    S1_FIGHT_MAP_16, S1_FIGHT_MAP_17, S1_FIGHT_MAP_18, S1_FIGHT_MAP_19, S1_FIGHT_MAP_20,
-    S1_FIGHT_MAP_21, S1_FIGHT_MAP_22, S1_FIGHT_MAP_23, S1_FIGHT_MAP_24, S1_FIGHT_MAP_25,
-    S1_FIGHT_MAP_26, S1_FIGHT_MAP_27, S1_FIGHT_MAP_28, S1_FIGHT_MAP_29, S1_FIGHT_MAP_30,
-    S1_FIGHT_MAP_31, S1_FIGHT_MAP_32, S1_FIGHT_MAP_33, S1_FIGHT_MAP_34, S1_FIGHT_MAP_35,
-    S1_FIGHT_MAP_36, S1_FIGHT_MAP_37, S1_FIGHT_MAP_38, S1_FIGHT_MAP_39, S1_FIGHT_MAP_40
-]
+# S1_FIGHT_MAPS = [
+#     S1_FIGHT_MAP_1, S1_FIGHT_MAP_2, S1_FIGHT_MAP_3, S1_FIGHT_MAP_4, S1_FIGHT_MAP_5,
+#     S1_FIGHT_MAP_6, S1_FIGHT_MAP_7, S1_FIGHT_MAP_8, S1_FIGHT_MAP_9, S1_FIGHT_MAP_10,
+#     S1_FIGHT_MAP_11, S1_FIGHT_MAP_12, S1_FIGHT_MAP_13, S1_FIGHT_MAP_14, S1_FIGHT_MAP_15,
+#     S1_FIGHT_MAP_16, S1_FIGHT_MAP_17, S1_FIGHT_MAP_18, S1_FIGHT_MAP_19, S1_FIGHT_MAP_20,
+#     S1_FIGHT_MAP_21, S1_FIGHT_MAP_22, S1_FIGHT_MAP_23, S1_FIGHT_MAP_24, S1_FIGHT_MAP_25,
+#     S1_FIGHT_MAP_26, S1_FIGHT_MAP_27, S1_FIGHT_MAP_28, S1_FIGHT_MAP_29, S1_FIGHT_MAP_30,
+#     S1_FIGHT_MAP_31, S1_FIGHT_MAP_32, S1_FIGHT_MAP_33, S1_FIGHT_MAP_34, S1_FIGHT_MAP_35,
+#     S1_FIGHT_MAP_36, S1_FIGHT_MAP_37, S1_FIGHT_MAP_38, S1_FIGHT_MAP_39, S1_FIGHT_MAP_40
+# ]
+S1_FIGHT_MAPS = [S1_FIGHT_DEBUG]
 S2_FIGHT_MAPS = [
     S2_FIGHT_MAP_1, S2_FIGHT_MAP_2, S2_FIGHT_MAP_3, S2_FIGHT_MAP_4, S2_FIGHT_MAP_5,
     S2_FIGHT_MAP_6, S2_FIGHT_MAP_7, S2_FIGHT_MAP_8, S2_FIGHT_MAP_9, S2_FIGHT_MAP_10,

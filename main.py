@@ -11,6 +11,8 @@ from entities import (
     FieldWeapon,
     MerchantNPC,
     DoctorNFNPC,
+    SoldierNPC,
+    ScientistNPC,
     Portal,
     Obstacle,
     DroneNPC,
@@ -26,7 +28,20 @@ from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
 from dialogue_manager import DialogueManager
-from text_data import merchant_dialogue, doctorNF_dialogue, drone_dialogue, BOSS_TIPS
+from text_data import (
+    merchant_dialogue,
+    doctorNF_dialogue,
+    drone_dialogue,
+    soldier1_before_dialogue,
+    soldier1_after_dialogue,
+    scientist1_dialogue,
+    doctorNF12_before_dialogue,
+    doctorNF12_after_dialogue,
+    doctorNF13_dialogue,
+    soldier2_before_dialogue,
+    soldier2_after_dialogue,
+    BOSS_TIPS
+)
 
 # 맵 상태 초기화
 CURRENT_MAP = MAPS[0]
@@ -634,6 +649,7 @@ room_shop_items = {}
 shop_items = []
 room_drone_rooms = {}
 room_acquire_type = {}
+room_entry_dir_cache = {}
 
 def spawn_room_npcs():
     # NPC 소환
@@ -669,11 +685,155 @@ def spawn_room_npcs():
                 npcs.append(
                     DoctorNFNPC(
                         images["doctorNF"],
-                        npc_info["x"],  
+                        npc_info["x"],
                         npc_info["y"],
                         doctorNF_dialogue
                     )
                 )
+            elif npc_info["npc_type"] == "scientist1_npc" and config.CURRENT_STAGE == "1-2":
+                npcs.append(
+                    ScientistNPC(
+                        images["scientist1"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        scientist1_dialogue
+                    )
+                )
+            elif npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "1-3":
+                npcs.append(
+                    DoctorNFNPC(
+                        images["doctorNF"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        doctorNF13_dialogue
+                    )
+                )
+
+    if config.CURRENT_STAGE == "1-1" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
+        cx_cell, cy_cell = current_room_pos
+        room_key = (cx_cell, cy_cell)
+
+        entry_dir = room_entry_dir_cache.get(room_key)
+        if entry_dir is None:
+            for nx, ny in world.neighbors(cx_cell, cy_cell):
+                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
+                    if ny < cy_cell: entry_dir = "north"
+                    elif ny > cy_cell: entry_dir = "south"
+                    elif nx < cx_cell: entry_dir = "west"
+                    else:              entry_dir = "east"
+                    break
+
+        eff_w   = world_instance.effective_bg_width
+        eff_h   = world_instance.effective_bg_height
+        center_x = eff_w  / 2
+        center_y = eff_h  / 2
+
+        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
+        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
+
+        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
+
+        if entry_dir == "north":
+            x = center_x - X_OFF_NS
+            y = -OUT_TOP
+        elif entry_dir == "south":
+            x = center_x - X_OFF_NS
+            y = eff_h + OUT_BOT
+        elif entry_dir == "west":
+            x = -OUT_LEFT
+            y = center_y - Y_OFF_WE
+        elif entry_dir == "east":
+            x = eff_w + OUT_RGHT
+            y = center_y - Y_OFF_WE
+        else:
+            x, y = center_x, center_y
+
+        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
+        dlg = soldier1_after_dialogue if rs == 9 else soldier1_before_dialogue
+        npcs.append(SoldierNPC(images["soldier1"], x, y, dlg))
+
+    if config.CURRENT_STAGE == "1-2" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
+        cx_cell, cy_cell = current_room_pos
+        room_key = (cx_cell, cy_cell)
+        entry_dir = room_entry_dir_cache.get(room_key)
+        if entry_dir is None:
+            for nx, ny in world.neighbors(cx_cell, cy_cell):
+                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
+                    if ny < cy_cell:   entry_dir = "north"
+                    elif ny > cy_cell: entry_dir = "south"
+                    elif nx < cx_cell: entry_dir = "west"
+                    else:              entry_dir = "east"
+                    break
+
+        eff_w   = world_instance.effective_bg_width
+        eff_h   = world_instance.effective_bg_height
+        center_x = eff_w  / 2
+        center_y = eff_h  / 2
+
+        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
+        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
+        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
+
+        if entry_dir == "north":
+            x = center_x - X_OFF_NS; y = -OUT_TOP
+        elif entry_dir == "south":
+            x = center_x - X_OFF_NS; y = eff_h + OUT_BOT
+        elif entry_dir == "west":
+            x = -OUT_LEFT;          y = center_y - Y_OFF_WE
+        elif entry_dir == "east":
+            x = eff_w + OUT_RGHT;   y = center_y - Y_OFF_WE
+        else:
+            x, y = center_x, center_y
+
+        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
+        dlg = doctorNF12_after_dialogue if rs == 9 else doctorNF12_before_dialogue
+        npcs.append(DoctorNFNPC(images["doctorNF"], x, y, dlg))
+
+    if config.CURRENT_STAGE == "1-3" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
+        cx_cell, cy_cell = current_room_pos
+        room_key = (cx_cell, cy_cell)
+        entry_dir = room_entry_dir_cache.get(room_key)
+        if entry_dir is None:
+            for nx, ny in world.neighbors(cx_cell, cy_cell):
+                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
+                    if ny < cy_cell:   entry_dir = "north"
+                    elif ny > cy_cell: entry_dir = "south"
+                    elif nx < cx_cell: entry_dir = "west"
+                    else:              entry_dir = "east"
+                    break
+
+        eff_w   = world_instance.effective_bg_width
+        eff_h   = world_instance.effective_bg_height
+        center_x = eff_w  / 2
+        center_y = eff_h  / 2
+
+        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
+        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
+        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
+        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
+
+        if entry_dir == "north":
+            x = center_x - X_OFF_NS; y = -OUT_TOP
+        elif entry_dir == "south":
+            x = center_x - X_OFF_NS; y = eff_h + OUT_BOT
+        elif entry_dir == "west":
+            x = -OUT_LEFT;          y = center_y - Y_OFF_WE
+        elif entry_dir == "east":
+            x = eff_w + OUT_RGHT;   y = center_y - Y_OFF_WE
+        else:
+            x, y = center_x, center_y
+
+        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
+        dlg = soldier2_after_dialogue if rs == 9 else soldier2_before_dialogue
+        npcs.append(SoldierNPC(images["soldier2"], x, y, dlg))
 
 def on_dialogue_close():
     global mouse_left_released_after_dialogue, dialogue_frozen_frame
@@ -1076,6 +1236,7 @@ def change_room(direction):
         new_x = current_room_pos[0] + dx
         new_y = current_room_pos[1] + dy
         spawn_direction = SPAWN_FROM_OPPOSITE[direction]
+        room_entry_dir_cache[(new_x, new_y)] = spawn_direction
 
     if not (0 <= new_x < WIDTH and 0 <= new_y < HEIGHT):
         print("[DEBUG] 이동 불가: 맵 경계 밖")
@@ -2166,6 +2327,15 @@ def trigger_combat_end():
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "out"
     enemy_counter_fx["t"] = 0.0
+    for npc in npcs:
+        tname = type(npc).__name__
+        if tname == "SoldierNPC":
+            if config.CURRENT_STAGE == "1-1":
+                npc.dialogue = soldier1_after_dialogue
+            elif config.CURRENT_STAGE == "1-3":
+                npc.dialogue = soldier2_after_dialogue
+        elif tname == "DoctorNFNPC" and config.CURRENT_STAGE == "1-2":
+            npc.dialogue = doctorNF12_after_dialogue
 
 def trigger_stage_banner(text):
     stage_banner_fx["text"] = text
@@ -3458,6 +3628,29 @@ while running:
     #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
 
     if not player_dead:
+        for npc in npcs:
+            npc.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
+
+        if not dialogue_manager.active and not paused:
+            for npc in npcs:
+                nx = getattr(npc, "x", getattr(npc, "world_x", None))
+                ny = getattr(npc, "y", getattr(npc, "world_y", None))
+                img = getattr(npc, "image", None)
+                if nx is None or ny is None or img is None:
+                    continue
+
+                screen_x = nx - (world_x - shake_offset_x)
+                screen_y = ny - (world_y - shake_offset_y)
+                top_y = screen_y - img.get_height() // 2
+
+                draw_npc_interact_hint(
+                    screen,
+                    screen_x,
+                    top_y,
+                    lines=("대화하기", "(Space)")
+                )
+
+    if not player_dead:
         ammo_bar_pos = (30, SCREEN_HEIGHT - 80)
         ammo_bar_size = (400, 20)
         last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, ammo_gauge_max, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
@@ -3659,28 +3852,6 @@ while running:
 
     if len(config.score_gain_texts) > max_stack:
         del config.score_gain_texts[0:len(config.score_gain_texts) - max_stack]
-
-    for npc in npcs:
-        npc.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
-
-    if not dialogue_manager.active and not paused:
-        for npc in npcs:
-            nx = getattr(npc, "x", getattr(npc, "world_x", None))
-            ny = getattr(npc, "y", getattr(npc, "world_y", None))
-            img = getattr(npc, "image", None)
-            if nx is None or ny is None or img is None:
-                continue
-
-            screen_x = nx - (world_x - shake_offset_x)
-            screen_y = ny - (world_y - shake_offset_y)
-            top_y = screen_y - img.get_height() // 2
-
-            draw_npc_interact_hint(
-                screen,
-                screen_x,
-                top_y,
-                lines=("대화하기", "(Space)")
-            )
 
     if not player_dead:
         if weapon and not melee.active:

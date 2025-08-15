@@ -12,7 +12,7 @@ GAME_STATE_MENU = 0
 GAME_STATE_PLAYING = 1
 GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
-game_state = 0
+game_state = 1
 
 # 배경 크기
 BG_WIDTH = int(1600 * PLAYER_VIEW_SCALE)
@@ -103,7 +103,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "1-1"
+CURRENT_STAGE = "1-3"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,

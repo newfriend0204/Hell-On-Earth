@@ -112,6 +112,28 @@ def neighbors(x, y):
     return [(x+dx, y+dy) for dx, dy in offsets
             if 0 <= x+dx < WIDTH and 0 <= y+dy < HEIGHT]
 
+def find_end_room(grid):
+    """E(보스방/종점) 좌표 반환."""
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if grid[y][x] == 'E':
+                return (x, y)
+    return None
+
+def find_boss_entry_room(grid):
+    """
+    E와 인접한 유일한 진입 방(F)을 찾아 반환.
+    맵 규칙상 E 주변의 F는 1개 이하로 제한되어 있음.
+    """
+    epos = find_end_room(grid)
+    if not epos:
+        return None
+    ex, ey = epos
+    for nx, ny in neighbors(ex, ey):
+        if grid[ny][nx] == 'F':  # 보스방과 직접 연결된 전투방
+            return (nx, ny)
+    return None
+
 def count_adjacent_fight(grid, ex, ey):
     # 특정 좌표 주변에 전투방이 몇 개 있는지 계산
     return sum(1 for nx, ny in neighbors(ex, ey) if grid[ny][nx] == 'F')
