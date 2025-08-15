@@ -547,3 +547,21 @@ def draw_enemy_counter(screen, remaining, slide_progress=1.0, alpha=255, anchor_
     panel.set_alpha(alpha)
     screen.blit(panel, (x, y))
     screen.blit(text_surf, (x + pad_x, y + pad_y))
+
+def draw_shock_overlay(screen, intensity: float):
+    # 감전 상태 전용 파란 비네트 오버레이.
+    if intensity <= 0:
+        return
+    w, h = screen.get_size()
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+
+    base_alpha = int(140 * max(0.0, min(1.0, intensity)))
+    color = (60, 160, 255, base_alpha)
+
+    surf.fill(color)
+    ell_w, ell_h = int(w * 0.85), int(h * 0.75)
+    hole = pygame.Surface((ell_w, ell_h), pygame.SRCALPHA)
+    pygame.draw.ellipse(hole, (0, 0, 0, 0), hole.get_rect())
+    surf.blit(hole, ((w - ell_w)//2, (h - ell_h)//2), special_flags=pygame.BLEND_RGBA_SUB)
+
+    screen.blit(surf, (0, 0))

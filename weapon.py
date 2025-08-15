@@ -2481,6 +2481,8 @@ class Gun19(WeaponBase):
         dist = math.hypot(dx, dy)
         if dist > self.DEFEND_DISTANCE:
             return False
+        if dist <= 1e-6:
+            return False        
 
         facing_dx = math.cos(math.atan2(
             pygame.mouse.get_pos()[1] - config.player_rect.centery,
@@ -2991,7 +2993,7 @@ class Gun24(WeaponBase):
             angle_rad=angle,
             damage=Gun24.LEFT_DAMAGE,
             speed=Gun24.LEFT_SPEED,
-            max_distance=Gun24.LEFT_RANGE,
+            max_range=Gun24.LEFT_RANGE,
             spread_deg_for_record=Gun24.LEFT_SPREAD
         )
 
@@ -3117,7 +3119,7 @@ class Gun25(WeaponBase):
                     0,
                     self.bullet_images[0][0] if isinstance(self.bullet_images[0], list) else self.bullet_images[0],
                     speed=12 * config.PLAYER_VIEW_SCALE,
-                    max_distance=self.RANGE,
+                    max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
                     damage=self.DAMAGE
                 )
                 b.trail_enabled = self.bullet_has_trail

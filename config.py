@@ -12,7 +12,7 @@ GAME_STATE_MENU = 0
 GAME_STATE_PLAYING = 1
 GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
-game_state = 1
+game_state = 0
 
 # 배경 크기
 BG_WIDTH = int(1600 * PLAYER_VIEW_SCALE)
@@ -140,10 +140,10 @@ STAGE_THEME = {
 
 TIER_PRICES = {
     1: 20,
-    2: 35,
-    3: 50,
-    4: 65,
-    5: 80
+    2: 40,
+    3: 60,
+    4: 85,
+    5: 100
 }
 
 combat_state = False
@@ -163,3 +163,23 @@ dropped_items = []
 score_gain_texts = []
 effects = []
 active_mines = []
+
+# 감전 디버프
+stunned_until_ms = 0
+slow_until_ms = 0
+move_slow_factor = 1.0
+slow_started_ms = 0
+slow_duration_ms = 0
+shock_particles = []
+next_shock_spawn_ms = 0
+
+knockback_impulse_x = 0.0
+knockback_impulse_y = 0.0
+KNOCKBACK_DECAY = 0.88
+
+def apply_knockback(dx, dy):
+    # 내부적으로 속도형 임펄스로 누적 후 main.py에서 프레임별 감쇠 적용.
+    global knockback_impulse_x, knockback_impulse_y
+
+    knockback_impulse_x += dx / 18.0
+    knockback_impulse_y += dy / 18.0

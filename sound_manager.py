@@ -7,22 +7,22 @@ def load_sounds():
     path_sound = lambda *paths: os.path.join(ASSET_DIR, *paths)
 
     # 믹서 채널 수 설정
-    pygame.mixer.set_num_channels(16)
+    pygame.mixer.set_num_channels(32)
     
     walk_sound = pygame.mixer.Sound(path_sound("Sound", "ForestWalk.mp3"))
     walk_sound.set_volume(0.3)
 
     enemy_die_sound = pygame.mixer.Sound(path_sound("Sound", "EnemyDie.mp3"))
-    enemy_die_sound.set_volume(0.3)
+    enemy_die_sound.set_volume(0.5)
 
     room_move_sound = pygame.mixer.Sound(path_sound("Sound", "RoomMove.mp3"))
 
     swap_gun_sound = pygame.mixer.Sound(path_sound("Sound", "SwapGun.mp3"))
-    swap_gun_sound.set_volume(0.8)
+    swap_gun_sound.set_volume(1)
 
     button_click = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonClick.wav"))
     button_click.set_volume(0.8)
-    button_select = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonSelect.mp3"))
+    button_select = pygame.mixer.Sound(path_sound("Sound", "UI", "ButtonSelect.wav"))
     button_select.set_volume(0.6)
 
     knife_use = pygame.mixer.Sound(path_sound("Sound", "Gun", "KnifeUse.mp3"))
@@ -86,7 +86,16 @@ def load_sounds():
         "mine_plant": pygame.mixer.Sound(path_sound("Sound", "Entity", "MinePlant.mp3")),
         "mine_activate": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineActivate.mp3")),
         "mine_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "MineExplosion.mp3")),
-        "spawn_enemy": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnEnemy.mp3")), 
+        "spawn_enemy": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnEnemy.mp3")),
+        "flame_start": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlameStart.mp3")),
+        "flame_loop": pygame.mixer.Sound(path_sound("Sound", "Entity", "FlameLoop.mp3")),
+        "reaver_slam": pygame.mixer.Sound(path_sound("Sound", "Entity", "ReaverSlam.mp3")),
+        "shock_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockCharge.mp3")),
+        "shock_burst":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockBurst.mp3")),
+        "stab_hit":  pygame.mixer.Sound(path_sound("Sound", "Entity", "StabHit.mp3")),
+        "pulse_tick":  pygame.mixer.Sound(path_sound("Sound", "Entity", "PulseTick.mp3")),
+        "cocoon_shatter":  pygame.mixer.Sound(path_sound("Sound", "Entity", "CocoonShatter.mp3")),
+        "burster_explode":  pygame.mixer.Sound(path_sound("Sound", "Entity", "BursterExplode.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)
@@ -100,8 +109,8 @@ def load_sounds():
     weapon_sounds["gun3_fire_enemy"] = pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun3Fire.wav"))
     weapon_sounds["enemy4_fire"] = weapon_sounds["gun5_fire"]
     weapon_sounds["enemy4_preheat"] = weapon_sounds["gun5_preheat"]
-    weapon_sounds["enemy4_shield_break"] = pygame.mixer.Sound(path_sound("Sound", "ShieldBreak.mp3"))
-    weapon_sounds["enemy4_shield_charged"] = pygame.mixer.Sound(path_sound("Sound", "ShieldCharged.mp3"))
+    weapon_sounds["enemy4_shield_break"] = pygame.mixer.Sound(path_sound("Sound", "Entity", "ShieldBreak.mp3"))
+    weapon_sounds["enemy4_shield_charged"] = pygame.mixer.Sound(path_sound("Sound", "Entity", "ShieldCharged.mp3"))
     weapon_sounds["enemy5_fire"] = weapon_sounds["gun3_fire"]
 
     weapon_sounds["gun1_fire_enemy"].set_volume(0.25)
@@ -138,3 +147,79 @@ def load_sounds():
         **weapon_sounds,
         **entity_sounds
     }
+
+_BGM_FILES = None
+_bgm_current_key = None
+
+def _ensure_bgm_files():
+    global _BGM_FILES
+    if _BGM_FILES is None:
+        path = lambda *p: os.path.join(ASSET_DIR, *p)
+        _BGM_FILES = {
+            1: path("Sound", "Background", "Map1.mp3"),
+            2: path("Sound", "Background", "Map2.mp3"),
+            3: path("Sound", "Background", "Map3.mp3"),
+            "main": path("Sound", "Background", "Main.mp3"),
+        }
+
+def _stage_to_key(stage_like):
+    # "1-1" → 1, 2 → 2 등 유연 파싱
+    try:
+        if isinstance(stage_like, str):
+            return int(stage_like.split("-")[0])
+        return int(stage_like)
+    except Exception:
+        return 1
+
+def set_bgm_volume(vol: float):
+    pygame.mixer.music.set_volume(max(0.0, min(1.0, float(vol))))
+
+def stop_bgm(fade_ms: int = 400):
+    try:
+        pygame.mixer.music.fadeout(max(0, int(fade_ms)))
+    except Exception:
+        pass
+
+def cut_bgm():
+    # 즉시(하드) 정지 — 사망 연출 등에 사용
+    try:
+        pygame.mixer.music.stop()
+        global _bgm_current_key
+        _bgm_current_key = None
+    except Exception:
+        pass
+
+def play_bgm_for_stage(stage_like, fade_ms: int = 600):
+    # 스테이지(1/2/3 또는 '1-1' 등)를 받아 해당 BGM을 무한 반복 재생
+    global _bgm_current_key
+    _ensure_bgm_files()
+    key = _stage_to_key(stage_like)
+    if key == _bgm_current_key:
+        # 이미 같은 곡이 플레이 중이면 무시
+        return
+    try:
+        # 부드럽게 교체
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.fadeout(250)
+        pygame.mixer.music.load(_BGM_FILES.get(key, _BGM_FILES[1]))
+        set_bgm_volume(0.3)
+        pygame.mixer.music.play(-1, fade_ms=max(0, int(fade_ms)))  # 무한 반복
+        _bgm_current_key = key
+    except Exception:
+        _bgm_current_key = None
+
+def play_bgm_main(fade_ms: int = 600, restart: bool = False):
+    # 메인 메뉴 BGM을 무한 반복 재생. 이미 재생 중이면 기본적으로 그대로 둠.
+    global _bgm_current_key
+    _ensure_bgm_files()
+    if _bgm_current_key == "main" and not restart:
+        return
+    try:
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.fadeout(250)
+        pygame.mixer.music.load(_BGM_FILES["main"])
+        set_bgm_volume(0.3)
+        pygame.mixer.music.play(-1, fade_ms=max(0, int(fade_ms)))
+        _bgm_current_key = "main"
+    except Exception:
+        _bgm_current_key = None

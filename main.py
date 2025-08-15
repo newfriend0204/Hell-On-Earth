@@ -3,14 +3,26 @@ import math
 import random
 from config import *
 import config
+import os
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import load_sounds
-from entities import ExplosionEffectPersistent, FieldWeapon, MerchantNPC, DoctorNFNPC, Portal, Obstacle, DroneNPC
+from entities import (
+    ExplosionEffectPersistent,
+    FieldWeapon,
+    MerchantNPC,
+    DoctorNFNPC,
+    Portal,
+    Obstacle,
+    DroneNPC,
+    spawn_shock_particles,
+    update_shock_particles,
+    draw_shock_particles,
+)
 from collider import Collider
 from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES, MeleeController
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter, draw_shock_overlay
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
 from dialogue_manager import DialogueManager
@@ -46,6 +58,15 @@ pygame.mouse.set_visible(False)
 
 #screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+ICON_PATH = os.path.join(ASSET_DIR, "Image", "GameIcon.png")
+_icon_surface = pygame.image.load(ICON_PATH).convert_alpha()
+_icon_surface = pygame.transform.smoothscale(
+    _icon_surface,
+    (int(_icon_surface.get_width()), int(_icon_surface.get_height()))
+)
+pygame.display.set_icon(_icon_surface)
+
 pygame.display.set_caption("Hell On Earth")
 
 def get_player_world_position():
@@ -56,6 +77,7 @@ def get_player_world_position():
 
 images = load_images()
 sounds = load_sounds()
+config.sounds = sounds
 config.images = images
 config.dropped_items = []
 weapon_assets = load_weapon_assets(images)
@@ -124,6 +146,85 @@ MENU_BUTTONS = [
 ]
 _menu_scales = [1.0 for _ in MENU_BUTTONS]
 _menu_hover  = -1
+_menu_modal = None
+_menu_modal_hover = -1
+
+def _draw_dim(surface, alpha=160):
+    dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, alpha))
+    surface.blit(dim, (0, 0))
+
+def _draw_center_panel(surface, w, h):
+    panel = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (18, 18, 18, 235), (0, 0, w, h), border_radius=16)
+    pygame.draw.rect(panel, (200, 200, 200, 90), (0, 0, w, h), width=2, border_radius=18)
+    rect = panel.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+    surface.blit(panel, rect)
+    return rect
+
+def _draw_menu_confirm_quit(surface):
+    # '정말 나가시겠습니까?' (붉은글씨), [예]/[아니요]
+    global _menu_modal_hover
+    _draw_dim(surface, 170)
+    rect = _draw_center_panel(surface, 560, 260)
+
+    prompt = BUTTON_FONT.render("정말 나가시겠습니까?", True, (220, 60, 60))
+    surface.blit(prompt, ( (SCREEN_WIDTH - prompt.get_width())//2, rect.y + 42))
+
+    mouse_pos = pygame.mouse.get_pos()
+    # 먼저 기본으로 그려서 rect 얻고, hover면 다시 하이라이트로 그린다.
+    yes_center = (SCREEN_WIDTH//2 - 90, rect.bottom - 60)
+    no_center  = (SCREEN_WIDTH//2 + 90, rect.bottom - 60)
+    yes_rect = _draw_button(surface, "예", yes_center, False, 1.0)
+    no_rect  = _draw_button(surface, "아니요", no_center, False, 1.0)
+
+    hovered = -1
+    if yes_rect.collidepoint(mouse_pos): hovered = 0
+    elif no_rect.collidepoint(mouse_pos): hovered = 1
+    if hovered != -1:
+        if hovered != _menu_modal_hover:
+            sounds["button_select"].play()
+        _menu_modal_hover = hovered
+        # 하이라이트로 다시 그리기
+        _ = _draw_button(surface, "예", yes_center, hovered==0, 1.08 if hovered==0 else 1.0)
+        _ = _draw_button(surface, "아니요", no_center, hovered==1, 1.08 if hovered==1 else 1.0)
+    else:
+        _menu_modal_hover = -1
+
+    return yes_rect, no_rect
+
+def _draw_menu_panel(surface, title, lines):
+    # 조작법/크레딧 팝업. 닫기 버튼 하나.
+    global _menu_modal_hover
+    _draw_dim(surface, 170)
+    rect = _draw_center_panel(surface, 700, 600)
+
+    # 제목
+    title_surf = TITLE_FONT.render(title, True, (235, 235, 235))
+    surface.blit(title_surf, ((SCREEN_WIDTH - title_surf.get_width())//2, rect.y + 24))
+
+    # 본문
+    y = rect.y + 24 + title_surf.get_height() + 12
+    for line in lines:
+        txt = BUTTON_FONT.render(line, True, (220, 220, 220))
+        surface.blit(txt, (rect.x + 36, y))
+        y += txt.get_height() + 8
+        if y > rect.bottom - 90:
+            break
+
+    # 닫기 버튼
+    mouse_pos = pygame.mouse.get_pos()
+    close_center = (SCREEN_WIDTH//2, rect.bottom - 46)
+    close_rect = _draw_button(surface, "닫기", close_center, False, 1.0)
+    hovered = 0 if close_rect.collidepoint(mouse_pos) else -1
+    if hovered != -1:
+        if hovered != _menu_modal_hover:
+            sounds["button_select"].play()
+        _menu_modal_hover = hovered
+        _ = _draw_button(surface, "닫기", close_center, True, 1.08)
+    else:
+        _menu_modal_hover = -1
+    return close_rect
 
 def _lerp(a, b, t): return a + (b - a) * t
 
@@ -142,16 +243,33 @@ def _draw_button(surface, text, center_xy, hovered=False, scale=1.0):
     surface.blit(btn, rect)
     return rect
 
+LOGO_PATH = os.path.join(ASSET_DIR, "Image", "GameLogo.png")
+_game_logo = pygame.image.load(LOGO_PATH).convert_alpha()
+_max_w = int(SCREEN_WIDTH * 0.9)
+_max_h = int(SCREEN_HEIGHT * 0.45)
+if _game_logo.get_width() > _max_w:
+    nw = _max_w
+    nh = int(_game_logo.get_height() * (nw / _game_logo.get_width()))
+    _game_logo = pygame.transform.smoothscale(_game_logo, (nw, nh))
+if _game_logo.get_height() > _max_h:
+    nh = _max_h
+    nw = int(_game_logo.get_width() * (nh / _game_logo.get_height()))
+    _game_logo = pygame.transform.smoothscale(_game_logo, (nw, nh))
+
 def _draw_title(surface):
-    lines = ["Hell", "On Earth"]
-    y = 90
-    for i, t in enumerate(lines):
-        surf   = TITLE_FONT.render(t, True, (240, 240, 240))
-        shadow = TITLE_FONT.render(t, True, (0, 0, 0))
-        sx = (SCREEN_WIDTH - surf.get_width()) // 2
-        surface.blit(shadow, (sx+2, y+2))
-        surface.blit(surf,   (sx,   y))
-        y += surf.get_height() + (8 if i == 0 else 0)
+    # 메인 메뉴 상단에 게임 로고를 표시
+    top = 56
+    rect = _game_logo.get_rect()
+    rect.centerx = SCREEN_WIDTH // 2
+    rect.top = top
+
+    shadow = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    shadow.blit(_game_logo, (0, 0))
+    shadow.fill((0, 0, 0, 80), special_flags=pygame.BLEND_RGBA_MIN)
+    surface.blit(shadow, (rect.x + 3, rect.y + 3))
+    surface.blit(_game_logo, rect)
+
+    return rect.bottom
 
 HOWTO_LINES = [
     "조작법", "",
@@ -159,28 +277,24 @@ HOWTO_LINES = [
     "공격: 마우스 좌클릭",
     "보조 발사: 마우스 우클릭",
     "근접 공격: V",
-    "무기 교체: 숫자키 (1~0) / 마우스 휠",
+    "무기 교체: 숫자키 (1~4)",
     "상호작용: Space",
     "무기 상세/탭 UI: Tab",
+    "나머지는 게임을 들어가면 자세히 알게 됩니다.",
 ]
 
 CREDITS_LINES = [
     "크레딧", "",
-    "Game Title: Hell On Earth",
-    "Game Design / Programming: 새친",
-    "Assistant: GPT-5 Thinking",
-    "Assets: Project internal assets",
+    "게임 이름:Hell on Earth",
+    "",
+    "게임 아이디어 제공/코딩:홍승표(1%)",
+    "",
+    "도움:GPT-4o, GPT-4.1, GPT-5 Thinking(99%)",
+    "",
+    "이미지 제공:GPT-4o, GPT-5 Thinking",
+    "",
+    "사운드 제공:음원 사이트(https://pixabay.com),직접 녹음",
 ]
-
-def _draw_text_block(surface, lines, start_y=140):
-    y = start_y
-    for i, line in enumerate(lines):
-        font  = TITLE_FONT if i == 0 else SUB_FONT
-        color = (240, 240, 240) if i == 0 else (210, 210, 210)
-        surf = font.render(line, True, color)
-        x = (SCREEN_WIDTH - surf.get_width()) // 2
-        surface.blit(surf, (x, y))
-        y += surf.get_height() + (14 if i == 0 else 8)
 
 def init_new_game():
     global grid, current_room_pos, visited_f_rooms, room_portals, current_portal, portal_spawn_at_ms
@@ -241,6 +355,8 @@ confirm_quit_active = False
 pause_request = False
 confirm_hover = -1
 confirm_scales = [1.0, 1.0]
+start_transition_pending = False
+start_transition_old_surface = None
 
 dialogue_manager = DialogueManager()
 last_merchant_ms = 0
@@ -825,6 +941,8 @@ def trigger_player_death():
         p["vy"] *= 1.5
     config.blood_effects.append(blood)
     gameover_sfx_played = False
+    from sound_manager import cut_bgm
+    cut_bgm()
     player_dead = True
     death_started_ms = pygame.time.get_ticks()
     move_left = move_right = move_up = move_down = False
@@ -884,6 +1002,8 @@ def advance_to_next_stage():
 
     next_stage = stage_order[idx + 1]
     config.CURRENT_STAGE = next_stage
+    from sound_manager import play_bgm_for_stage
+    play_bgm_for_stage(next_stage)
     try:
         trigger_stage_banner(f"스테이지 {next_stage}")
     except Exception:
@@ -2176,52 +2296,80 @@ while running:
                 running = False
         pygame.mouse.set_visible(True)
         screen.fill((0,0,0))
-        _draw_title(screen)
+        logo_bottom = _draw_title(screen)
 
         if config.game_state == config.GAME_STATE_MENU:
-            cx = SCREEN_WIDTH//2; base_y = 240; gap = 72
+            from sound_manager import play_bgm_main
+            play_bgm_main()
+            cx = SCREEN_WIDTH//2; base_y = 400; gap = 72
             mouse_pos = pygame.mouse.get_pos()
-            hovered = -1
-            rects = []
+
+            # 기본 버튼 렌더 (모달이 떠 있을 때도 배경처럼 보이게 그리되, 상호작용은 막음)
+            hovered = -1 if _menu_modal else -1
             for i in range(len(MENU_BUTTONS)):
-                _menu_scales[i] = _lerp(_menu_scales[i], 1.08 if _menu_hover==i else 1.0, 0.18)
+                _menu_scales[i] = _lerp(_menu_scales[i], 1.08 if (_menu_hover==i and not _menu_modal) else 1.0, 0.18)
+            rects = []
             for i, btn in enumerate(MENU_BUTTONS):
                 cy = base_y + i*gap
                 rect = _draw_button(screen, btn["label"], (cx, cy), False, _menu_scales[i])
                 rects.append(rect)
-                if rect.collidepoint(mouse_pos): hovered = i
-            if hovered != -1 and hovered != _menu_hover:
+                if not _menu_modal and rect.collidepoint(mouse_pos): hovered = i
+            if not _menu_modal and hovered != -1 and hovered != _menu_hover:
                 sounds["button_select"].play()
-            _menu_hover = hovered
-            for e in events:
-                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and _menu_hover != -1:
-                    sounds["button_click"].play()
-                    bid = MENU_BUTTONS[_menu_hover]["id"]
-                    if bid == "start":
-                        init_new_game()
-                        config.game_state = config.GAME_STATE_PLAYING
-                        pygame.mouse.set_visible(False)
-                    elif bid == "howto":
-                        config.game_state = config.GAME_STATE_HOWTO
-                    elif bid == "credits":
-                        config.game_state = config.GAME_STATE_CREDITS
-                    elif bid == "quit":
-                        running = False
+            _menu_hover = hovered if not _menu_modal else -1
+
+            # 모달 입력/렌더링
+            if _menu_modal:
+                if _menu_modal["type"] == "confirm_quit":
+                    yes_rect, no_rect = _draw_menu_confirm_quit(screen)
+                    for e in events:
+                        if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_n):
+                            sounds["button_click"].play(); _menu_modal = None
+                        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                            if yes_rect.collidepoint(mouse_pos):
+                                sounds["button_click"].play()
+                                running = False
+                            elif no_rect.collidepoint(mouse_pos):
+                                sounds["button_click"].play()
+                                _menu_modal = None
+                elif _menu_modal["type"] == "panel":
+                    if _menu_modal["name"] == "howto":
+                        close_rect = _draw_menu_panel(screen, "조작법", HOWTO_LINES[2:])  # 제목 줄 제외
+                    else:
+                        close_rect = _draw_menu_panel(screen, "크레딧", CREDITS_LINES[2:])
+                    for e in events:
+                        if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_SPACE, pygame.K_RETURN):
+                            sounds["button_click"].play(); _menu_modal = None
+                        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and close_rect.collidepoint(mouse_pos):
+                            sounds["button_click"].play(); _menu_modal = None
+            else:
+                # 모달이 없을 때만 메뉴 상호작용
+                for e in events:
+                    if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and _menu_hover != -1:
+                        sounds["button_click"].play()
+                        bid = MENU_BUTTONS[_menu_hover]["id"]
+                        if bid == "start":
+                            # 메뉴 화면을 캡처해 두고 전환 예약
+                            start_transition_old_surface = screen.copy()
+                            init_new_game()
+                            config.game_state = config.GAME_STATE_PLAYING
+                            pygame.mouse.set_visible(False)
+                            start_transition_pending = True
+                            from sound_manager import play_bgm_for_stage
+                            play_bgm_for_stage(config.CURRENT_STAGE)
+                        elif bid == "howto":
+                            _menu_modal = {"type":"panel","name":"howto"}
+                        elif bid == "credits":
+                            _menu_modal = {"type":"panel","name":"credits"}
+                        elif bid == "quit":
+                            _menu_modal = {"type":"confirm_quit"}
 
         elif config.game_state in (config.GAME_STATE_HOWTO, config.GAME_STATE_CREDITS):
-            lines = HOWTO_LINES if config.game_state == config.GAME_STATE_HOWTO else CREDITS_LINES
-            _draw_text_block(screen, lines, start_y=140)
-            back_rect = _draw_button(screen, "뒤로", (SCREEN_WIDTH//2, SCREEN_HEIGHT-80), False, 1.0)
-            if back_rect.collidepoint(pygame.mouse.get_pos()):
-                _draw_button(screen, "뒤로", (SCREEN_WIDTH//2, SCREEN_HEIGHT-80), True, 1.08)
-                for e in events:
-                    if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                        sounds["button_click"].play()
-                        config.game_state = config.GAME_STATE_MENU
-            for e in events:
-                if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-                    sounds["button_click"].play()
-                    config.game_state = config.GAME_STATE_MENU
+            # (이전 방식 화면 전환은 더 이상 안 쓰지만, 남겨진 상태로 진입해도
+            #  사용자 경험을 해치지 않도록 메뉴 팝업과 동일하게 처리)
+            target = "howto" if config.game_state == config.GAME_STATE_HOWTO else "credits"
+            _menu_modal = {"type":"panel","name": target}
+            config.game_state = config.GAME_STATE_MENU
 
         pygame.display.flip()
         clock.tick(60)
@@ -2653,6 +2801,13 @@ while running:
     if weapon:
         max_speed *= (1 - weapon.speed_penalty)
 
+    now_ms = pygame.time.get_ticks()
+    if now_ms < getattr(config, "slow_until_ms", 0):
+        max_speed *= getattr(config, "move_slow_factor", 1.0)
+    else:
+        if hasattr(config, "move_slow_factor"):
+            config.move_slow_factor = 1.0
+
     if move_left:
         world_vx -= acceleration_rate
     elif move_right:
@@ -2675,6 +2830,18 @@ while running:
 
     world_vx = max(-max_speed, min(max_speed, world_vx))
     world_vy = max(-max_speed, min(max_speed, world_vy))
+
+    kvx = getattr(config, "knockback_impulse_x", 0.0)
+    kvy = getattr(config, "knockback_impulse_y", 0.0)
+    if kvx or kvy:
+        world_vx += kvx
+        world_vy += kvy
+        config.knockback_impulse_x *= getattr(config, "KNOCKBACK_DECAY", 0.88)
+        config.knockback_impulse_y *= getattr(config, "KNOCKBACK_DECAY", 0.88)
+        if abs(config.knockback_impulse_x) < 0.01:
+            config.knockback_impulse_x = 0.0
+        if abs(config.knockback_impulse_y) < 0.01:
+            config.knockback_impulse_y = 0.0
 
     test_world_x = world_x + world_vx
     test_world_y = world_y
@@ -3300,6 +3467,13 @@ while running:
 
     display_w, display_h = screen.get_size()
 
+    # Electric Shock 파티클 (감전 상태일 때만 스폰)
+    now_ms = pygame.time.get_ticks()
+    if getattr(config, "player_shock_until", 0) > now_ms:
+        spawn_shock_particles(player_rect.centerx, player_rect.centery, count=2)
+    update_shock_particles()
+    draw_shock_particles(screen)
+
     if damage_flash_alpha > 0:
         display_w, display_h = screen.get_size()
         overlay = pygame.Surface((display_w, display_h), pygame.SRCALPHA)
@@ -3318,6 +3492,12 @@ while running:
         screen.blit(overlay, (0, 0))
         damage_flash_alpha = max(0, damage_flash_alpha - damage_flash_fade_speed)
 
+    if getattr(config, "slow_until_ms", 0) > now_ms:
+        remain = config.slow_until_ms - now_ms
+        duration = getattr(config, "slow_duration_ms", 3000) or 3000
+        intensity = max(0.0, min(1.0, remain / float(duration)))
+        if intensity > 0:
+            draw_shock_overlay(screen, intensity)
 
     for bullet in bullets[:]:
         if isinstance(bullet, ExplosionEffectPersistent):
@@ -3406,6 +3586,25 @@ while running:
 
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 
+        now_ms = pygame.time.get_ticks()
+        if now_ms < getattr(config, "slow_until_ms", 0):
+            spawn_shock_particles(player_rect.centerx, player_rect.centery, count=2)
+        update_shock_particles()
+        draw_shock_particles(screen)
+
+    if start_transition_pending:
+        def _draw_game():
+            render_game_frame()
+        swipe_curtain_transition(
+            screen,
+            start_transition_old_surface,
+            _draw_game,
+            direction="down",
+            duration=0.5
+        )
+        start_transition_pending = False
+        mouse_left_released_after_transition = True
+
     if slide_direction:
         # 방 전환 실행
         def draw_new_room():
@@ -3420,6 +3619,10 @@ while running:
         move_left  = k[pygame.K_a] or k[pygame.K_LEFT]
         move_right = k[pygame.K_d] or k[pygame.K_RIGHT]
         world_vx = 0; world_vy = 0
+
+        now_ms = pygame.time.get_ticks()
+        if now_ms < getattr(config, "stunned_until_ms", 0):
+            move_left = move_right = move_up = move_down = False
 
     if not player_dead:
         score_box = pygame.Surface((180, 30), pygame.SRCALPHA)
@@ -3600,6 +3803,8 @@ while running:
                 _go_scales[:] = [1.0, 1.0]
                 player_dead = False
                 gameover_sfx_played = False
+                from sound_manager import play_bgm_for_stage
+                play_bgm_for_stage(config.CURRENT_STAGE)
             elif _exit_requested:
                 old_surface = screen.copy()
                 def _draw_menu():

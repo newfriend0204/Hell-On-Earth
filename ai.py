@@ -2362,8 +2362,11 @@ class Enemy12(AIBase):
     PELLET_SPREAD_DEG = 30
     PELLET_DAMAGE = 9
     PELLET_RANGE = 500 * PLAYER_VIEW_SCALE
-    FIRE_INTERVAL = 1800  # ms
+    FIRE_INTERVAL = 1800
     SHOT_DISTANCE = 300 * PLAYER_VIEW_SCALE
+
+    PLAYER_RADIUS_EST = int(30 * PLAYER_VIEW_SCALE)
+    SAFE_GAP = int(30 * PLAYER_VIEW_SCALE)
 
     BULLET_SPEED = 12
 
@@ -2436,13 +2439,27 @@ class Enemy12(AIBase):
         angle_to_player = math.atan2(player_pos[1] - self.world_y, player_pos[0] - self.world_x)
         self._rotate_towards(angle_to_player, now)
 
-        # 이동 목표 = 플레이어 방향으로 압박
-        self.goal_pos = player_pos
-
-        # 사거리 내면 샷건 사격
         dx = player_pos[0] - self.world_x
         dy = player_pos[1] - self.world_y
         dist_to_player = math.hypot(dx, dy)
+
+        # 최소 분리(플레이어를 밀지 않게 거리 유지)
+        min_sep = self.radius + self.PLAYER_RADIUS_EST + self.SAFE_GAP
+        if dist_to_player < min_sep:
+            nx = (dx / dist_to_player) if dist_to_player > 0 else 0.0
+            ny = (dy / dist_to_player) if dist_to_player > 0 else 0.0
+            back = (min_sep - dist_to_player) + int(18 * PLAYER_VIEW_SCALE)
+            self.goal_pos = (
+                max(0, min(self.map_width,  self.world_x - nx * back)),
+                max(0, min(self.map_height, self.world_y - ny * back))
+            )
+            self.speed = self.BASE_SPEED * 1.1
+            return
+
+        # 기본적으로는 플레이어 쪽으로 접근
+        self.goal_pos = player_pos
+
+        # 사거리 내면 샷건 사격
         if dist_to_player <= self.SHOT_DISTANCE:
             if now - self.last_shot_time >= self.FIRE_INTERVAL:
                 self.shoot()
@@ -4234,6 +4251,2769 @@ class Enemy18(AIBase):
         body_rect = body_rot.get_rect(center=(sx, sy))
         self.rect = body_rect
         screen.blit(body_rot, body_rect)
+
+class Enemy19(AIBase):
+    rank = 8
+
+    MAX_HP = 800
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(32 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.0
+
+    CONE_RANGE = int(420 * PLAYER_VIEW_SCALE)
+    CONE_HALF_ANGLE_DEG = 35.0
+
+    TRIGGER_RADIUS = int(360 * PLAYER_VIEW_SCALE)
+    PREHEAT_MS = 1400
+    SPRAY_MS   = 1000
+    COOLDOWN_MS = 2800
+    BACKOFF_MS   = 350
+
+    SPRAY_TICK_MS = 500
+    SPRAY_TICK_DAMAGE = 3
+
+    BURN_DURATION_MS = 3000
+    BURN_TICK_MS = 500
+    BURN_TICK_DAMAGE = 4
+
+    TELEGRAPH_ALPHA = 76
+    SPRAY_ALPHA_MIN = 120
+    SPRAY_ALPHA_MAX = 185
+    CONE_SEGMENTS = 14
+
+    PLAYER_RADIUS_EST = int(15 * PLAYER_VIEW_SCALE)
+    SAFE_GAP = int(10 * PLAYER_VIEW_SCALE)
+
+    WANDER_RECALC_MIN = 1200
+    WANDER_RECALC_MAX = 2400
+    WANDER_STEP = int(260 * PLAYER_VIEW_SCALE)
+    WANDER_PLAYER_BIAS = 0.35
+
+    GUN_DISTANCE = int(38 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0,
+            far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.MAX_HP
+
+        self.image_original = images["enemy19"]
+        self.gun_image_original = images.get("gun17", images.get("gun1"))
+        self.rect = self.image_original.get_rect(center=(0, 0))
+        self.snd_start = sounds.get("flame_start")
+        self.snd_loop  = sounds.get("flame_loop")
+        self._loop_channel = None
+
+        self.state = "WANDER"  # WANDER → PREHEAT → SPRAY → COOLDOWN → WANDER (+BACKOFF)
+        self.state_until = 0
+        self.locked_angle = 0.0
+        self._next_spray_tick_ms = 0
+
+        self._player_burn_until = 0
+        self._player_burn_next  = 0
+        self._enemy_burn = {}
+
+        self._wander_goal = (self.world_x, self.world_y)
+        self._wander_recalc_at = pygame.time.get_ticks()
+        self._wander_seed = random.random() * 1000.0
+
+        self.kill_callback = kill_callback
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        if d == 0: return (0.0, 0.0)
+        return (dx/d, dy/d)
+
+    @staticmethod
+    def _angle_diff(a, b):
+        return (a - b + math.pi) % (2*math.pi) - math.pi  # [-pi, pi]
+
+    def _muzzle_pos(self):
+        return (
+            self.world_x + math.cos(self.direction_angle) * self.GUN_DISTANCE,
+            self.world_y + math.sin(self.direction_angle) * self.GUN_DISTANCE,
+        )
+
+    def _line_blocked(self, x0, y0, x1, y1):
+        om = getattr(config, "obstacle_manager", None)
+        if not om:
+            return False
+        step = 8 * PLAYER_VIEW_SCALE
+        dx, dy = x1 - x0, y1 - y0
+        dist = max(1.0, math.hypot(dx, dy))
+        vx, vy = dx / dist, dy / dist
+        t = 0.0
+        r_small = 3 * PLAYER_VIEW_SCALE
+        obs_list = getattr(om, "static_obstacles", []) + getattr(om, "combat_obstacles", [])
+        while t <= dist:
+            ox = x0 + vx * t
+            oy = y0 + vy * t
+            for obs in obs_list:
+                for c in getattr(obs, "colliders", []):
+                    if getattr(c, "bullet_passable", False):  # 불/탄환 통과 허용은 스킵
+                        continue
+                    cx = obs.world_x + getattr(c, "center", (0,0))[0]
+                    cy = obs.world_y + getattr(c, "center", (0,0))[1]
+                    shape = getattr(c, "shape", None)
+                    if shape == "circle":
+                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), c.size):
+                            return True
+                    elif shape == "ellipse":
+                        try: rx, ry = c.size
+                        except: continue
+                        if self.check_ellipse_circle_collision((ox,oy), r_small, (cx,cy), rx, ry):
+                            return True
+                    elif shape == "rectangle":
+                        try: w, h = c.size
+                        except: continue
+                        coll_r = ((w/2)**2 + (h/2)**2) ** 0.5
+                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), coll_r):
+                            return True
+            t += step
+        return False
+
+    def _in_cone_and_visible(self, tx, ty):
+        mx, my = self._muzzle_pos()
+        dx, dy = tx - mx, ty - my
+        dist = math.hypot(dx, dy)
+        if dist > self.CONE_RANGE:
+            return False
+        ang = math.atan2(dy, dx)
+        dtheta = abs(self._angle_diff(ang, self.locked_angle))
+        if math.degrees(dtheta) > self.CONE_HALF_ANGLE_DEG:
+            return False
+        if self._line_blocked(mx, my, tx, ty):
+            return False
+        return True
+
+    def _apply_burn_to_player(self, now):
+        if now < self._player_burn_until and now >= self._player_burn_next:
+            self._player_burn_next = now + self.BURN_TICK_MS
+            try:
+                if self.damage_player:
+                    self.damage_player(int(self.BURN_TICK_DAMAGE))
+                else:
+                    config.damage_player(int(self.BURN_TICK_DAMAGE))
+            except Exception:
+                pass
+
+    def _apply_burn_to_enemies(self, now):
+        to_delete = []
+        for e, st in list(self._enemy_burn.items()):
+            if (not getattr(e, "alive", True)) or now >= st["until"]:
+                to_delete.append(e)
+                continue
+            if now >= st["next"]:
+                st["next"] = now + self.BURN_TICK_MS
+                try:
+                    e.hit(int(self.BURN_TICK_DAMAGE), None, force=True)
+                except Exception:
+                    pass
+        for e in to_delete:
+            self._enemy_burn.pop(e, None)
+
+    def _start_loop(self):
+        if self.snd_loop and (self._loop_channel is None or not self._loop_channel.get_busy()):
+            try:
+                self._loop_channel = self.snd_loop.play(loops=-1)
+            except Exception:
+                self._loop_channel = None
+
+    def _stop_loop(self):
+        try:
+            if self._loop_channel:
+                self._loop_channel.stop()
+        except Exception:
+            pass
+        self._loop_channel = None
+
+    def _recalc_wander_goal(self, px, py):
+        # 마구잡이 방황 목표 갱신(플레이어 쪽으로 아주 약한 바이어스).
+        now = pygame.time.get_ticks()
+        self._wander_recalc_at = now + random.randint(self.WANDER_RECALC_MIN, self.WANDER_RECALC_MAX)
+        # 기본 무작위 벡터
+        angle = random.uniform(0, 2*math.pi)
+        rx = math.cos(angle) * self.WANDER_STEP
+        ry = math.sin(angle) * self.WANDER_STEP
+        # 플레이어 방향 바이어스
+        dx, dy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(dx, dy)
+        bx, by = nx * self.WANDER_STEP * self.WANDER_PLAYER_BIAS, ny * self.WANDER_STEP * self.WANDER_PLAYER_BIAS
+        gx = self.world_x + rx + bx
+        gy = self.world_y + ry + by
+        self._wander_goal = (max(0, min(self.map_width, gx)),
+                             max(0, min(self.map_height, gy)))
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+
+        # 시선: WANDER/COOLDOWN/BACKOFF에서는 플레이어를 계속 바라봄
+        dx, dy = px - self.world_x, py - self.world_y
+        if self.state in ("WANDER", "COOLDOWN", "BACKOFF"):
+            if dx or dy:
+                self.direction_angle = math.atan2(dy, dx)
+
+        # 화상 DOT 진행
+        self._apply_burn_to_player(now)
+        self._apply_burn_to_enemies(now)
+
+        # 최소 분리(겹치면 BACKOFF 유도)
+        dist_to_player = math.hypot(dx, dy)
+        min_sep = self.radius + self.PLAYER_RADIUS_EST + self.SAFE_GAP
+
+        if self.state == "WANDER":
+            self.speed = self.BASE_SPEED
+
+            # 너무 가까우면 BACKOFF로 전환
+            if dist_to_player < min_sep:
+                self.state = "BACKOFF"
+                self.state_until = now + self.BACKOFF_MS
+                # 목표는 뒤로
+                nx, ny = self._norm(dx, dy)
+                back = (min_sep - dist_to_player) + int(20 * PLAYER_VIEW_SCALE)
+                self.goal_pos = (max(0, min(self.map_width, self.world_x - nx * back)),
+                                 max(0, min(self.map_height, self.world_y - ny * back)))
+                return
+
+            # 방황 목표 주기적 갱신
+            if now >= self._wander_recalc_at:
+                self._recalc_wander_goal(px, py)
+            self.goal_pos = self._wander_goal
+
+            # 근접하면 예열(PREHEAT)로
+            if dist_to_player <= self.TRIGGER_RADIUS:
+                self.state = "PREHEAT"
+                self.state_until = now + self.PREHEAT_MS
+                self.locked_angle = self.direction_angle  # 각도 고정
+                self.speed = 0.0
+                self.goal_pos = (self.world_x, self.world_y)
+                try:
+                    if self.snd_start: self.snd_start.play()
+                except: pass
+                return
+
+        elif self.state == "BACKOFF":
+            # 강제 뒷걸음 (속도 약간 증가)
+            self.speed = self.BASE_SPEED * 1.15
+            nx, ny = self._norm(dx, dy)
+            back = (min_sep - dist_to_player) + int(24 * PLAYER_VIEW_SCALE)
+            self.goal_pos = (max(0, min(self.map_width, self.world_x - nx * back)),
+                             max(0, min(self.map_height, self.world_y - ny * back)))
+
+            if now >= self.state_until:
+                self.state = "WANDER"
+
+        elif self.state == "PREHEAT":
+            self.speed = 0.0
+            self.direction_angle = self.locked_angle
+            self.goal_pos = (self.world_x, self.world_y)
+
+            # 예열 중에도 너무 파고들면 살짝 뒤로 밀려남(자기 자신만)
+            if dist_to_player < min_sep:
+                nx, ny = self._norm(dx, dy)
+                shift = (min_sep - dist_to_player) + int(10 * PLAYER_VIEW_SCALE)
+                self.world_x = max(0, min(self.map_width, self.world_x - nx * shift))
+                self.world_y = max(0, min(self.map_height, self.world_y - ny * shift))
+
+            if now >= self.state_until:
+                self.state = "SPRAY"
+                self.state_until = now + self.SPRAY_MS
+                self._next_spray_tick_ms = now
+                self._start_loop()
+
+        elif self.state == "SPRAY":
+            self.speed = 0.0
+            self.direction_angle = self.locked_angle
+            self.goal_pos = (self.world_x, self.world_y)
+
+            if now >= self._next_spray_tick_ms:
+                self._next_spray_tick_ms = now + self.SPRAY_TICK_MS
+
+                # 플레이어 피해/화상
+                if self._in_cone_and_visible(px, py):
+                    try:
+                        if self.damage_player:
+                            self.damage_player(int(self.SPRAY_TICK_DAMAGE))
+                        else:
+                            config.damage_player(int(self.SPRAY_TICK_DAMAGE))
+                    except Exception:
+                        pass
+                    self._player_burn_until = max(self._player_burn_until, now + self.BURN_DURATION_MS)
+                    if self._player_burn_next < now:
+                        self._player_burn_next = now + self.BURN_TICK_MS
+
+                # 아군 피해/화상
+                for e in enemies:
+                    if e is self or not getattr(e, "alive", True):
+                        continue
+                    ex, ey = e.world_x, e.world_y
+                    if self._in_cone_and_visible(ex, ey):
+                        try:
+                            e.hit(int(self.SPRAY_TICK_DAMAGE), None, force=True)
+                        except Exception:
+                            pass
+                        st = self._enemy_burn.get(e)
+                        until = now + self.BURN_DURATION_MS
+                        nextt = now + self.BURN_TICK_MS if (not st or st["next"] < now) else st["next"]
+                        self._enemy_burn[e] = {"until": max(until, st["until"]) if st else until,
+                                               "next": nextt}
+
+            if now >= self.state_until:
+                self._stop_loop()
+                self.state = "COOLDOWN"
+                self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "COOLDOWN":
+            self.speed = self.BASE_SPEED
+
+            # 너무 가까우면 BACKOFF로 스냅
+            if dist_to_player < min_sep:
+                self.state = "BACKOFF"
+                self.state_until = now + self.BACKOFF_MS
+                nx, ny = self._norm(dx, dy)
+                back = (min_sep - dist_to_player) + int(20 * PLAYER_VIEW_SCALE)
+                self.goal_pos = (max(0, min(self.map_width, self.world_x - nx * back)),
+                                 max(0, min(self.map_height, self.world_y - ny * back)))
+                return
+
+            # 방황으로 회귀하기 전, 목표는 느슨히 방황 목표
+            if now >= self._wander_recalc_at:
+                self._recalc_wander_goal(px, py)
+            self.goal_pos = self._wander_goal
+
+            if now >= self.state_until:
+                self.state = "WANDER"
+
+    def hit(self, damage, blood_effects, force=False):
+        super().hit(damage, blood_effects, force)
+
+    def die(self, blood_effects):
+        self._stop_loop()
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(7, 8)
+        except:
+            pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 텔레그래프/분사 콘
+        state = self.state
+        if state in ("PREHEAT", "SPRAY"):
+            ang = self.locked_angle
+            half = math.radians(self.CONE_HALF_ANGLE_DEG)
+            radius = self.CONE_RANGE
+
+            pts = [(sx, sy)]
+            start = ang - half
+            end   = ang + half
+            for i in range(self.CONE_SEGMENTS + 1):
+                t = i / self.CONE_SEGMENTS
+                a = start + (end - start) * t
+                px = sx + math.cos(a) * radius
+                py = sy + math.sin(a) * radius
+                pts.append((px, py))
+
+            if state == "PREHEAT":
+                color = (255, 140, 40, self.TELEGRAPH_ALPHA)
+            else:
+                pulse = (math.sin(pygame.time.get_ticks() * 0.02) + 1) * 0.5
+                alpha = int(self.SPRAY_ALPHA_MIN + (self.SPRAY_ALPHA_MAX - self.SPRAY_ALPHA_MIN) * pulse)
+                color = (255, 90, 20, alpha)
+
+            # 서피스에 그려서 합성
+            minx = int(min(p[0] for p in pts)); maxx = int(max(p[0] for p in pts))
+            miny = int(min(p[1] for p in pts)); maxy = int(max(p[1] for p in pts))
+            w = max(1, maxx - minx + 4); h = max(1, maxy - miny + 4)
+            surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            lp = [(p[0] - minx + 2, p[1] - miny + 2) for p in pts]
+            pygame.draw.polygon(surf, color, lp)
+            screen.blit(surf, (minx, miny))
+
+        gun_pos_x = sx + math.cos(self.direction_angle) * self.GUN_DISTANCE
+        gun_pos_y = sy + math.sin(self.direction_angle) * self.GUN_DISTANCE
+        gun_rot = pygame.transform.rotate(self.gun_image_original, -math.degrees(self.direction_angle) - 90)
+        gun_rect = gun_rot.get_rect(center=(gun_pos_x, gun_pos_y))
+        screen.blit(gun_rot, gun_rect)
+
+        # 본체
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+class Enemy20(AIBase):
+    rank = 8
+
+    MAX_HP = 1000
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
+    RADIUS = int(36 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.0
+
+    WINDUP_MS = 700
+    MARK_OFFSET = int(150 * PLAYER_VIEW_SCALE)
+    MARK_RADIUS = int(176 * PLAYER_VIEW_SCALE)
+
+    DASH_SPEED_MULT = 2.2
+    DASH_REACH_EPS = int(18 * PLAYER_VIEW_SCALE)
+    DASH_TIMEOUT_MS = 1200
+    COOLDOWN_MS = 2200
+
+    DAMAGE = 40
+    KNOCKBACK_PX = int(260 * PLAYER_VIEW_SCALE)
+
+    MARK_ALPHA = 76
+    MARK_BORDER_ALPHA = 120
+
+    PLAYER_RADIUS_EST = int(15 * PLAYER_VIEW_SCALE)
+    SAFE_GAP = int(10 * PLAYER_VIEW_SCALE)
+    BACKOFF_MS = 300
+
+    WANDER_RECALC_MIN = 1200
+    WANDER_RECALC_MAX = 2400
+    WANDER_STEP = int(240 * PLAYER_VIEW_SCALE)
+    WANDER_PLAYER_BIAS = 0.30
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0,
+            far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=rank
+        )
+        self.hp = self.MAX_HP
+
+        self._shockwave_started_at = -9999
+        self.SHOCKWAVE_MS = 500
+
+        self.image_original = images.get("enemy20", images.get("enemy19"))
+        self.rect = self.image_original.get_rect(center=(0, 0))
+
+        self.snd_mark  = sounds.get("reaver_mark")
+        self.snd_dash  = sounds.get("reaver_dash")
+        self.snd_slam  = sounds.get("reaver_slam")
+
+        self.state = "WANDER"  # WANDER → TARGETING → DASH → IMPACT → COOLDOWN
+        self.state_until = 0
+        self.locked_angle = 0.0
+
+        self.mark_cx = self.world_x
+        self.mark_cy = self.world_y
+
+        self._wander_goal = (self.world_x, self.world_y)
+        self._wander_recalc_at = pygame.time.get_ticks()
+
+        self._backoff_until = 0
+
+        self._dash_started_at = 0
+
+        self.kill_callback = kill_callback
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        if d == 0: return (0.0, 0.0)
+        return (dx/d, dy/d)
+
+    def _compute_mark_center(self):
+        self.mark_cx = self.world_x + math.cos(self.locked_angle) * self.MARK_OFFSET
+        self.mark_cy = self.world_y + math.sin(self.locked_angle) * self.MARK_OFFSET
+
+    def _recalc_wander_goal(self, px, py):
+        now = pygame.time.get_ticks()
+        self._wander_recalc_at = now + random.randint(self.WANDER_RECALC_MIN, self.WANDER_RECALC_MAX)
+        ang = random.uniform(0, 2*math.pi)
+        rx, ry = math.cos(ang) * self.WANDER_STEP, math.sin(ang) * self.WANDER_STEP
+        dx, dy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(dx, dy)
+        bx, by = nx * self.WANDER_STEP * self.WANDER_PLAYER_BIAS, ny * self.WANDER_STEP * self.WANDER_PLAYER_BIAS
+        gx = self.world_x + rx + bx
+        gy = self.world_y + ry + by
+        self._wander_goal = (max(0, min(self.map_width, gx)),
+                             max(0, min(self.map_height, gy)))
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        px, py = world_x + player_rect.centerx, world_y + player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+
+        # 기본 시선
+        if self.state in ("WANDER", "COOLDOWN"):
+            if dx or dy:
+                self.direction_angle = math.atan2(dy, dx)
+
+        # 최소 분리(플레이어 밀지 않음)
+        min_sep = self.radius + self.PLAYER_RADIUS_EST + self.SAFE_GAP
+        if dist_to_player < min_sep and self.state in ("WANDER", "COOLDOWN", "TARGETING"):
+            self._backoff_until = now + self.BACKOFF_MS
+            nx, ny = self._norm(dx, dy)
+            back = (min_sep - dist_to_player) + int(18 * PLAYER_VIEW_SCALE)
+            self.goal_pos = (max(0, min(self.map_width, self.world_x - nx * back)),
+                             max(0, min(self.map_height, self.world_y - ny * back)))
+            self.speed = self.BASE_SPEED * 1.05
+            return
+
+        if self.state == "WANDER":
+            self.speed = self.BASE_SPEED
+
+            # 방황 목표 갱신
+            if now >= self._wander_recalc_at:
+                self._recalc_wander_goal(px, py)
+            self.goal_pos = self._wander_goal
+
+            # 표식 시전 진입(좀 더 멀리서도 시작)
+            if dist_to_player <= self.MARK_OFFSET + self.MARK_RADIUS * 0.65:
+                self.state = "TARGETING"
+                self.state_until = now + self.WINDUP_MS
+                self.locked_angle = self.direction_angle
+                self._compute_mark_center()
+                self.speed = 0.0
+                self.goal_pos = (self.world_x, self.world_y)
+
+        elif self.state == "TARGETING":
+            # 제자리에서 표식 표시, 시선 고정
+            self.speed = 0.0
+            self.direction_angle = self.locked_angle
+            self.goal_pos = (self.world_x, self.world_y)
+
+            # 예열 중 겹치면 자기 자신만 살짝 물러남
+            if dist_to_player < min_sep:
+                nx, ny = self._norm(dx, dy)
+                shift = (min_sep - dist_to_player) + int(10 * PLAYER_VIEW_SCALE)
+                self.world_x = max(0, min(self.map_width, self.world_x - nx * shift))
+                self.world_y = max(0, min(self.map_height, self.world_y - ny * shift))
+
+            # 예열 종료 → 대시
+            if now >= self.state_until:
+                try:
+                    if self.snd_dash: self.snd_dash.play()
+                except: pass
+                self.state = "DASH"
+                self._dash_started_at = now
+                self._shockwave_started_at = now
+                self.speed = self.BASE_SPEED * self.DASH_SPEED_MULT
+                self.goal_pos = (self.mark_cx, self.mark_cy)
+
+        elif self.state == "DASH":
+            # 표식 중심으로 빠르게 이동(지형에 막힐 수 있음)
+            self.speed = self.BASE_SPEED * self.DASH_SPEED_MULT
+            self.direction_angle = math.atan2(self.mark_cy - self.world_y, self.mark_cx - self.world_x)
+            self.goal_pos = (self.mark_cx, self.mark_cy)
+
+            # 도달/타임아웃 판정
+            if math.hypot(self.mark_cx - self.world_x, self.mark_cy - self.world_y) <= self.DASH_REACH_EPS:
+                self.state = "IMPACT"
+            elif now - self._dash_started_at >= self.DASH_TIMEOUT_MS:
+                # 실패: 쿨다운으로
+                self.state = "COOLDOWN"
+                self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "IMPACT":
+            # 한 프레임 동안 피해 적용 후 바로 COOLDOWN
+            self._do_impact(px, py, enemies)
+            self.state = "COOLDOWN"
+            self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "COOLDOWN":
+            self.speed = self.BASE_SPEED
+            # 느슨히 방황 계속
+            if now >= self._wander_recalc_at:
+                self._recalc_wander_goal(px, py)
+            self.goal_pos = self._wander_goal
+
+            if now >= self.state_until:
+                self.state = "WANDER"
+
+    def _do_impact(self, px, py, enemies):
+        # 사운드/화면 연출
+        try:
+            if self.snd_slam: self.snd_slam.play()
+        except: pass
+        try:
+            if hasattr(config, "add_screen_shake"):
+                config.add_screen_shake(6, 320)
+        except: pass
+
+        # 플레이어 판정
+        if math.hypot(px - self.mark_cx, py - self.mark_cy) <= self.MARK_RADIUS:
+            # 피해
+            try:
+                if self.damage_player:
+                    self.damage_player(int(self.DAMAGE))
+                else:
+                    config.damage_player(int(self.DAMAGE))
+            except Exception:
+                pass
+
+            # 넉백
+            if hasattr(config, "apply_knockback"):
+                vx = px - self.mark_cx
+                vy = py - self.mark_cy
+                nx, ny = self._norm(vx, vy)
+                config.apply_knockback(nx * self.KNOCKBACK_PX, ny * self.KNOCKBACK_PX)
+
+        # 아군(다른 적) 판정(친선 피해 ON)
+        for e in enemies:
+            if e is self or not getattr(e, "alive", True):
+                continue
+            if math.hypot(e.world_x - self.mark_cx, e.world_y - self.mark_cy) <= self.MARK_RADIUS:
+                try:
+                    e.hit(int(self.DAMAGE), None, force=True)
+                except Exception:
+                    pass
+
+        # 자기 자신 (위치 보정) — 표식 중앙에 정렬
+        self.world_x = self.mark_cx
+        self.world_y = self.mark_cy
+
+        # 더미 충돌 목표 해제
+        self.goal_pos = (self.world_x, self.world_y)
+
+        if self.kill_callback:
+            try:
+                self.kill_callback(self)
+            except:
+                pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 표식 그리기(TARGETING 중에만 표시)
+        if self.state == "TARGETING":
+            cx = int(self.mark_cx - world_x + shake_offset_x)
+            cy = int(self.mark_cy - world_y + shake_offset_y)
+            r  = self.MARK_RADIUS
+
+            size = r*2 + 6
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            center = (size//2, size//2)
+
+            # 채움 + 테두리
+            pygame.draw.circle(surf, (255, 60, 60, self.MARK_ALPHA), center, r)
+            pygame.draw.circle(surf, (255, 90, 90, self.MARK_BORDER_ALPHA), center, r, width=3)
+            screen.blit(surf, (cx - size//2, cy - size//2))
+
+        # 대시 시작 시: 표식 중심에서 하얀 원형 충격파가 퍼짐
+        now = pygame.time.get_ticks()
+        if self.state in ("DASH", "IMPACT"):
+            t = now - getattr(self, "_shockwave_started_at", -9999)
+            if 0 <= t <= self.SHOCKWAVE_MS:
+                cx = int(self.mark_cx - world_x + shake_offset_x)
+                cy = int(self.mark_cy - world_y + shake_offset_y)
+                p = t / self.SHOCKWAVE_MS
+                rr = max(4, int(self.MARK_RADIUS * p))
+                size_sw = rr * 2 + 8
+                sw = pygame.Surface((size_sw, size_sw), pygame.SRCALPHA)
+                alpha = max(0, int(220 * (1.0 - p)))
+                pygame.draw.circle(sw, (255, 255, 255, alpha), (size_sw//2, size_sw//2), rr, width=4)
+                screen.blit(sw, (cx - size_sw//2, cy - size_sw//2))
+
+        # 본체
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+class Enemy21(AIBase):
+    rank = 8
+
+    HP = 900
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(34 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.0
+
+    PULSE_RADIUS = int(300 * PLAYER_VIEW_SCALE)
+    DAMAGE = 28
+    WINDUP_MS = 1400
+    COOLDOWN_MS = 2500
+
+    STUN_MS = 1000
+    SLOW_MS = 3000
+    SLOW_FACTOR = 0.50
+
+    ORBIT_RADIUS = int(PULSE_RADIUS * 0.75)
+    APPROACH_STEP = int(240 * PLAYER_VIEW_SCALE)
+
+    W_APPROACH = 0.55
+    W_STRAFE   = 0.45
+    W_RADIAL   = 0.20
+    W_REPULSE  = 0.20
+
+    STRAFE_SWITCH_MIN = 500
+    STRAFE_SWITCH_MAX = 900
+
+    RETREAT_PROB_PER_SEC = 0.18
+    RETREAT_DUR_MIN = 200
+    RETREAT_DUR_MAX = 320
+    RETREAT_CD_MIN  = 900
+    RETREAT_CD_MAX  = 1400
+
+    PLAYER_RADIUS_EST = int(15 * PLAYER_VIEW_SCALE)
+    SAFE_GAP = int(10 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
+            radius=self.RADIUS, push_strength=self.PUSH_STRENGTH, alert_duration=0,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.hp = self.HP
+
+        self.image_original = images.get("enemy21", images.get("enemy18"))
+        self.rect = self.image_original.get_rect(center=(0, 0))
+
+        self.snd_charge = sounds.get("shock_charge")
+        self.snd_burst  = sounds.get("shock_burst")
+
+        self.state = "APPROACH"  # APPROACH → WINDUP → DISCHARGE → COOLDOWN → APPROACH
+        self.state_until = 0
+
+        now = pygame.time.get_ticks()
+        self._strafe_dir = random.choice([-1, 1])
+        self._strafe_until = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        self._retreat_active_until   = 0
+        self._retreat_cooldown_until = 0
+
+        self._last_update_ms = now
+
+        self._charge_start_ms = 0
+        self._burst_ms = 220
+        self._burst_started_ms = -9999
+
+        self.kill_callback = kill_callback
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        return (dx/d, dy/d) if d > 0 else (0.0, 0.0)
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        dt = max(1, now - getattr(self, "_last_update_ms", now))
+        self._last_update_ms = now
+
+        px, py = world_x + player_rect.centerx, world_y + player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        # 시선은 기본적으로 플레이어를 향함
+        if dx or dy:
+            self.direction_angle = math.atan2(dy, dx)
+
+        # 최소 분리(겹침 방지): 자기 자신이 살짝 뒤로
+        min_sep = self.radius + self.PLAYER_RADIUS_EST + self.SAFE_GAP
+        repulse_vec = (0.0, 0.0)
+        if dist < min_sep:
+            nx, ny = self._norm(dx, dy)
+            back = (min_sep - dist) + int(18 * PLAYER_VIEW_SCALE)
+            self.world_x = max(0, min(self.map_width,  self.world_x - nx * 0.25 * back))
+            self.world_y = max(0, min(self.map_height, self.world_y - ny * 0.25 * back))
+            repulse_vec = (-nx, -ny)  # 벡터 합성에 약하게 반영(뒤로 밀림 방지용)
+
+        if self.state == "APPROACH":
+            self.speed = self.BASE_SPEED * 1.06
+
+            # 좌/우 전환
+            if now >= self._strafe_until:
+                self._strafe_dir *= -1
+                self._strafe_until = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+            nx, ny = self._norm(dx, dy)
+            tx, ty = -ny * self._strafe_dir, nx * self._strafe_dir  # 접선
+
+            # ORBIT_RADIUS로 수렴(너무 멀면 당기고, 너무 가까우면 약하게 밀어냄)
+            # (ORBIT_RADIUS가 작아져 근본적으로 더 접근하려는 성향 강화)
+            radial_err = (self.ORBIT_RADIUS - dist) * 0.008  # +면 바깥으로, -면 안쪽으로
+            radial_vec = (nx * radial_err, ny * radial_err)
+
+            # 마이크로 후퇴 확률(감지 범위 근처에서만): 짧게만, 쿨다운 있음
+            retreat_vec = (0.0, 0.0)
+            retreat_active = now < self._retreat_active_until
+            if not retreat_active and dist <= self.PULSE_RADIUS * 1.2 and now >= self._retreat_cooldown_until:
+                if random.random() < self.RETREAT_PROB_PER_SEC * (dt / 1000.0):
+                    self._retreat_active_until = now + random.randint(self.RETREAT_DUR_MIN, self.RETREAT_DUR_MAX)
+                    self._retreat_cooldown_until = now + random.randint(self.RETREAT_CD_MIN, self.RETREAT_CD_MAX)
+                    retreat_active = True
+            if retreat_active:
+                retreat_strength = 0.35
+                retreat_vec = (-nx * retreat_strength, -ny * retreat_strength)
+
+            # 가중치 합성(전체적으로는 접근 성향 ↑)
+            approach_w = self.W_APPROACH * (0.25 if retreat_active else 1.0)  # 후퇴 중에도 접근 성향 약간 유지
+            vx = (nx * approach_w) \
+               + (tx * self.W_STRAFE) \
+               + (radial_vec[0] * self.W_RADIAL) \
+               + (retreat_vec[0]) \
+               + (repulse_vec[0] * self.W_REPULSE)
+            vy = (ny * approach_w) \
+               + (ty * self.W_STRAFE) \
+               + (radial_vec[1] * self.W_RADIAL) \
+               + (retreat_vec[1]) \
+               + (repulse_vec[1] * self.W_REPULSE)
+
+            mvx, mvy = self._norm(vx, vy)
+            step = self.APPROACH_STEP * 0.14  # 이전보다 살짝 적극적으로 이동
+            gx = self.world_x + mvx * step
+            gy = self.world_y + mvy * step
+            self.goal_pos = (max(0, min(self.map_width, gx)),
+                             max(0, min(self.map_height, gy)))
+
+            # 범위 진입 -> 충전 시작
+            if dist <= self.PULSE_RADIUS:
+                self.state = "WINDUP"
+                self.state_until = now + self.WINDUP_MS
+                self._charge_start_ms = now
+                self.speed = 0.0
+                self.goal_pos = (self.world_x, self.world_y)
+                try:
+                    if self.snd_charge: self.snd_charge.play()
+                except: pass
+
+        elif self.state == "WINDUP":
+            self.speed = 0.0
+            self.goal_pos = (self.world_x, self.world_y)
+
+            if now >= self.state_until:
+                self.state = "DISCHARGE"
+                self._burst_started_ms = now
+                try:
+                    if self.snd_burst: self.snd_burst.play()
+                except: pass
+
+                # 판정/디버프
+                if dist <= self.PULSE_RADIUS:
+                    try:
+                        if self.damage_player:
+                            self.damage_player(int(self.DAMAGE))
+                        else:
+                            config.damage_player(int(self.DAMAGE))
+                    except Exception:
+                        pass
+                    try:
+                        config.stunned_until_ms = max(getattr(config, "stunned_until_ms", 0), now + self.STUN_MS)
+                        config.slow_until_ms = max(getattr(config, "slow_until_ms", 0), now + self.SLOW_MS)
+                        config.move_slow_factor = self.SLOW_FACTOR   # -50%
+                        config.slow_started_ms = now
+                        config.slow_duration_ms = self.SLOW_MS
+                    except Exception:
+                        pass
+
+        elif self.state == "DISCHARGE":
+            self.state = "COOLDOWN"
+            self.state_until = now + self.COOLDOWN_MS
+            self.speed = self.BASE_SPEED * 0.95
+            self.goal_pos = (self.world_x, self.world_y)
+
+        elif self.state == "COOLDOWN":
+            # 쿨다운 중에도 가볍게 무빙(다음 사이클 준비)
+            self.speed = self.BASE_SPEED
+            nx, ny = self._norm(dx, dy)
+            tx, ty = -ny * self._strafe_dir, nx * self._strafe_dir
+            if now >= self._strafe_until:
+                self._strafe_dir *= -1
+                self._strafe_until = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+            vx = nx * 0.12 + tx * 0.55
+            vy = ny * 0.12 + ty * 0.55
+            mvx, mvy = self._norm(vx, vy)
+            step = self.APPROACH_STEP * 0.08
+            gx = self.world_x + mvx * step
+            gy = self.world_y + mvy * step
+            self.goal_pos = (max(0, min(self.map_width, gx)),
+                             max(0, min(self.map_height, gy)))
+            if now >= self.state_until:
+                self.state = "APPROACH"
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 충전/방출 테레그래프
+        now = pygame.time.get_ticks()
+        if self.state in ("WINDUP", "DISCHARGE"):
+            r = self.PULSE_RADIUS
+            cx = int(self.world_x - world_x + shake_offset_x)
+            cy = int(self.world_y - world_y + shake_offset_y)
+            size = r * 2 + 8
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            cen = (size // 2, size // 2)
+            if self.state == "WINDUP":
+                t = now - self._charge_start_ms
+                p = min(1.0, t / max(1, self.WINDUP_MS))
+                alpha = int(60 + 80 * (0.5 + 0.5 * math.sin(p * math.pi * 2)))
+                pygame.draw.circle(surf, (80, 170, 255, alpha), cen, r, width=4)
+                for i in range(3):
+                    ang = (p * 6.28 * (i + 1) * 0.8) % (2 * math.pi)
+                    rr = int(r * (0.4 + 0.5 * ((i + 1) / 3)))
+                    x = cen[0] + int(math.cos(ang) * rr)
+                    y = cen[1] + int(math.sin(ang) * rr)
+                    pygame.draw.circle(surf, (180, 220, 255, alpha), (x, y), 6)
+            else:
+                t = now - self._burst_started_ms
+                if 0 <= t <= self._burst_ms:
+                    p = t / self._burst_ms
+                    rr = int(r * (0.9 + 0.2 * p))
+                    a = int(220 * (1.0 - p))
+                    pygame.draw.circle(surf, (255, 255, 255, a), cen, rr, width=6)
+            screen.blit(surf, (cx - size // 2, cy - size // 2))
+
+        # 본체
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+    def die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(8, 9)
+        except Exception:
+            pass
+
+class Enemy22(AIBase):
+    rank = 1
+
+    HP = 110
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.70
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.10
+
+    HOLD_DIST = int(120 * PLAYER_VIEW_SCALE)
+    RING_TOL  = int(40  * PLAYER_VIEW_SCALE)
+
+    STRAFE_STEP       = int(80 * PLAYER_VIEW_SCALE)
+    STRAFE_SWITCH_MIN = 600
+    STRAFE_SWITCH_MAX = 1000
+
+    WINDUP_MS   = 600
+    IMPACT_MS   = 120
+    COOLDOWN_MIN = 900
+    COOLDOWN_MAX = 1200
+
+    WAVE_LEN = int(220 * PLAYER_VIEW_SCALE)
+    WAVE_WID = int(60  * PLAYER_VIEW_SCALE)
+    WAVE_GAP = int(25  * PLAYER_VIEW_SCALE)
+
+    DMG = 12
+    KNOCKBACK = int(140 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=self.WINDUP_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images["enemy22"]
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.state = "APPROACH"  # APPROACH / WINDUP / IMPACT / COOLDOWN
+        self.state_until = 0
+        self.locked_angle = 0.0
+        self.locked_pos = None
+        self.has_hit = False
+        self.show_alert = False
+
+        self._strafe_dir = random.choice([-1, 1])
+        self._next_strafe_switch = pygame.time.get_ticks() + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+    @staticmethod
+    def _norm(dx, dy):
+        dist = math.hypot(dx, dy)
+        return (dx / dist, dy / dist) if dist > 1e-6 else (0.0, 0.0)
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        # 항상 플레이어를 바라보게 유지(시전/임팩트 중에는 각도 고정)
+        if self.state not in ("WINDUP", "IMPACT"):
+            if dx or dy:
+                self.direction_angle = math.atan2(dy, dx)
+
+        # 좌우 무빙 타이밍 갱신
+        if self.state == "APPROACH" and now >= self._next_strafe_switch:
+            self._strafe_dir *= -1
+            self._next_strafe_switch = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        # 상태별 처리
+        if self.state == "APPROACH":
+            # 링 거리 유지 + 좌우 무빙
+            nx, ny = self._norm(dx, dy)
+            tx, ty = -ny, nx  # 수직(좌우) 방향
+
+            if dist > self.HOLD_DIST + self.RING_TOL:
+                target = (px - nx * self.HOLD_DIST, py - ny * self.HOLD_DIST)
+            elif dist < self.HOLD_DIST:
+                target = (self.world_x - nx * 40, self.world_y - ny * 40)
+            else:
+                target = (self.world_x + tx * self.STRAFE_STEP * self._strafe_dir,
+                          self.world_y + ty * self.STRAFE_STEP * self._strafe_dir)
+
+            self.goal_pos = target
+            self.speed = self.BASE_SPEED
+
+            # 공격 개시 조건
+            if dist <= (self.HOLD_DIST + 20 * PLAYER_VIEW_SCALE) and now >= self.state_until:
+                self.state = "WINDUP"
+                self.state_until = now + self.WINDUP_MS
+                self.locked_angle = self.direction_angle
+                self.locked_pos = (self.world_x, self.world_y)  # ⛓️ 위치 고정
+                self.has_hit = False
+                self.show_alert = True
+
+        elif self.state == "WINDUP":
+            # 위치/각도 완전 고정
+            self.goal_pos = None
+            self.speed = 0.0
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
+            if now >= self.state_until:
+                # 슬래시 시작
+                self.state = "IMPACT"
+                self.state_until = now + self.IMPACT_MS
+                self.show_alert = False
+                # 판정 1회
+                self._do_hit(px, py)
+
+        elif self.state == "IMPACT":
+            # 짧은 연출 구간(이동 없음)
+            self.goal_pos = None
+            self.speed = 0.0
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
+            if now >= self.state_until:
+                self.state = "COOLDOWN"
+                self.state_until = now + random.randint(self.COOLDOWN_MIN, self.COOLDOWN_MAX)
+
+        elif self.state == "COOLDOWN":
+            # 쿨다운 동안 접근만(공격 시작 제한만 걸림)
+            nx, ny = self._norm(dx, dy)
+            target = (px - nx * self.HOLD_DIST, py - ny * self.HOLD_DIST)
+            self.goal_pos = target
+            self.speed = self.BASE_SPEED
+            if now >= self.state_until:
+                self.state = "APPROACH"
+
+    def _do_hit(self, px, py):
+        # IMPACT 시작 시 1회 판정: 정면 직사각형 안에 플레이어가 있으면 피해 + 넉백
+        if self.has_hit:
+            return
+        ang = self.locked_angle
+        dx = px - self.world_x
+        dy = py - self.world_y
+        cos_a = math.cos(-ang)
+        sin_a = math.sin(-ang)
+        lx = dx * cos_a - dy * sin_a
+        ly = dx * sin_a + dy * cos_a
+        hit = (self.WAVE_GAP <= lx <= self.WAVE_GAP + self.WAVE_LEN) and (abs(ly) <= self.WAVE_WID * 0.5)
+        if hit and callable(self.damage_player):
+            self.damage_player(self.DMG)
+            # 넉백(정면 방향으로)
+            nx, ny = math.cos(ang), math.sin(ang)
+            config.apply_knockback(nx * self.KNOCKBACK, ny * self.KNOCKBACK)
+        self.has_hit = True
+
+    # WINDUP/IMPACT 동안 위치를 강제로 고정(충돌 보정, 적 간 밀침 등 무시)
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        super().update(dt, world_x, world_y, player_rect, enemies)
+        if self.state in ("WINDUP", "IMPACT"):
+            if self.locked_pos is None:
+                self.locked_pos = (self.world_x, self.world_y)
+            self.world_x, self.world_y = self.locked_pos
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 텔레그래프(충격파 범위)
+        if self.state in ("WINDUP", "IMPACT"):
+            ang = self.locked_angle
+            # 빨간 반투명 직사각형
+            base_surf = pygame.Surface((self.WAVE_LEN, self.WAVE_WID), pygame.SRCALPHA)
+            base_surf.fill((255, 40, 40, 110))
+            rotated = pygame.transform.rotate(base_surf, -math.degrees(ang))
+            # 직사각형의 중심은 적으로부터 GAP + LEN/2 떨어진 지점
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            rect = rotated.get_rect(center=(cx, cy))
+            screen.blit(rotated, rect)
+
+            # 하얀 슬래시 바(임팩트 중 짧게 스윕)
+            if self.state == "IMPACT":
+                now = pygame.time.get_ticks()
+                t = 1.0 - max(0.0, (self.state_until - now)) / max(1.0, self.IMPACT_MS)
+                bar_x = self.WAVE_GAP + int(self.WAVE_LEN * t)
+                bar_len = int(12 * PLAYER_VIEW_SCALE)
+                bar_wid = self.WAVE_WID + 4
+                bar_surf = pygame.Surface((bar_len, bar_wid), pygame.SRCALPHA)
+                bar_surf.fill((255, 255, 255, 200))
+                bar_rot = pygame.transform.rotate(bar_surf, -math.degrees(ang))
+                bx = sx + int(math.cos(ang) * (bar_x))
+                by = sy + int(math.sin(ang) * (bar_x))
+                brect = bar_rot.get_rect(center=(bx, by))
+                screen.blit(bar_rot, brect)
+
+        # 본체
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+        # 경고(!)표시는 WINDUP 중에만
+        if self.state == "WINDUP":
+            self.draw_alert(screen, sx, sy)
+
+    def die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(2, 3)
+
+class Enemy23(AIBase):
+    rank = 8
+
+    HP = 900
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+    RADIUS = int(36 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.0
+
+    AIM_MS = 500
+    SUPPRESS_MS = 3500
+    RELOAD_MS = 1500
+
+    FIRE_INTERVAL_MS = 80
+    SPREAD_TOTAL_DEG = 12.0
+    BULLET_DAMAGE = 14
+    BULLET_SPEED = 8.0 * PLAYER_VIEW_SCALE
+    BULLET_RANGE = 1800 * PLAYER_VIEW_SCALE
+
+    ROT_SPEED_DEG_S = 50.0
+    FRONT_DR_REDUCTION = 0.20
+    FRONT_DR_ANGLE_DEG = 60.0
+
+    KEEP_MIN = int(700 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(1000 * PLAYER_VIEW_SCALE)
+    REPOSITION_DISTANCE = int(400 * PLAYER_VIEW_SCALE)
+
+    POS_CLEARANCE = int(32 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=self.AIM_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy23", images.get("enemy20"))
+        self.gun_image_original = images.get("gun26", images.get("gun1"))
+        self.bullet_image = images.get("enemy_bullet", images.get("bullet1"))
+        self.fire_sound = sounds.get("gun26_fire")
+
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.state = "SELECT_POSITION"  # SELECT_POSITION, AIMING, SUPPRESSING, RELOADING
+        self.state_until = 0
+        self.selected_pos = None
+        self.show_alert = False
+
+        now = pygame.time.get_ticks()
+        self.next_fire_at = now
+
+        self.aim_angle = self.direction_angle
+
+    @staticmethod
+    def _wrap_angle(a):
+        while a > math.pi: a -= 2*math.pi
+        while a < -math.pi: a += 2*math.pi
+        return a
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _is_position_clear(self, x, y):
+        if not (0 <= x <= self.map_width and 0 <= y <= self.map_height):
+            return False
+        if not hasattr(config, "obstacle_manager") or config.obstacle_manager is None:
+            return True
+        for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
+            for c in obs.colliders:
+                if c.check_collision_circle((x, y), self.radius + self.POS_CLEARANCE, (obs.world_x, obs.world_y)):
+                    return False
+        return True
+
+    def _choose_vantage(self, world_x, world_y, player_rect):
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        for _ in range(24):
+            ang = random.uniform(0, 2*math.pi)
+            r = random.uniform(self.KEEP_MIN, self.KEEP_MAX)
+            cx = px + math.cos(ang) * r
+            cy = py + math.sin(ang) * r
+            if self._is_position_clear(cx, cy):
+                return (cx, cy)
+        return (self.world_x, self.world_y)
+
+    def _count_my_bullets(self):
+        try:
+            return sum(1 for b in config.global_enemy_bullets if getattr(b, "owner", None) is self)
+        except Exception:
+            return 0
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        # 너무 붙으면 즉시 재위치
+        if dist < self.REPOSITION_DISTANCE and self.state not in ("SELECT_POSITION", "RELOADING"):
+            self.state = "SELECT_POSITION"
+            self.selected_pos = None
+            self.show_alert = False
+
+        desired_angle = math.atan2(dy, dx)
+        if self.state == "SUPPRESSING":
+            self.aim_angle = desired_angle  # 실제 회전은 update()에서 제한
+        else:
+            self.aim_angle = desired_angle
+            self.direction_angle = desired_angle
+
+        if self.state == "SELECT_POSITION":
+            if self.selected_pos is None:
+                self.selected_pos = self._choose_vantage(world_x, world_y, player_rect)
+            self.goal_pos = self.selected_pos
+            self.speed = self.BASE_SPEED
+            if math.hypot(self.world_x - self.selected_pos[0], self.world_y - self.selected_pos[1]) < 40:
+                self.state = "AIMING"
+                self.state_until = now + self.AIM_MS
+                self.show_alert = True
+
+        elif self.state == "AIMING":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                self.state = "SUPPRESSING"
+                self.state_until = now + self.SUPPRESS_MS
+                self.show_alert = False
+                self.next_fire_at = now
+
+        elif self.state == "SUPPRESSING":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.next_fire_at and self._count_my_bullets() < 80:
+                self._fire_bullet()
+                self.next_fire_at = now + self.FIRE_INTERVAL_MS
+            if now >= self.state_until:
+                self.state = "RELOADING"
+                self.state_until = now + self.RELOAD_MS
+
+        elif self.state == "RELOADING":
+            # 유지 반경 복원용 이동
+            if dist > 1e-6:
+                nx, ny = (dx / dist, dy / dist)
+            else:
+                nx, ny = (0.0, 0.0)
+            if dist < self.KEEP_MIN:
+                target = (self.world_x - nx * (self.KEEP_MIN - dist + 40),
+                          self.world_y - ny * (self.KEEP_MIN - dist + 40))
+            elif dist > self.KEEP_MAX:
+                target = (self.world_x + nx * (dist - self.KEEP_MAX),
+                          self.world_y + ny * (dist - self.KEEP_MAX))
+            else:
+                tx, ty = -ny, nx
+                mul = int(120 * PLAYER_VIEW_SCALE) * random.choice([-1, 1])
+                target = (self.world_x + tx * mul, self.world_y + ty * mul)
+            self.goal_pos = target
+            self.speed = self.BASE_SPEED
+            if now >= self.state_until:
+                self.state = "SELECT_POSITION"
+                self.selected_pos = None
+
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        # 사격 중 회전속도 제한
+        if self.state == "SUPPRESSING":
+            max_delta = math.radians(self.ROT_SPEED_DEG_S) * (dt / 1000.0)
+            diff = self._wrap_angle(self.aim_angle - self.direction_angle)
+            if abs(diff) > max_delta:
+                self.direction_angle += max_delta * (1 if diff > 0 else -1)
+            else:
+                self.direction_angle = self.aim_angle
+        super().update(dt, world_x, world_y, player_rect, enemies)
+
+    def _fire_bullet(self):
+        spawn_offset = max(int(32 * PLAYER_VIEW_SCALE), int(self.current_distance))
+        bullet_world_x = self.world_x + math.cos(self.direction_angle) * spawn_offset
+        bullet_world_y = self.world_y + math.sin(self.direction_angle) * spawn_offset
+
+        target_world_x = bullet_world_x + math.cos(self.direction_angle) * 2000
+        target_world_y = bullet_world_y + math.sin(self.direction_angle) * 2000
+
+        new_bullet = Bullet(
+            bullet_world_x,
+            bullet_world_y,
+            target_world_x,
+            target_world_y,
+            self.SPREAD_TOTAL_DEG,
+            self.bullet_image,
+            speed=self.BULLET_SPEED,
+            max_distance=self.BULLET_RANGE,
+            damage=self.BULLET_DAMAGE
+        )
+        new_bullet.trail_enabled = True
+        new_bullet.owner = self
+        config.global_enemy_bullets.append(new_bullet)
+
+        # 발사마다 사운드
+        if self.fire_sound:
+            try:
+                self.fire_sound.play()
+            except Exception:
+                pass
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+        # 전방 경감(플레이어 현재 위치 기준 근사)
+        try:
+            px, py = (config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery)
+            vec_angle = math.atan2(py - self.world_y, px - self.world_x)
+            diff = abs(self._wrap_angle(vec_angle - self.direction_angle))
+            if diff <= math.radians(self.FRONT_DR_ANGLE_DEG):
+                damage = int(math.ceil(damage * (1.0 - self.FRONT_DR_REDUCTION)))
+        except Exception:
+            pass
+        self.hp -= damage
+        if self.hp <= 0:
+            self.die(blood_effects)
+
+    def die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(8, 9)
+        except Exception:
+            pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        
+        # 총 (회전 -90° 보정)
+        if self.gun_image_original:
+            gun_pos_x = sx + math.cos(self.direction_angle) * (self.current_distance)
+            gun_pos_y = sy + math.sin(self.direction_angle) * (self.current_distance)
+            rotated_gun = pygame.transform.rotate(self.gun_image_original, -math.degrees(self.direction_angle) - 90)
+            gun_rect = rotated_gun.get_rect(center=(gun_pos_x, gun_pos_y))
+            screen.blit(rotated_gun, gun_rect)
+
+        # 본체
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+        # 조준 경고 '!'
+        if self.state == "AIMING":
+            self.show_alert = True
+            self.draw_alert(screen, sx, sy)
+        else:
+            self.show_alert = False
+
+class Enemy24(AIBase):
+    rank = 5
+
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+    MIN_KEEP_DIST = int(100 * PLAYER_VIEW_SCALE)
+    STRAFE_STEP = int(70 * PLAYER_VIEW_SCALE)
+    STRAFE_SWITCH_MIN = 600
+    STRAFE_SWITCH_MAX = 1000
+
+    P1_HP = 600
+    P1_WINDUP_MS = 250
+    P1_IMPACT_MS = 100
+    P1_BETWEEN_HITS_MS = 150
+    P1_COOLDOWN_MS = 2000
+    P1_DMG = 16
+    P1_KNOCKBACK = int(80 * PLAYER_VIEW_SCALE)
+    P1_WAVE_LEN = int(160 * PLAYER_VIEW_SCALE)
+    P1_WAVE_WID = int(50  * PLAYER_VIEW_SCALE)
+    P1_WAVE_GAP = int(20  * PLAYER_VIEW_SCALE)
+
+    COCOON_HP = 150
+    COCOON_MS = 8000
+
+    P2_HP = 400
+    P2_WINDUP_MS = 600
+    P2_COOLDOWN_MS = 3500
+    P2_DASH_SPEED = BASE_SPEED * 2.4
+    P2_DMG = 32
+    P2_RADIUS = int(150 * PLAYER_VIEW_SCALE)
+    P2_KNOCKBACK = int(220 * PLAYER_VIEW_SCALE)
+    P2_MIN_JUMP = int(300 * PLAYER_VIEW_SCALE)
+    P2_MAX_JUMP = int(500 * PLAYER_VIEW_SCALE)
+    P2_FRONT_DR = 0.15
+    P2_FRONT_ANGLE_DEG = 60.0
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
+            radius=self.RADIUS, push_strength=0.10,
+            alert_duration=self.P1_WINDUP_MS, damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.image_original = images.get("enemy24", images.get("enemy10"))
+        self.image_cocoon  = images.get("enemy24_cocoon", self.image_original)
+        self.rect = self.image_original.get_rect(center=(0,0))
+        self.snd_stab_hit       = sounds.get("stab_hit")
+        self.snd_pulse_tick     = sounds.get("pulse_tick")
+        self.snd_cocoon_shatter = sounds.get("cocoon_shatter")
+        self.snd_slam           = sounds.get("reaver_slam")
+
+        self.kill_callback = kill_callback
+
+        self.phase = "P1"  # "P1" / "COCOON" / "P2"
+        self.hp = self.P1_HP
+        self.state = "P1_APPROACH"
+        self.state_until = 0
+        self.locked_angle = self.direction_angle
+        self.locked_pos = (self.world_x, self.world_y)
+
+        self._p1_has_hit = False
+
+        self._cocoon_started_at = -1
+        self._cocoon_ends_at = -1
+        self._cocoon_hp = 0
+        self._next_pulse_at = 0
+
+        self._p2_target = (self.world_x, self.world_y)
+
+        self._strafe_dir = random.choice([-1, 1])
+        self._next_strafe_switch = pygame.time.get_ticks() + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+    @staticmethod
+    def _wrap(a):
+        while a > math.pi: a -= 2*math.pi
+        while a < -math.pi: a += 2*math.pi
+        return a
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        return (dx/d, dy/d) if d > 1e-6 else (0.0, 0.0)
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _is_clear(self, x, y):
+        if not hasattr(config, "obstacle_manager") or config.obstacle_manager is None:
+            return True
+        for obs in config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles:
+            for c in obs.colliders:
+                if c.check_collision_circle((x, y), self.radius + int(10*PLAYER_VIEW_SCALE),
+                                            (obs.world_x, obs.world_y)):
+                    return False
+        return True
+
+    def _ring_target_with_strafe(self, px, py, desired_dist):
+        dx, dy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(dx, dy)
+        tx, ty = -ny, nx
+        base_x = px - nx * desired_dist
+        base_y = py - ny * desired_dist
+        # 좌우 진자 무빙
+        jitter = self.STRAFE_STEP * 0.7 * self._strafe_dir
+        return (base_x + tx * jitter, base_y + ty * jitter)
+
+    def _cocoon_pulse_interval(self, now):
+        # 남은 시간 [8s..0s] → 간격 [800..180] ms
+        if self._cocoon_ends_at <= 0: return 600
+        left = max(0, self._cocoon_ends_at - now)
+        t = 1.0 - (left / float(self.COCOON_MS))
+        return int(800 - (800 - 180) * t)
+
+    def _do_p1_hit(self, px, py):
+        ang = self.locked_angle
+        dx = px - self.world_x
+        dy = py - self.world_y
+        ca = math.cos(-ang); sa = math.sin(-ang)
+        lx = dx * ca - dy * sa
+        ly = dx * sa + dy * ca
+        hit = (self.P1_WAVE_GAP <= lx <= self.P1_WAVE_GAP + self.P1_WAVE_LEN) and (abs(ly) <= self.P1_WAVE_WID * 0.5)
+        if hit and callable(self.damage_player):
+            try: self.damage_player(self.P1_DMG)
+            except: pass
+            nx, ny = math.cos(ang), math.sin(ang)
+            try: config.apply_knockback(nx * self.P1_KNOCKBACK, ny * self.P1_KNOCKBACK)
+            except: pass
+            try:
+                if self.snd_stab_hit: self.snd_stab_hit.play()
+            except: pass
+
+    def _enter_cocoon(self):
+        now = pygame.time.get_ticks()
+        self.phase = "COCOON"
+        self.state = "COCOON_IDLE"
+        self._cocoon_started_at = now
+        self._cocoon_ends_at = now + self.COCOON_MS
+        self._cocoon_hp = self.COCOON_HP
+        self.locked_angle = self.direction_angle
+        self.locked_pos = (self.world_x, self.world_y)
+        self.speed = 0.0
+        self.goal_pos = None
+        self.push_strength = 0.0     # 코쿤은 자리만 차지(밀치지 않음)
+        self._next_pulse_at = now + self._cocoon_pulse_interval(now)
+
+    def _rebirth_to_p2(self):
+        self.phase = "P2"
+        self.hp = self.P2_HP
+        self.state = "P2_APPROACH"
+        self.state_until = pygame.time.get_ticks() + 200  # 짧은 전환 보호
+        self.speed = self.BASE_SPEED
+        self.goal_pos = None
+        self.push_strength = 0.10
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        # 좌우 스트레이프 토글(접근/쿨다운 상태에서만)
+        if self.state in ("P1_APPROACH", "P1_COOLDOWN", "P2_APPROACH", "P2_COOLDOWN") and now >= self._next_strafe_switch:
+            self._strafe_dir *= -1
+            self._next_strafe_switch = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        # 최소거리 보장: 너무 가까우면 목표를 뒤로 잡아 강제 이격
+        if dist < self.MIN_KEEP_DIST and self.state not in ("P1_WINDUP1","P1_IMPACT1","P1_WINDUP2","P1_IMPACT2","COCOON","P2_WINDUP","P2_DASH"):
+            nx, ny = self._norm(dx, dy)
+            back = (self.world_x - nx * (self.MIN_KEEP_DIST - dist + 30),
+                    self.world_y - ny * (self.MIN_KEEP_DIST - dist + 30))
+            self.goal_pos = back
+            self.speed = self.BASE_SPEED * 0.9
+
+        if self.phase == "P1":
+            if self.state.startswith("P1_"):
+                if self.state in ("P1_WINDUP1", "P1_IMPACT1", "P1_WINDUP2", "P1_IMPACT2"):
+                    self.direction_angle = self.locked_angle
+                    self.goal_pos = (self.world_x, self.world_y)
+                    self.speed = 0.0
+                else:
+                    if dx or dy:
+                        self.direction_angle = math.atan2(dy, dx)
+
+            if self.state == "P1_APPROACH":
+                desired = self.P1_WAVE_GAP + int(self.P1_WAVE_LEN * 0.7)
+                target = self._ring_target_with_strafe(px, py, desired)
+                self.goal_pos = target
+                self.speed = self.BASE_SPEED
+                if dist <= desired + 12:
+                    self.goal_pos = (self.world_x, self.world_y)
+                    self.speed = 0.0
+                    self.state = "P1_WINDUP1"
+                    self.state_until = now + self.P1_WINDUP_MS
+                    self.locked_angle = self.direction_angle
+                    self._p1_has_hit = False
+                    self.show_alert = True
+
+            elif self.state == "P1_WINDUP1":
+                if now >= self.state_until:
+                    self.state = "P1_IMPACT1"
+                    self.state_until = now + self.P1_IMPACT_MS
+                    self.show_alert = False
+                    self._do_p1_hit(px, py)
+
+            elif self.state == "P1_IMPACT1":
+                if now >= self.state_until:
+                    self.state = "P1_GAP"
+                    self.state_until = now + self.P1_BETWEEN_HITS_MS
+
+            elif self.state == "P1_GAP":
+                if now >= self.state_until:
+                    self.state = "P1_WINDUP2"
+                    self.state_until = now + self.P1_WINDUP_MS
+                    self.locked_angle = self.direction_angle
+                    self.show_alert = True
+
+            elif self.state == "P1_WINDUP2":
+                if now >= self.state_until:
+                    self.state = "P1_IMPACT2"
+                    self.state_until = now + self.P1_IMPACT_MS
+                    self.show_alert = False
+                    self._do_p1_hit(px, py)
+
+            elif self.state == "P1_IMPACT2":
+                if now >= self.state_until:
+                    self.state = "P1_COOLDOWN"
+                    self.state_until = now + self.P1_COOLDOWN_MS
+
+            elif self.state == "P1_COOLDOWN":
+                desired = self.P1_WAVE_GAP + int(self.P1_WAVE_LEN * 0.7)
+                target = self._ring_target_with_strafe(px, py, desired)
+                self.goal_pos = target
+                self.speed = self.BASE_SPEED * 0.9
+                if now >= self.state_until:
+                    self.state = "P1_APPROACH"
+
+        elif self.phase == "COCOON":
+            self.direction_angle = self.locked_angle
+            self.world_x, self.world_y = self.locked_pos
+            self.goal_pos = None
+            self.speed = 0.0
+
+            if now >= self._next_pulse_at:
+                try:
+                    if self.snd_pulse_tick: self.snd_pulse_tick.play()
+                except: pass
+                self._next_pulse_at = now + self._cocoon_pulse_interval(now)
+
+            if now >= self._cocoon_ends_at:
+                self._rebirth_to_p2()
+
+        elif self.phase == "P2":
+            if dx or dy:
+                self.direction_angle = math.atan2(dy, dx)
+
+            if self.state == "P2_APPROACH":
+                # 점프 가능한 링(300~500)으로 '슬금슬금'
+                if dist < self.P2_MIN_JUMP or dist > self.P2_MAX_JUMP:
+                    desired = max(self.P2_MIN_JUMP, min(self.P2_MAX_JUMP, dist))
+                    target = self._ring_target_with_strafe(px, py, desired)
+                    self.goal_pos = target
+                    self.speed = self.BASE_SPEED
+                else:
+                    # 점프 텔레그래프 시작
+                    self.state = "P2_WINDUP"
+                    self.state_until = now + self.P2_WINDUP_MS
+                    nx, ny = self._norm(dx, dy)
+                    jump_dist = max(self.P2_MIN_JUMP, min(dist, self.P2_MAX_JUMP))
+                    tx = self.world_x + nx * jump_dist
+                    ty = self.world_y + ny * jump_dist
+                    if 0 <= tx <= self.map_width and 0 <= ty <= self.map_height and self._is_clear(tx, ty):
+                        self._p2_target = (tx, ty)
+                    else:
+                        self._p2_target = (self.world_x, self.world_y)
+                    self.locked_angle = self.direction_angle
+                    self.show_alert = True
+                    self.goal_pos = None
+                    self.speed = 0.0
+
+            elif self.state == "P2_WINDUP":
+                # 제자리에서 조준/텔레그래프
+                self.goal_pos = None
+                self.speed = 0.0
+                if now >= self.state_until:
+                    # 순간이동 X → 돌진 상태로 전환
+                    self.state = "P2_DASH"
+
+            elif self.state == "P2_DASH":
+                # 목표 지점으로 빠르게 돌진
+                tx, ty = self._p2_target
+                self.goal_pos = (tx, ty)
+                self.speed = self.P2_DASH_SPEED
+                # 도착/근접 시 임팩트 후 쿨다운
+                if math.hypot(tx - self.world_x, ty - self.world_y) <= max(12, self.RADIUS):
+                    # 슬램 판정
+                    if math.hypot(px - self.world_x, py - self.world_y) <= self.P2_RADIUS:
+                        try: self.damage_player(self.P2_DMG)
+                        except: pass
+                        npx, npy = self._norm(px - self.world_x, py - self.world_y)
+                        try: config.apply_knockback(npx * self.P2_KNOCKBACK, npy * self.P2_KNOCKBACK)
+                        except: pass
+                    try:
+                        if self.snd_slam: self.snd_slam.play()
+                    except: pass
+                    self.show_alert = False
+                    self.state = "P2_COOLDOWN"
+                    self.state_until = now + self.P2_COOLDOWN_MS
+
+            elif self.state == "P2_COOLDOWN":
+                # 링 중앙 근처로 복귀 + 살짝 스트레이프(너무 오래 붙어있지 않게)
+                desired = 0.5 * (self.P2_MIN_JUMP + self.P2_MAX_JUMP)
+                nx, ny = self._norm(dx, dy)
+                tx, ty = -ny, nx
+                base_x = px - nx * desired
+                base_y = py - ny * desired
+                wiggle = self.STRAFE_STEP * 0.5 * self._strafe_dir
+                self.goal_pos = (base_x + tx * wiggle, base_y + ty * wiggle)
+                self.speed = self.BASE_SPEED * 0.9
+                if now >= self.state_until:
+                    self.state = "P2_APPROACH"
+
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+
+        if self.phase == "COCOON":
+            self._cocoon_hp -= damage
+            if self._cocoon_hp <= 0:
+                try:
+                    if self.snd_cocoon_shatter: self.snd_cocoon_shatter.play()
+                except: pass
+                self._final_die(blood_effects)
+            return
+
+        if self.phase == "P2":
+            # 전방 경감
+            try:
+                px, py = (config.world_x + config.player_rect.centerx,
+                          config.world_y + config.player_rect.centery)
+                vec_angle = math.atan2(py - self.world_y, px - self.world_y)
+            except Exception:
+                vec_angle = self.direction_angle
+            diff = abs(self._wrap(vec_angle - self.direction_angle))
+            if diff <= math.radians(self.P2_FRONT_ANGLE_DEG):
+                damage = int(math.ceil(damage * (1.0 - self.P2_FRONT_DR)))
+
+        self.hp -= damage
+        if self.hp <= 0:
+            if self.phase == "P1":
+                self._enter_cocoon()
+            else:
+                self._final_die(blood_effects)
+
+    def _final_die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(5, 6)
+        except Exception:
+            pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        if self.phase == "P1":
+            if self.state in ("P1_WINDUP1", "P1_WINDUP2", "P1_IMPACT1", "P1_IMPACT2"):
+                ang = self.locked_angle
+                base = pygame.Surface((self.P1_WAVE_LEN, self.P1_WAVE_WID), pygame.SRCALPHA)
+                base.fill((255, 40, 40, 110))
+                rotated = pygame.transform.rotate(base, -math.degrees(ang))
+                cx = sx + int(math.cos(ang) * (self.P1_WAVE_GAP + self.P1_WAVE_LEN * 0.5))
+                cy = sy + int(math.sin(ang) * (self.P1_WAVE_GAP + self.P1_WAVE_LEN * 0.5))
+                rect = rotated.get_rect(center=(cx, cy))
+                screen.blit(rotated, rect)
+
+            body = pygame.transform.rotate(self.image_original, -math.degrees(self.direction_angle) + 90)
+            body_rect = body.get_rect(center=(sx, sy))
+            self.rect = body_rect
+            screen.blit(body, body_rect)
+
+            if self.state in ("P1_WINDUP1", "P1_WINDUP2"):
+                self.draw_alert(screen, sx, sy)
+
+        elif self.phase == "COCOON":
+            now = pygame.time.get_ticks()
+            elapsed = now - self._cocoon_started_at
+            t = min(1.0, max(0.0, elapsed / float(self.COCOON_MS)))
+            freq = 0.6 + (3.0 - 0.6) * t  # Hz
+            amp = 0.06
+            scale = 1.0 + amp * math.sin(2 * math.pi * freq * (elapsed / 1000.0))
+            iw, ih = self.image_cocoon.get_width(), self.image_cocoon.get_height()
+            sw = max(2, int(iw * scale))
+            sh = max(2, int(ih * scale))
+            puls = pygame.transform.smoothscale(self.image_cocoon, (sw, sh))
+            rect = puls.get_rect(center=(sx, sy))
+            screen.blit(puls, rect)
+
+        elif self.phase == "P2":
+            if self.state == "P2_WINDUP":
+                cx = int(self._p2_target[0] - world_x + shake_offset_x)
+                cy = int(self._p2_target[1] - world_y + shake_offset_y)
+                r = self.P2_RADIUS
+                size = r*2 + 6
+                surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                center = (size//2, size//2)
+                pygame.draw.circle(surf, (255, 60, 60, 110), center, r)
+                pygame.draw.circle(surf, (255, 90, 90, 160), center, r, width=3)
+                screen.blit(surf, (cx - size//2, cy - size//2))
+                self.draw_alert(screen, sx, sy)
+
+            body = pygame.transform.rotate(self.image_original, -math.degrees(self.direction_angle) + 90)
+            body_rect = body.get_rect(center=(sx, sy))
+            self.rect = body_rect
+            screen.blit(body, body_rect)
+
+class Enemy25(AIBase):
+    rank = 8
+
+    HP = 700
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.80
+    RADIUS = int(32 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.10
+
+    MIN_KEEP_DIST = int(90 * PLAYER_VIEW_SCALE)
+    DESIRED_MELEE_DIST = int(120 * PLAYER_VIEW_SCALE)
+    STRAFE_STEP = int(70 * PLAYER_VIEW_SCALE)
+    STRAFE_SWITCH_MIN = 600
+    STRAFE_SWITCH_MAX = 1000
+
+    WINDUP_MS = 260
+    IMPACT_MS = 90
+    COOLDOWN_MS = 1800
+    DMG = 25
+    KNOCKBACK = int(110 * PLAYER_VIEW_SCALE)
+
+    WAVE_LEN = int(140 * PLAYER_VIEW_SCALE)
+    WAVE_WID = int(58  * PLAYER_VIEW_SCALE)
+    WAVE_GAP = int(20  * PLAYER_VIEW_SCALE)
+
+    SWELL_MS = 700
+    EXP_RADIUS = int(250 * PLAYER_VIEW_SCALE)
+    EXP_DMG = 40
+    EXP_KNOCKBACK = int(260 * PLAYER_VIEW_SCALE)
+
+    SPAWN_OFFSET = int(120 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=self.WINDUP_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy25", images.get("enemy24"))
+        self.explosion_sprite = images.get("explosion1")
+        self.snd_stab_hit = sounds.get("stab_hit")
+        self.snd_explode  = sounds.get("burster_explode")
+
+        self._images_dict = images
+        self._sounds_dict = sounds
+
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.state = "APPROACH"   # APPROACH / WINDUP / IMPACT / COOLDOWN / DEATH_SWELL
+        self.state_until = 0
+        self.locked_angle = self.direction_angle
+        self.locked_pos = (self.world_x, self.world_y)
+        self.show_alert = False
+
+        self._strafe_dir = random.choice([-1, 1])
+        self._next_strafe_switch = pygame.time.get_ticks() + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        self._pending_blood_effects = None
+        self._swelling_started_at = -1
+
+    @staticmethod
+    def _wrap(a):
+        while a > math.pi: a -= 2*math.pi
+        while a < -math.pi: a += 2*math.pi
+        return a
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        return (dx/d, dy/d) if d > 1e-6 else (0.0, 0.0)
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _ring_target_with_strafe(self, px, py, desired_dist):
+        dx, dy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(dx, dy)
+        tx, ty = -ny, nx
+        base_x = px - nx * desired_dist
+        base_y = py - ny * desired_dist
+        jitter = self.STRAFE_STEP * 0.7 * self._strafe_dir
+        return (base_x + tx * jitter, base_y + ty * jitter)
+
+    def _do_melee_hit(self, px, py):
+        # IMPACT 시작 시 1회 판정
+        ang = self.locked_angle
+        dx = px - self.world_x
+        dy = py - self.world_y
+        ca = math.cos(-ang); sa = math.sin(-ang)
+        lx = dx * ca - dy * sa
+        ly = dx * sa + dy * ca
+        hit = (self.WAVE_GAP <= lx <= self.WAVE_GAP + self.WAVE_LEN) and (abs(ly) <= self.WAVE_WID * 0.5)
+        if hit and callable(self.damage_player):
+            try:
+                self.damage_player(self.DMG)
+                nx, ny = math.cos(ang), math.sin(ang)
+                config.apply_knockback(nx * self.KNOCKBACK, ny * self.KNOCKBACK)
+            except Exception:
+                pass
+            # 타격 사운드
+            try:
+                if self.snd_stab_hit: self.snd_stab_hit.play()
+            except Exception:
+                pass
+
+    def _spawn_enemy7_pair(self):
+        # 좌/우 두 마리 Enemy7 스폰(가능할 때만)
+        Enemy7Class = globals().get("Enemy7", None)
+        if Enemy7Class is None:
+            return
+        # 좌/우 오프셋(바라보는 각도에 수직)
+        perp = self.direction_angle + math.pi * 0.5
+        offx = math.cos(perp) * self.SPAWN_OFFSET
+        offy = math.sin(perp) * self.SPAWN_OFFSET
+        spawns = [(self.world_x - offx, self.world_y - offy),
+                  (self.world_x + offx, self.world_y + offy)]
+        for sx, sy in spawns:
+            # 맵 경계 보정
+            sx = min(max(0, sx), self.map_width)
+            sy = min(max(0, sy), self.map_height)
+            try:
+                enemy = Enemy7Class(sx, sy, self._images_dict, self._sounds_dict,
+                                    self.map_width, self.map_height,
+                                    damage_player_fn=self.damage_player, rank=7)
+                config.all_enemies.append(enemy)
+            except Exception:
+                # 생성 실패해도 게임 진행에는 영향 없게 무시
+                pass
+
+    def _explode_and_die(self):
+        # 폭발 판정 + 스폰 + 최종 사망 처리(드랍 포함)
+        # 폭발 피해/넉백(플레이어)
+        try:
+            px, py = (config.world_x + config.player_rect.centerx,
+                      config.world_y + config.player_rect.centery)
+            dist = math.hypot(px - self.world_x, py - self.world_y)
+            if dist <= self.EXP_RADIUS and callable(self.damage_player):
+                self.damage_player(self.EXP_DMG)
+                nx, ny = self._norm(px - self.world_x, py - self.world_y)
+                try:
+                    config.apply_knockback(nx * self.EXP_KNOCKBACK, ny * self.EXP_KNOCKBACK)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # 폭발 사운드
+        try:
+            if self.snd_explode: self.snd_explode.play()
+        except Exception:
+            pass
+
+        # Enemy7 두 마리 스폰
+        self._spawn_enemy7_pair()
+
+        # 최종 사망(드랍 5/5)
+        if not getattr(self, "_already_dropped", False):
+            super().die(self._pending_blood_effects)
+            try:
+                self.spawn_dropped_items(5, 5)
+            except Exception:
+                pass
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        # 스트레이프 토글
+        if self.state in ("APPROACH", "COOLDOWN") and now >= self._next_strafe_switch:
+            self._strafe_dir *= -1
+            self._next_strafe_switch = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        # 최소 거리 보장(밀착 방지)
+        if self.state in ("APPROACH", "COOLDOWN") and dist < self.MIN_KEEP_DIST:
+            nx, ny = self._norm(dx, dy)
+            back = (self.world_x - nx * (self.MIN_KEEP_DIST - dist + 30),
+                    self.world_y - ny * (self.MIN_KEEP_DIST - dist + 30))
+            self.goal_pos = back
+            self.speed = self.BASE_SPEED * 0.9
+
+        # 공통 회전
+        if self.state not in ("WINDUP", "IMPACT", "DEATH_SWELL"):
+            if dx or dy:
+                self.direction_angle = math.atan2(dy, dx)
+
+        if self.state == "APPROACH":
+            target = self._ring_target_with_strafe(px, py, self.DESIRED_MELEE_DIST)
+            self.goal_pos = target
+            self.speed = self.BASE_SPEED
+            if dist <= self.DESIRED_MELEE_DIST + 12:
+                self.goal_pos = (self.world_x, self.world_y)
+                self.speed = 0.0
+                self.state = "WINDUP"
+                self.state_until = now + self.WINDUP_MS
+                self.locked_angle = self.direction_angle
+                self.show_alert = True
+
+        elif self.state == "WINDUP":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                self.state = "IMPACT"
+                self.state_until = now + self.IMPACT_MS
+                self.show_alert = False
+                self._do_melee_hit(px, py)
+
+        elif self.state == "IMPACT":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                self.state = "COOLDOWN"
+                self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "COOLDOWN":
+            target = self._ring_target_with_strafe(px, py, self.DESIRED_MELEE_DIST)
+            self.goal_pos = target
+            self.speed = self.BASE_SPEED * 0.9
+            if now >= self.state_until:
+                self.state = "APPROACH"
+
+        elif self.state == "DEATH_SWELL":
+            # 자리/방향 고정, 팽창 이펙트 표시
+            self.goal_pos = None
+            self.speed = 0.0
+            self.direction_angle = self.locked_angle
+            self.world_x, self.world_y = self.locked_pos
+            if now >= self.state_until:
+                # 폭발 & 최종 사망
+                self._explode_and_die()
+
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        super().update(dt, world_x, world_y, player_rect, enemies)
+        # DEATH_SWELL 동안에는 물리 고정
+        if self.state == "DEATH_SWELL":
+            self.world_x, self.world_y = self.locked_pos
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+        self.hp -= damage
+        if self.hp > 0:
+            return
+
+        # 사망 트리거: 팽창 상태로 전환(한 번만)
+        if self.state != "DEATH_SWELL":
+            self._pending_blood_effects = blood_effects
+            self.state = "DEATH_SWELL"
+            self.state_until = pygame.time.get_ticks() + self.SWELL_MS
+            self.locked_angle = self.direction_angle
+            self.locked_pos = (self.world_x, self.world_y)
+            self.push_strength = 0.0   # 팽창 중 밀침 없음
+            self.show_alert = False
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 근접 텔레그래프
+        if self.state in ("WINDUP", "IMPACT"):
+            ang = self.locked_angle
+            base = pygame.Surface((self.WAVE_LEN, self.WAVE_WID), pygame.SRCALPHA)
+            base.fill((255, 40, 40, 110))
+            rotated = pygame.transform.rotate(base, -math.degrees(ang))
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            rect = rotated.get_rect(center=(cx, cy))
+            screen.blit(rotated, rect)
+
+        # 본체 (DEATH_SWELL 중에는 팽창 스케일)
+        if self.state == "DEATH_SWELL":
+            now = pygame.time.get_ticks()
+            t = 1.0 - max(0.0, (self.state_until - now)) / max(1.0, self.SWELL_MS)
+            scale = 1.0 + 0.25 * t   # 1.0 → 1.25
+            iw, ih = self.image_original.get_width(), self.image_original.get_height()
+            sw = max(2, int(iw * scale))
+            sh = max(2, int(ih * scale))
+            body = pygame.transform.smoothscale(self.image_original, (sw, sh))
+            body = pygame.transform.rotate(body, -math.degrees(self.locked_angle) + 90)
+            body_rect = body.get_rect(center=(sx, sy))
+            self.rect = body_rect
+            screen.blit(body, body_rect)
+
+            # 바닥 폭발 반경 텔레그래프(붉은 원)
+            size = self.EXP_RADIUS * 2 + 6
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            center = (size // 2, size // 2)
+            alpha = 90 + int(80 * t)
+            pygame.draw.circle(surf, (255, 60, 60, alpha), center, self.EXP_RADIUS)
+            pygame.draw.circle(surf, (255, 90, 90, min(180, alpha + 40)), center, self.EXP_RADIUS, width=4)
+            screen.blit(surf, (sx - size // 2, sy - size // 2))
+        else:
+            body = pygame.transform.rotate(self.image_original, -math.degrees(self.direction_angle) + 90)
+            body_rect = body.get_rect(center=(sx, sy))
+            self.rect = body_rect
+            screen.blit(body, body_rect)
+
+            if self.state == "WINDUP":
+                self.draw_alert(screen, sx, sy)
+
+class Enemy26(AIBase):
+    rank = 1
+
+    HP = 150
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.70
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.12
+
+    MELEE_RANGE = int(60 * PLAYER_VIEW_SCALE)
+    MIN_KEEP_DIST = int(56 * PLAYER_VIEW_SCALE)
+
+    WINDUP_MS = 300
+    IMPACT_MS = 100
+    COOLDOWN_MS = 2000
+
+    DMG = 15
+    KNOCKBACK = int(120 * PLAYER_VIEW_SCALE)
+
+    FRONT_DR = 0.50
+    FRONT_ARC_DEG = 70.0
+    BLOCK_FLASH_MS = 150
+
+    WAVE_LEN = int(120 * PLAYER_VIEW_SCALE)
+    WAVE_WID = int(50  * PLAYER_VIEW_SCALE)
+    WAVE_GAP = int(16  * PLAYER_VIEW_SCALE)
+
+    SLASH_THICK = int(12 * PLAYER_VIEW_SCALE)
+    SLASH_WIDTH  = int(0.9 * WAVE_WID)
+
+    ROT_SPEED_DEG_S = 120.0
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=self.WINDUP_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy26", images.get("enemy10"))
+        self.shield_image_original = images.get("gun19", None)
+        self.block_sound = sounds.get("gun19_defend", None)
+
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.state = "APPROACH"     # APPROACH → WINDUP → IMPACT → COOLDOWN
+        self.state_until = 0
+        self.locked_angle = self.direction_angle
+        self.show_alert = False
+
+        self._strafe_dir = random.choice([-1, 1])
+        self._next_strafe_switch = pygame.time.get_ticks() + random.randint(700, 1100)
+        self._strafe_step = int(50 * PLAYER_VIEW_SCALE)
+
+        self.block_flash_until = 0
+
+    @staticmethod
+    def _wrap(a):
+        while a > math.pi: a -= 2*math.pi
+        while a < -math.pi: a += 2*math.pi
+        return a
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        return (dx/d, dy/d) if d > 1e-6 else (0.0, 0.0)
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _player_pos_world_now(self):
+        # 현재 프레임의 플레이어 월드 좌표(히트 순간 재확인용).
+        try:
+            return (config.world_x + config.player_rect.centerx,
+                    config.world_y + config.player_rect.centery)
+        except Exception:
+            return (self.world_x, self.world_y)
+
+    def _is_player_in_front_arc(self, px, py):
+        angle_to_player = math.atan2(py - self.world_y, px - self.world_x)
+        diff = abs(self._wrap(angle_to_player - self.direction_angle))
+        return diff <= math.radians(self.FRONT_ARC_DEG)
+
+    def _do_melee_hit(self):
+        # IMPACT 시작 시 1회 판정: 정면 직사각형 안이면 피해 + 넉백.
+        px, py = self._player_pos_world_now()
+        ang = self.locked_angle
+        dx = px - self.world_x
+        dy = py - self.world_y
+        ca = math.cos(-ang); sa = math.sin(-ang)
+        lx = dx * ca - dy * sa
+        ly = dx * sa + dy * ca
+        hit = (self.WAVE_GAP <= lx <= self.WAVE_GAP + self.WAVE_LEN) and (abs(ly) <= self.WAVE_WID * 0.5)
+        if hit and callable(self.damage_player):
+            try:
+                self.damage_player(self.DMG)
+            except Exception:
+                pass
+            # 넉백(정면 방향)
+            try:
+                nx, ny = math.cos(ang), math.sin(ang)
+                config.apply_knockback(nx * self.KNOCKBACK, ny * self.KNOCKBACK)
+            except Exception:
+                pass
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        desired = math.atan2(dy, dx) if (dx or dy) else self.direction_angle
+
+        # 회전 로직:
+        # - WINDUP: 즉시 스냅 회전(바로바로 플레이어를 봄) + 히트박스 각도도 함께 업데이트
+        # - IMPACT/APPROACH/COOLDOWN: 느리게 추적 회전
+        if self.state == "WINDUP":
+            self.direction_angle = desired
+            self.locked_angle = desired  # 텔레그래프 직사각형도 함께 따라가도록
+        elif self.state in ("IMPACT", "APPROACH", "COOLDOWN"):
+            max_delta = math.radians(self.ROT_SPEED_DEG_S) * (getattr(config, "dt", 16) / 1000.0)
+            diff = self._wrap(desired - self.direction_angle)
+            if abs(diff) > max_delta:
+                self.direction_angle += max_delta * (1 if diff > 0 else -1)
+            else:
+                self.direction_angle = desired
+
+        # 살랑 스트레이프 토글
+        if self.state in ("APPROACH", "COOLDOWN") and now >= self._next_strafe_switch:
+            self._strafe_dir *= -1
+            self._next_strafe_switch = now + random.randint(700, 1100)
+
+        if self.state == "APPROACH":
+            # 최소 거리 보장: 너무 가까우면 살짝 후퇴
+            if dist < self.MIN_KEEP_DIST:
+                nx, ny = self._norm(dx, dy)
+                self.goal_pos = (self.world_x - nx * (self.MIN_KEEP_DIST - dist + 20),
+                                 self.world_y - ny * (self.MIN_KEEP_DIST - dist + 20))
+                self.speed = self.BASE_SPEED * 0.85
+            else:
+                # 목표 링으로 전진 + 약한 스트레이프
+                nx, ny = self._norm(dx, dy)
+                tx, ty = -ny, nx
+                base_x = px - nx * self.MELEE_RANGE
+                base_y = py - ny * self.MELEE_RANGE
+                jitter = self._strafe_step * 0.6 * self._strafe_dir
+                self.goal_pos = (base_x + tx * jitter, base_y + ty * jitter)
+                self.speed = self.BASE_SPEED
+
+            # 공격 개시 조건(사거리 내)
+            if dist <= self.MELEE_RANGE + 8:
+                self.state = "WINDUP"
+                self.state_until = now + self.WINDUP_MS
+                self.locked_angle = self.direction_angle  # 직사각형 초기화(이후 WINDUP에서 계속 갱신됨)
+                self.show_alert = True
+                self.goal_pos = None
+                self.speed = 0.0
+
+        elif self.state == "WINDUP":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                # IMPACT 진입: 시작 순간 사운드 재생 + 스냅 회전 + 1회 판정
+                self.direction_angle = desired
+                self.locked_angle = desired
+                try:
+                    if self.block_sound:
+                        self.block_sound.play()   # 요청: 밀칠 때 defend 사운드 재생
+                except Exception:
+                    pass
+                self.state = "IMPACT"
+                self.state_until = now + self.IMPACT_MS
+                self.show_alert = False
+                self._do_melee_hit()
+
+        elif self.state == "IMPACT":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                self.state = "COOLDOWN"
+                self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "COOLDOWN":
+            # 다시 링으로 복귀하며 살짝 스트레이프
+            nx, ny = self._norm(dx, dy)
+            tx, ty = -ny, nx
+            base_x = px - nx * self.MELEE_RANGE
+            base_y = py - ny * self.MELEE_RANGE
+            jitter = self._strafe_step * 0.4 * self._strafe_dir
+            self.goal_pos = (base_x + tx * jitter, base_y + ty * jitter)
+            self.speed = self.BASE_SPEED * 0.9
+            if now >= self.state_until:
+                self.state = "APPROACH"
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+
+        # force 피해는 가드 무시
+        final_damage = damage
+        if not force:
+            # 플레이어가 정면 원호 내에 있으면 50% 경감 + 플래시 + 사운드
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if self._is_player_in_front_arc(px, py):
+                final_damage = max(1, int(math.ceil(damage * (1.0 - self.FRONT_DR))))
+                now = pygame.time.get_ticks()
+                self.block_flash_until = now + self.BLOCK_FLASH_MS
+                try:
+                    if self.block_sound:
+                        self.block_sound.play()
+                except Exception:
+                    pass
+
+        self.hp -= max(1, int(final_damage))
+        if self.hp <= 0:
+            self.die(blood_effects)
+
+    def die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(3, 3)
+        except Exception:
+            pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 텔레그래프(붉은 직사각형) — WINDUP 동안에 표시(각도는 WINDUP에서 실시간 갱신됨)
+        if self.state == "WINDUP":
+            ang = self.locked_angle
+            base = pygame.Surface((self.WAVE_LEN, self.WAVE_WID), pygame.SRCALPHA)
+            base.fill((255, 40, 40, 110))
+            rotated = pygame.transform.rotate(base, -math.degrees(ang))
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            rect = rotated.get_rect(center=(cx, cy))
+            screen.blit(rotated, rect)
+            # 경고 아이콘
+            self.draw_alert(screen, sx, sy)
+
+        # 본체
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        screen.blit(body, body_rect)
+
+        # 방패(전방 표시) — 막은 직후 약간 더 진하게
+        if self.shield_image_original is not None:
+            offset = (self.radius + int(10 * PLAYER_VIEW_SCALE))
+            shield_cx = sx + math.cos(self.direction_angle) * offset
+            shield_cy = sy + math.sin(self.direction_angle) * offset
+            rotated_shield = pygame.transform.rotate(
+                self.shield_image_original, -math.degrees(self.direction_angle) - 90
+            )
+            alpha = 110
+            if pygame.time.get_ticks() < self.block_flash_until:
+                alpha = 220
+            temp = rotated_shield.copy()
+            temp.set_alpha(alpha)
+            shield_rect = temp.get_rect(center=(shield_cx, shield_cy))
+            screen.blit(temp, shield_rect)
+
+        # 임팩트 순간 '하얀 슬래시 바' 연출
+        if self.state == "IMPACT":
+            now = pygame.time.get_ticks()
+            total = max(1, self.IMPACT_MS)
+            t = 1.0 - max(0.0, (self.state_until - now) / total)  # 0→1
+            ang = self.locked_angle  # 임팩트 시작 각도 기준
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + int(self.WAVE_LEN * t)))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + int(self.WAVE_LEN * t)))
+            bar = pygame.Surface((self.SLASH_WIDTH, self.SLASH_THICK), pygame.SRCALPHA)
+            bar.fill((255, 255, 255, int(220 * (1.0 - t))))  # 끝으로 갈수록 옅어짐
+            rotated_bar = pygame.transform.rotate(bar, -math.degrees(ang) + 90)  # 수직 방향
+            bar_rect = rotated_bar.get_rect(center=(cx, cy))
+            screen.blit(rotated_bar, bar_rect)
+
+class Enemy27(AIBase):
+    rank = 3
+
+    HP = 450
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+    PUSH_STRENGTH = 0.10
+
+    MELEE_RANGE = int(60 * PLAYER_VIEW_SCALE)
+    MIN_KEEP_DIST = int(54 * PLAYER_VIEW_SCALE)
+
+    WINDUP_MS = 280
+    IMPACT_MS = 100
+    COOLDOWN_MS = 1500
+
+    BASE_DMG = 15
+    DMG_PER_STACK = 2
+
+    STRAFE_STEP = int(60 * PLAYER_VIEW_SCALE)
+    STRAFE_SWITCH_MIN = 550
+    STRAFE_SWITCH_MAX = 950
+
+    WAVE_LEN = int(120 * PLAYER_VIEW_SCALE)
+    WAVE_WID = int(50  * PLAYER_VIEW_SCALE)
+    WAVE_GAP = int(16  * PLAYER_VIEW_SCALE)
+
+    SLASH_THICK = int(12 * PLAYER_VIEW_SCALE)
+    SLASH_WIDTH = int(0.9 * WAVE_WID)
+
+    MAX_STACKS = 10
+    SPEED_PER_STACK = 0.02
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=self.WINDUP_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy27", images.get("enemy10"))
+        self.snd_hit   = sounds.get("stab_hit")
+
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.state = "APPROACH"  # APPROACH / WINDUP / IMPACT / COOLDOWN
+        self.state_until = 0
+        self.locked_angle = self.direction_angle
+        self.show_alert = False
+
+        self._strafe_dir = random.choice([-1, 1])
+        self._next_strafe_switch = pygame.time.get_ticks() + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        self.stacks = 0
+
+    @staticmethod
+    def _wrap(a):
+        while a > math.pi: a -= 2*math.pi
+        while a < -math.pi: a += 2*math.pi
+        return a
+
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy)
+        return (dx/d, dy/d) if d > 1e-6 else (0.0, 0.0)
+
+    def _player_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _player_pos_world_now(self):
+        try:
+            return (config.world_x + config.player_rect.centerx,
+                    config.world_y + config.player_rect.centery)
+        except Exception:
+            return (self.world_x, self.world_y)
+
+    def _effective_speed(self):
+        return self.BASE_SPEED * (1.0 + self.SPEED_PER_STACK * self.stacks)
+
+    def _effective_damage(self):
+        return self.BASE_DMG + self.DMG_PER_STACK * self.stacks
+
+    def _ring_target_with_strafe(self, px, py, desired_dist):
+        dx, dy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(dx, dy)
+        tx, ty = -ny, nx
+        base_x = px - nx * desired_dist
+        base_y = py - ny * desired_dist
+        jitter = self.STRAFE_STEP * 0.6 * self._strafe_dir
+        return (base_x + tx * jitter, base_y + ty * jitter)
+
+    def _do_melee_hit(self):
+        # IMPACT 시작 시 1회 판정: 정면 직사각형 안이면 피해 + 약한 넉백.
+        px, py = self._player_pos_world_now()
+        ang = self.locked_angle
+        dx = px - self.world_x
+        dy = py - self.world_y
+        ca = math.cos(-ang); sa = math.sin(-ang)
+        lx = dx * ca - dy * sa
+        ly = dx * sa + dy * ca
+        hit = (self.WAVE_GAP <= lx <= self.WAVE_GAP + self.WAVE_LEN) and (abs(ly) <= self.WAVE_WID * 0.5)
+        if hit and callable(self.damage_player):
+            try:
+                self.damage_player(self._effective_damage())
+            except Exception:
+                pass
+            # 넉백(정면 방향, 살짝)
+            try:
+                nx, ny = math.cos(ang), math.sin(ang)
+                config.apply_knockback(nx * int(100 * PLAYER_VIEW_SCALE), ny * int(100 * PLAYER_VIEW_SCALE))
+            except Exception:
+                pass
+            # 타격 사운드
+            try:
+                if self.snd_hit: self.snd_hit.play()
+            except Exception:
+                pass
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        px, py = self._player_pos(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+
+        if dx or dy:
+            desired = math.atan2(dy, dx)
+            self.direction_angle = desired
+            if self.state == "WINDUP":
+                # WINDUP 중에는 히트박스 각도도 매 프레임 같이 갱신
+                self.locked_angle = desired
+
+        # 스트레이프 토글
+        if self.state in ("APPROACH", "COOLDOWN") and now >= self._next_strafe_switch:
+            self._strafe_dir *= -1
+            self._next_strafe_switch = now + random.randint(self.STRAFE_SWITCH_MIN, self.STRAFE_SWITCH_MAX)
+
+        if self.state == "APPROACH":
+            # 최소 거리 보장: 너무 가까우면 약간 후퇴
+            if dist < self.MIN_KEEP_DIST:
+                nx, ny = self._norm(dx, dy)
+                self.goal_pos = (self.world_x - nx * (self.MIN_KEEP_DIST - dist + 20),
+                                 self.world_y - ny * (self.MIN_KEEP_DIST - dist + 20))
+                self.speed = self._effective_speed() * 0.9
+            else:
+                target = self._ring_target_with_strafe(px, py, self.MELEE_RANGE)
+                self.goal_pos = target
+                self.speed = self._effective_speed()
+
+            if dist <= self.MELEE_RANGE + 8:
+                self.state = "WINDUP"
+                self.state_until = now + self.WINDUP_MS
+                self.locked_angle = self.direction_angle
+                self.show_alert = True
+                self.goal_pos = None
+                self.speed = 0.0
+
+        elif self.state == "WINDUP":
+            # 준비 중 위치 고정, 각도는 위에서 즉시 스냅 & locked_angle 동기화됨
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                # IMPACT 진입: locked_angle을 현재 각도로 고정하고 1회 판정
+                self.locked_angle = self.direction_angle
+                self.state = "IMPACT"
+                self.state_until = now + self.IMPACT_MS
+                self.show_alert = False
+                self._do_melee_hit()
+
+        elif self.state == "IMPACT":
+            self.goal_pos = None
+            self.speed = 0.0
+            if now >= self.state_until:
+                self.state = "COOLDOWN"
+                self.state_until = now + self.COOLDOWN_MS
+
+        elif self.state == "COOLDOWN":
+            target = self._ring_target_with_strafe(px, py, self.MELEE_RANGE)
+            self.goal_pos = target
+            self.speed = self._effective_speed() * 0.95
+            if now >= self.state_until:
+                self.state = "APPROACH"
+
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+        self.hp -= max(1, int(damage))
+        if self.hp > 0:
+            # 스택 증가
+            old = self.stacks
+            if self.stacks < self.MAX_STACKS:
+                self.stacks += 1
+            return
+        # 죽음
+        self.die(blood_effects)
+
+    def die(self, blood_effects):
+        if getattr(self, "_already_dropped", False):
+            return
+        super().die(blood_effects)
+        try:
+            self.spawn_dropped_items(4, 5)
+        except Exception:
+            pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 텔레그래프(붉은 직사각형) — WINDUP 동안 표시(각도는 WINDUP에서 매 프레임 갱신됨)
+        if self.state == "WINDUP":
+            ang = self.locked_angle
+            base = pygame.Surface((self.WAVE_LEN, self.WAVE_WID), pygame.SRCALPHA)
+            base.fill((255, 40, 40, 110))
+            rotated = pygame.transform.rotate(base, -math.degrees(ang))
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + self.WAVE_LEN * 0.5))
+            rect = rotated.get_rect(center=(cx, cy))
+            screen.blit(rotated, rect)
+            self.draw_alert(screen, sx, sy)
+
+        # 본체(회전된 스프라이트)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+        body_rect = body.get_rect(center=(sx, sy))
+        self.rect = body_rect
+        # 기본 스프라이트 먼저 그림
+        screen.blit(body, body_rect)
+
+        if self.stacks > 0:
+            add = min(180, 18 * self.stacks)  # 스택에 비례해 붉은 강도 증가
+            tinted = body.copy()
+            # 색상 채널에 빨강을 더함(알파는 원본 스프라이트의 알파 그대로)
+            tinted.fill((add, 0, 0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+            screen.blit(tinted, body_rect)
+
+        # IMPACT 슬래시(흰 바) — 빠르게 지나가는 시각 효과
+        if self.state == "IMPACT":
+            now = pygame.time.get_ticks()
+            total = max(1, self.IMPACT_MS)
+            t = 1.0 - max(0.0, (self.state_until - now) / total)
+            ang = self.locked_angle
+            cx = sx + int(math.cos(ang) * (self.WAVE_GAP + int(self.WAVE_LEN * t)))
+            cy = sy + int(math.sin(ang) * (self.WAVE_GAP + int(self.WAVE_LEN * t)))
+            bar = pygame.Surface((self.SLASH_WIDTH, self.SLASH_THICK), pygame.SRCALPHA)
+            bar.fill((255, 255, 255, int(220 * (1.0 - t))))
+            rotated_bar = pygame.transform.rotate(bar, -math.degrees(ang) + 90)
+            bar_rect = rotated_bar.get_rect(center=(cx, cy))
+            screen.blit(rotated_bar, bar_rect)
+
+        # 머리 위 스택 표시(10칸)
+        self._draw_stack_hud(screen, sx, sy - int(48 * PLAYER_VIEW_SCALE))
+
+    def _draw_stack_hud(self, screen, cx, cy):
+        total = self.MAX_STACKS
+        w = int(6 * PLAYER_VIEW_SCALE)
+        h = int(5 * PLAYER_VIEW_SCALE)
+        gap = int(2 * PLAYER_VIEW_SCALE)
+        full = self.stacks
+        start_x = cx - (total * w + (total - 1) * gap) // 2
+        for i in range(total):
+            rect = pygame.Rect(start_x + i * (w + gap), cy, w, h)
+            if i < full:
+                pygame.draw.rect(screen, (200, 30, 30, 255), rect)
+            else:
+                pygame.draw.rect(screen, (110, 110, 110, 180), rect, width=1)
 
 class Boss1(AIBase):
     rank=10

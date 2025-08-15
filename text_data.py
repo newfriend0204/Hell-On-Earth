@@ -231,7 +231,7 @@ weapon_stats = {
         "spread": 9,
         "cost": 6,
         "rank": "3",
-        "desc": "보통 이상이ㅡ 연사력과 안정적인 제압 사격이 강점인 경기관총 입니다.",
+        "desc": "보통 이상의 연사력과 안정적인 제압 사격이 강점인 경기관총 입니다.",
         "usage": "좌클릭\n연사 사격."
     },
 }
@@ -442,7 +442,7 @@ doctorNF_dialogue = [
     # 0 — 인사
     {
         "speaker": "새친 연구원",
-        "text": "왔군. 이번엔 체계적으로 알려주지. 좌클릭으로 넘기고, 선택지는 클릭해.",
+        "text": "기지를 잘 탈출해서 잘 왔네. 대화는 좌클릭으로 넘길 수 있어.",
         "choices": None,
         "effect": None,
         "next": 1
@@ -451,433 +451,194 @@ doctorNF_dialogue = [
     # 1 — 메인 카테고리
     {
         "speaker": "새친 연구원",
-        "text": "무엇을 알고 싶지?",
+        "text": "무엇이 궁금하지? W/S로 움직이고, 좌클릭으로 선택해.",
         "choices": [
-            {"text": "1. 세계관", "next": 100},
-            {"text": "2. 조작법", "next": 200},
-            {"text": "3. 시스템", "next": 300},
-            {"text": "4. 적", "next": 400},
-            {"text": "5. UI", "next": 500},
-            {"text": "그만 듣기", "next": 999}
+            {"text": "1. 세계관", "next": 2},
+            {"text": "2. 조작법", "next": 11},
+            {"text": "3. 시스템", "next": 20},
+            {"text": "4. 적", "next": 27},
+            {"text": "5. UI", "next": 34},
+            {"text": "그만 듣기", "next": 46}
         ],
         "effect": None,
         "next": None
     },
 
     # =========================
-    # 1. 세계관 (submenu)
+    # 1. 세계관
     # =========================
     {
         "speaker": "새친 연구원",
-        "text": "[세계관] 어떤 항목이 궁금하지?",
+        "text": "[세계관] 어떤 항목이 궁금한가?",
         "choices": [
-            {"text": "1-1. NF 코퍼레이션", "next": 101},
-            {"text": "1-2. 새친 과학자", "next": 103},
-            {"text": "1-3. 포탈", "next": 105},
-            {"text": "1-4. 현재 상황", "next": 107},
+            {"text": "1-1. NF 코퍼레이션", "next": 3},
+            {"text": "1-2. 새친 과학자", "next": 5},
+            {"text": "1-3. 포탈", "next": 7},
+            {"text": "1-4. 현재 상황", "next": 9},
             {"text": "뒤로", "next": 1}
         ],
         "effect": None,
         "next": None
-    },  # 100
+    },
 
-    # 1-1. NF 코퍼레이션 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "NF 코퍼레이션은 거대 복합기업이야. 보안·군사·차원 연구에 깊게 관여하지.",
-        "choices": None,
-        "effect": None,
-        "next": 102
-    },  # 101
-    {
-        "speaker": "새친 연구원",
-        "text": "확장 과정에서 통제가 느슨해졌고, 그 틈이 지금 사태의 단초가 되었지.",
-        "choices": None,
-        "effect": None,
-        "next": 100
-    },  # 102
+    {"speaker": "새친 연구원", "text": "NF 코퍼레이션은 세계 각지의 과학자들이 모여 포탈을 연구하는 기밀 기업이야. 특수부대가 기밀을 지키고 있어서, 겉으로는 평범한 회사처럼 보이지.", "choices": None, "effect": None, "next": 4},
+    {"speaker": "새친 연구원", "text": "NF는 여러 기지를 운영하고 있어. 우리가 있던 곳은 '폭스트롯 기지'지. 이런 사태가 벌어진 걸 보면, 다른 기지에도 지원을 요청해야겠어.", "choices": None, "effect": None, "next": 2},
 
-    # 1-2. 새친 과학자 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "난 새친, 연구 파트의 현장 담당이야. 자네의 작전을 기술적으로 지원하지.",
-        "choices": None,
-        "effect": None,
-        "next": 104
-    },  # 103
-    {
-        "speaker": "새친 연구원",
-        "text": "필요하면 드론과 장치로 우회로나 힌트를 제공할 거야. 언제든 물어봐.",
-        "choices": None,
-        "effect": None,
-        "next": 100
-    },  # 104
+    {"speaker": "새친 연구원", "text": "나는 새친이야. 포탈 연구에서 핵심 역할을 맡고 있지. 이번 사태는 내가 아니라, 내 상위 과학자가 포탈 출력 규격을 3배나 높여서 실험한 탓이야.", "choices": None, "effect": None, "next": 6},
+    {"speaker": "새친 연구원", "text": "앞으로도 네 옆에서 최대한 지원할게. 다른 스테이지나 보스를 만나기 전에도 나를 볼 수 있을 거야.", "choices": None, "effect": None, "next": 2},
 
-    # 1-3. 포탈 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "포탈은 차원 간 통로야. 불안정한 얽힘이 생기면 이변이 함께 밀려와.",
-        "choices": None,
-        "effect": None,
-        "next": 106
-    },  # 105
-    {
-        "speaker": "새친 연구원",
-        "text": "최근 봉인 절차가 난항이었고, 그 사이 적들이 스며들었지.",
-        "choices": None,
-        "effect": None,
-        "next": 100
-    },  # 106
+    {"speaker": "새친 연구원", "text": "포탈은 막대한 에너지를 제공하는 중요한 자원이야. 우리는 그걸 이용해 많은 이득을 얻었지. 그런데 상위 과학자가 출력 규격을 3배로 올리는 실험을 하면서 포탈이 매우 불안정해졌어.", "choices": None, "effect": None, "next": 8},
+    {"speaker": "새친 연구원", "text": "그 결과, 포탈 너머 '지옥'이라는 차원에서 악마들이 쏟아져 나오고, 에너지가 사람들을 홀려 서로 죽이는 참사가 벌어졌지.", "choices": None, "effect": None, "next": 2},
 
-    # 1-4. 현재 상황 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "기지 일부는 이미 함락. 생존 인원은 산개했어. 보급도 불안정하지.",
-        "choices": None,
-        "effect": None,
-        "next": 108
-    },  # 107
-    {
-        "speaker": "새친 연구원",
-        "text": "목표는 포탈 안정화와 에너지 회수, 그리고 지휘 핵심의 차단이야.",
-        "choices": None,
-        "effect": None,
-        "next": 100
-    },  # 108
+    {"speaker": "새친 연구원", "text": "너도 봤겠지만, 폭스트롯 기지는 거의 함락 직전이야. 생존자들은 도심 쪽으로 탈출하고 있어. 기지가 숲속 깊이 은밀하게 지어졌거든.", "choices": None, "effect": None, "next": 10},
+    {"speaker": "새친 연구원", "text": "우리는 결국 지옥으로 넘어가, 이 사태를 일으킨 존재를 제압해야 해. 네 슈트는 내가 개조했으니, 포탈 에너지에 홀릴 걱정은 없어.", "choices": None, "effect": None, "next": 2},
 
     # =========================
-    # 2. 조작법 (submenu)
+    # 2. 조작법
     # =========================
     {
         "speaker": "새친 연구원",
-        "text": "[조작법] 어떤 항목이 궁금하지?",
+        "text": "[조작법] 어떤 항목이 궁금한가?",
         "choices": [
-            {"text": "2-1. 기본 이동", "next": 201},
-            {"text": "2-2. 무기 사용과 교체", "next": 203},
-            {"text": "2-3. 일시정지", "next": 205},
-            {"text": "2-4. UI보기", "next": 207},
+            {"text": "2-1. 기본 이동", "next": 12},
+            {"text": "2-2. 무기 사용과 교체", "next": 14},
+            {"text": "2-3. 일시정지", "next": 16},
+            {"text": "2-4. 슈트 UI보기", "next": 18},
             {"text": "뒤로", "next": 1}
         ],
         "effect": None,
         "next": None
-    },  # 200
+    },
 
-    # 2-1. 기본 이동 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "W/A/S/D로 이동. Shift로 달리기. 사격을 시작하면 다시 보행 속도로 전환돼.",
-        "choices": None,
-        "effect": None,
-        "next": 202
-    },  # 201
-    {
-        "speaker": "새친 연구원",
-        "text": "장시간 달리기는 위험해. 시야·포지션이 무너질 수 있어. 상황에 맞춰 써.",
-        "choices": None,
-        "effect": None,
-        "next": 200
-    },  # 202
+    {"speaker": "새친 연구원", "text": "W/A/S/D로 이동, Shift로 달릴 수 있어. 하지만 사격을 시작하면 다시 걷는 속도로 돌아가.", "choices": None, "effect": None, "next": 13},
+    {"speaker": "새친 연구원", "text": "방의 출입구로 가면 자동으로 이동 애니메이션과 함께 방이 전환돼.", "choices": None, "effect": None, "next": 11},
 
-    # 2-2. 무기 사용과 교체 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "좌/우클릭으로 발사. 탄약 게이지를 소모해. 바닥나면 V로 근접해 충전 오브를 노려.",
-        "choices": None,
-        "effect": None,
-        "next": 204
-    },  # 203
-    {
-        "speaker": "새친 연구원",
-        "text": "무기는 Space로 주워 슬롯을 채워. 상황에 맞춰 더 강한 무기를 선택해.",
-        "choices": None,
-        "effect": None,
-        "next": 200
-    },  # 204
+    {"speaker": "새친 연구원", "text": "좌/우클릭으로 무기를 발사해. 탄약 게이지를 소모하지. 탄약이 바닥나면 V키로 근접 공격해서 충전 오브를 노려봐.", "choices": None, "effect": None, "next": 15},
+    {"speaker": "새친 연구원", "text": "무기는 Space 키로 주워 슬롯을 채우거나 교체할 수 있어. 탄약이 모두 바닥나면 자동으로 근접 공격이 나가.", "choices": None, "effect": None, "next": 11},
 
-    # 2-3. 일시정지 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "일시정지는 빌드 설정에 따라 달라. 보통 ESC로 메뉴를 열 수 있지.",
-        "choices": None,
-        "effect": None,
-        "next": 206
-    },  # 205
-    {
-        "speaker": "새친 연구원",
-        "text": "전투 중에는 일시정지에 의존하지 말고, 엄폐나 거리로 시간을 벌어.",
-        "choices": None,
-        "effect": None,
-        "next": 200
-    },  # 206
+    {"speaker": "새친 연구원", "text": "ESC 키를 눌러 게임을 일시정지할 수 있어.", "choices": None, "effect": None, "next": 17},
+    {"speaker": "새친 연구원", "text": "주의해! 나가기를 누르면 진행 중인 내용이 모두 사라지고 메인 화면으로 돌아가. 가능하면 '계속하기'를 선택하는 걸 추천해.", "choices": None, "effect": None, "next": 11},
 
-    # 2-4. UI보기 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "Tab으로 UI를 열어 현재 상태와 무기 정보를 확인할 수 있어.",
-        "choices": None,
-        "effect": None,
-        "next": 208
-    },  # 207
-    {
-        "speaker": "새친 연구원",
-        "text": "무기 설명과 스탯은 상단 탭에서 볼 수 있어. 선택과 운용의 핵심이지.",
-        "choices": None,
-        "effect": None,
-        "next": 200
-    },  # 208
+    {"speaker": "새친 연구원", "text": "Tab 키로 슈트 UI를 열어 현재 상태나 무기 정보를 확인할 수 있어.", "choices": None, "effect": None, "next": 19},
+    {"speaker": "새친 연구원", "text": "상단 버튼을 눌러 다양한 정보를 확인해봐. 내 상태나 무기 설명도 볼 수 있어.", "choices": None, "effect": None, "next": 11},
 
     # =========================
-    # 3. 시스템 (submenu)
+    # 3. 시스템
     # =========================
     {
         "speaker": "새친 연구원",
-        "text": "[시스템] 어떤 항목이 궁금하지?",
+        "text": "[시스템] 어떤 항목이 궁금한가?",
         "choices": [
-            {"text": "3-1. 체력", "next": 301},
-            {"text": "3-2. 탄약 게이지", "next": 303},
-            {"text": "3-3. 적", "next": 305},
+            {"text": "3-1. 체력", "next": 21},
+            {"text": "3-2. 탄약 게이지", "next": 23},
+            {"text": "3-3. 적", "next": 25},
             {"text": "뒤로", "next": 1}
         ],
         "effect": None,
         "next": None
-    },  # 300
+    },
 
-    # 3-1. 체력 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "체력이 0이 되면 끝이야. 체력 오브와 상인 보급으로 유지해.",
-        "choices": None,
-        "effect": None,
-        "next": 302
-    },  # 301
-    {
-        "speaker": "새친 연구원",
-        "text": "업그레이드는 드론을 통해 가능해. 최대치가 오르면 장기전이 쉬워져.",
-        "choices": None,
-        "effect": None,
-        "next": 300
-    },  # 302
+    {"speaker": "새친 연구원", "text": "체력이 0이 되면 끝이야. 체력 오브나 상인 보급을 통해 유지해야 해.", "choices": None, "effect": None, "next": 22},
+    {"speaker": "새친 연구원", "text": "체력 최대치는 드론 업그레이드로 올릴 수 있어. 최대치가 늘어나면 장기전에 유리하지.", "choices": None, "effect": None, "next": 20},
 
-    # 3-2. 탄약 게이지 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "사격 시 탄약 게이지를 소모해. 바닥나면 근접으로 틈을 만들어 보급해.",
-        "choices": None,
-        "effect": None,
-        "next": 304
-    },  # 303
-    {
-        "speaker": "새친 연구원",
-        "text": "상인, 드론, 전투 드롭으로 보급 가능. 무기 등급이 높을수록 소모도 커.",
-        "choices": None,
-        "effect": None,
-        "next": 300
-    },  # 304
+    {"speaker": "새친 연구원", "text": "사격할 때마다 탄약 게이지가 줄어들어. 바닥나면 근접 공격으로 틈을 만들어 보급하자.", "choices": None, "effect": None, "next": 24},
+    {"speaker": "새친 연구원", "text": "탄약은 상인, 드론, 전투 드롭 등으로 보급 가능해. 무기 등급이 높을수록 탄약 소모도 커.", "choices": None, "effect": None, "next": 20},
 
-    # 3-3. 적 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "적마다 패턴과 약점이 달라. 경고 연출과 움직임을 관찰해 대응해.",
-        "choices": None,
-        "effect": None,
-        "next": 306
-    },  # 305
-    {
-        "speaker": "새친 연구원",
-        "text": "지형·링·레이저 등 경고를 보고 판단해. 무턱대고 뛰어들면 위험해.",
-        "choices": None,
-        "effect": None,
-        "next": 300
-    },  # 306
+    {"speaker": "새친 연구원", "text": "적마다 패턴과 약점이 달라. 경고 연출과 움직임을 보고, 원거리에서 싸울지 근접으로 갈지 판단해야 해.", "choices": None, "effect": None, "next": 26},
+    {"speaker": "새친 연구원", "text": "지형, 링, 레이저 같은 경고 신호를 잘 봐야 해. 무작정 돌진하면 위험하니까, 처음 보는 적은 여러 번 재도전하면서 패턴을 익히는 것도 좋아.", "choices": None, "effect": None, "next": 20},
 
     # =========================
     # 4. 적 (submenu)
     # =========================
     {
         "speaker": "새친 연구원",
-        "text": "[적] 어떤 항목이 궁금하지?",
+        "text": "[적] 어떤 항목이 궁금한가?",
         "choices": [
-            {"text": "4-1. 적의 정의", "next": 401},
-            {"text": "4-2. 등급", "next": 403},
-            {"text": "4-3. 보스", "next": 405},
+            {"text": "4-1. 적의 정의", "next": 28},
+            {"text": "4-2. 등급", "next": 30},
+            {"text": "4-3. 보스", "next": 32},
             {"text": "뒤로", "next": 1}
         ],
         "effect": None,
         "next": None
-    },  # 400
+    },
 
-    # 4-1. 적의 정의 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "포탈로 유입된 변칙체와 무장 인원이 혼재돼 있어. 각자 출처도 다르지.",
-        "choices": None,
-        "effect": None,
-        "next": 402
-    },  # 401
-    {
-        "speaker": "새친 연구원",
-        "text": "일부는 서로 교전하기도 해. 이 점을 이용하면 전장을 정리할 수 있어.",
-        "choices": None,
-        "effect": None,
-        "next": 400
-    },  # 402
+    # 4-1. 적의 정의
+    {"speaker": "새친 연구원", "text": "포탈에서 나온 악마들과 포탈 에너지에 홀린 군인들이 무차별적으로 공격하고 있어.", "choices": None, "effect": None, "next": 29},
+    {"speaker": "새친 연구원", "text": "스테이지가 진행될수록 더 강력한 적이 등장하니 주의해.", "choices": None, "effect": None, "next": 27},
 
-    # 4-2. 등급 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "등급은 1~10. 수치가 높을수록 체력·화력·드롭이 올라가.",
-        "choices": None,
-        "effect": None,
-        "next": 404
-    },  # 403
-    {
-        "speaker": "새친 연구원",
-        "text": "10등급은 보스 전용이야. 단계마다 새로운 형태가 기다리고 있지.",
-        "choices": None,
-        "effect": None,
-        "next": 400
-    },  # 404
+    # 4-2. 등급
+    {"speaker": "새친 연구원", "text": "적 등급은 1부터 10까지 있어. 수치가 높을수록 체력, 화력, 드롭 보상이 강력해져. 당연히 악의 정수도 더 많이 떨어뜨리지.", "choices": None, "effect": None, "next": 31},
+    {"speaker": "새친 연구원", "text": "10등급은 보스 전용이야. 각 단계마다 새로운 형태가 기다리고 있어.", "choices": None, "effect": None, "next": 27},
 
-    # 4-3. 보스 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "보스는 경고 후 강한 패턴을 연달아 써. 첫 패턴을 기억해 둬.",
-        "choices": None,
-        "effect": None,
-        "next": 406
-    },  # 405
-    {
-        "speaker": "새친 연구원",
-        "text": "약점을 내보이는 순간이 반드시 있어. 그 타이밍을 놓치지 마.",
-        "choices": None,
-        "effect": None,
-        "next": 400
-    },  # 406
+    # 4-3. 보스
+    {"speaker": "새친 연구원", "text": "보스는 미니맵에서 빨간색 방에 있어. 모든 스테이지마다 하나씩 있으니, 제대로 준비하고 들어가.", "choices": None, "effect": None, "next": 33},
+    {"speaker": "새친 연구원", "text": "보스 체력을 절반쯤 깎으면 충전 오브가 조금 떨어지고, 처치하면 맵 중앙에 포탈이 생성돼. Space 키로 다음 스테이지로 이동할 수 있어.", "choices": None, "effect": None, "next": 27},
 
     # =========================
     # 5. UI (submenu)
     # =========================
     {
         "speaker": "새친 연구원",
-        "text": "[UI] 어떤 항목이 궁금하지?",
+        "text": "[UI] 어떤 항목이 궁금한가?",
         "choices": [
-            {"text": "5-1. 필드 UI", "next": 501},
-            {"text": "5-2. 슈트 UI", "next": 502},
+            {"text": "5-1. 필드 UI", "next": 35},
+            {"text": "5-2. 슈트 UI", "next": 39},
             {"text": "뒤로", "next": 1}
         ],
         "effect": None,
         "next": None
-    },  # 500
+    },
 
     # 5-1. 필드 UI (submenu)
     {
         "speaker": "새친 연구원",
-        "text": "[필드 UI] 세부 항목을 고르지.",
+        "text": "[필드 UI] 세부 항목을 골라줘.",
         "choices": [
-            {"text": "5-1-1. 미니맵", "next": 511},
-            {"text": "5-1-2. 게이지바", "next": 512},
-            {"text": "5-1-3. 무기 슬롯", "next": 513},
-            {"text": "뒤로", "next": 500}
+            {"text": "5-1-1. 미니맵", "next": 36},
+            {"text": "5-1-2. 게이지바", "next": 37},
+            {"text": "5-1-3. 무기 슬롯", "next": 38},
+            {"text": "뒤로", "next": 34}
         ],
         "effect": None,
         "next": None
-    },  # 501
+    },
 
-    # 5-1-1. 미니맵 (1박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "미니맵은 주변 정보를 압축해서 보여줘. 이동 경로와 위협을 파악해.",
-        "choices": None,
-        "effect": None,
-        "next": 501
-    },  # 511
+    # 5-1-1. 미니맵
+    {"speaker": "새친 연구원", "text": "미니맵은 주변 정보를 압축해서 보여줘. 초록색은 시작 방, 회색/검정은 전투 방, 노란색은 획득 방, 빨간색은 보스 방이야.", "choices": None, "effect": None, "next": 35},
 
-    # 5-1-2. 게이지바 (1박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "체력/탄약 게이지를 즉시 확인 가능. 탄약이 낮으면 근접으로 보급해.",
-        "choices": None,
-        "effect": None,
-        "next": 501
-    },  # 512
+    # 5-1-2. 게이지바
+    {"speaker": "새친 연구원", "text": "체력과 탄약 게이지, 수치가 표시돼. 위쪽엔 악의 정수도 보여. 체력 게이지는 낮아질수록 색이 바뀌니까 잘 확인해.", "choices": None, "effect": None, "next": 35},
 
-    # 5-1-3. 무기 슬롯 (1박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "최대 4개의 무기를 운용해. 상황에 맞게 강·약화력을 배치해.",
-        "choices": None,
-        "effect": None,
-        "next": 501
-    },  # 513
+    # 5-1-3. 무기 슬롯
+    {"speaker": "새친 연구원", "text": "최대 4개의 무기를 장비할 수 있어. 무기 등급에 따라 테두리 색이 달라지고, 커서를 올리면 무기 이름도 확인할 수 있어.", "choices": None, "effect": None, "next": 35},
 
     # 5-2. 슈트 UI (submenu)
     {
         "speaker": "새친 연구원",
-        "text": "[슈트 UI] 세부 항목을 고르지.",
+        "text": "[슈트 UI] 세부 항목을 골라줘.",
         "choices": [
-            {"text": "5-2-1. 내 슈트 정보", "next": 521},
-            {"text": "5-2-2. 슈트 평가 항목", "next": 523},
-            {"text": "5-2-3. 무기 설명", "next": 525},
-            {"text": "뒤로", "next": 500}
+            {"text": "5-2-1. 내 슈트 정보", "next": 40},
+            {"text": "5-2-2. 슈트 평가 항목", "next": 42},
+            {"text": "5-2-3. 무기 설명", "next": 44},
+            {"text": "뒤로", "next": 34}
         ],
         "effect": None,
         "next": None
-    },  # 502
+    },
 
-    # 5-2-1. 내 슈트 정보 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "현재 체력, 탄약 최대치, 보유 자원 등을 한눈에 보여줘.",
-        "choices": None,
-        "effect": None,
-        "next": 522
-    },  # 521
-    {
-        "speaker": "새친 연구원",
-        "text": "강화로 최대치가 오르면 UI도 갱신돼. 전투 유지력이 크게 달라져.",
-        "choices": None,
-        "effect": None,
-        "next": 502
-    },  # 522
+    # 5-2-1. 내 슈트 정보
+    {"speaker": "새친 연구원", "text": "현재 체력, 탄약, 최대치, 악의 정수 보유량을 보여줘.", "choices": None, "effect": None, "next": 41},
+    {"speaker": "새친 연구원", "text": "잡은 적의 수나 현재 스테이지 정보도 확인할 수 있어.", "choices": None, "effect": None, "next": 39},
 
-    # 5-2-2. 슈트 평가 항목 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "진행도, 처치 수, 자원 보유량을 종합 평가해 안내해 준다.",
-        "choices": None,
-        "effect": None,
-        "next": 524
-    },  # 523
-    {
-        "speaker": "새친 연구원",
-        "text": "수치가 낮다면 보급·정비를 먼저. 높은 수치면 보스를 노려도 좋아.",
-        "choices": None,
-        "effect": None,
-        "next": 502
-    },  # 524
+    # 5-2-2. 슈트 평가 항목
+    {"speaker": "새친 연구원", "text": "슈트가 진행도, 처치 수, 자원 보유량 등을 종합 평가해줘.", "choices": None, "effect": None, "next": 43},
+    {"speaker": "새친 연구원", "text": "이 평가를 참고해서 전략을 조정하는 것도 좋아.", "choices": None, "effect": None, "next": 39},
 
-    # 5-2-3. 무기 설명 (2박스)
-    {
-        "speaker": "새친 연구원",
-        "text": "무기마다 등급(1~5)과 소모량이 달라. 상황별로 곡선 화력을 설계해.",
-        "choices": None,
-        "effect": None,
-        "next": 526
-    },  # 525
-    {
-        "speaker": "새친 연구원",
-        "text": "근거리·중거리·광역을 조합해 빈틈을 줄여라. 이는 생존 그 자체야.",
-        "choices": None,
-        "effect": None,
-        "next": 502
-    },  # 526
+    # 5-2-3. 무기 설명
+    {"speaker": "새친 연구원", "text": "무기 이미지, 성능, 설명, 사용 방법 등을 확인할 수 있는 탭이야.", "choices": None, "effect": None, "next": 45},
+    {"speaker": "새친 연구원", "text": "설명을 읽다 보면 무기를 어떻게 활용할지도 떠오를 거야.", "choices": None, "effect": None, "next": 39},
 
-    # 999 — 종료
-    {
-        "speaker": "새친 연구원",
-        "text": "좋아. 현장으로 나가 보자고.",
-        "choices": None,
-        "effect": None,
-        "next": None
-    }
+    # 46 — 종료 멘트
+    {"speaker": "새친 연구원", "text": "좋아, 여기까지야. 필요하면 언제든 다시 와.", "choices": None, "effect": None, "next": None}
 ]

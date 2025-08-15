@@ -1432,6 +1432,54 @@ class ScatteredBlood:
                 surface.fill((255, 0, 0, self.alpha))
                 screen.blit(surface, rect)
 
+class ShockParticle:
+    # 감전 파티클 생성
+    __slots__ = ("x", "y", "vx", "vy", "life_ms", "born", "size")
+    def __init__(self, x, y, vx, vy, life_ms, size):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.life_ms = life_ms
+        self.born = pygame.time.get_ticks()
+        self.size = size
+
+def spawn_shock_particles(screen_center_x, screen_center_y, count=2):
+    # 플레이어 주변 원형 영역에서 파란 파티클 생성
+    now = pygame.time.get_ticks()
+    for _ in range(count):
+        r = random.randint(10, 42) * PLAYER_VIEW_SCALE
+        ang = random.uniform(0, 2 * math.pi)
+        x = screen_center_x + math.cos(ang) * r
+        y = screen_center_y + math.sin(ang) * r
+        vx = math.cos(ang) * random.uniform(0.05, 0.20)
+        vy = -random.uniform(0.20, 0.45)
+        life = random.randint(380, 700)
+        size = random.randint(2, 4)
+        config.shock_particles.append(ShockParticle(x, y, vx, vy, life, size))
+
+def update_shock_particles():
+    now = pygame.time.get_ticks()
+    alive = []
+    for p in config.shock_particles:
+        t = now - p.born
+        if t > p.life_ms:
+            continue
+        p.x += p.vx
+        p.y += p.vy
+        alive.append(p)
+    config.shock_particles = alive
+
+def draw_shock_particles(screen):
+    now = pygame.time.get_ticks()
+    for p in config.shock_particles:
+        t = now - p.born
+        a = max(0, 255 - int(255 * (t / max(1, p.life_ms))))
+        col = (120, 200, 255, a)
+        s = pygame.Surface((p.size * 2, p.size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(s, col, (p.size, p.size), p.size)
+        screen.blit(s, (int(p.x - p.size), int(p.y - p.size)))
+
 class Obstacle:
     # 맵 상의 장애물(나무, 바위 등)
     def __init__(
