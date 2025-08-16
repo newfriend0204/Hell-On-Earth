@@ -32,14 +32,25 @@ from text_data import (
     merchant_dialogue,
     doctorNF_dialogue,
     drone_dialogue,
-    soldier1_before_dialogue,
-    soldier1_after_dialogue,
-    scientist1_dialogue,
     doctorNF12_before_dialogue,
     doctorNF12_after_dialogue,
     doctorNF13_dialogue,
+    doctorNF21_dialogue,
+    doctorNF22_dialogue,
+    scientist1_dialogue,
+    scientist2_before_dialogue,
+    scientist2_after_dialogue,
+    scientist3_before_dialogue,
+    scientist3_after_dialogue,
+    soldier1_before_dialogue,
+    soldier1_after_dialogue,
     soldier2_before_dialogue,
     soldier2_after_dialogue,
+    soldier2_before_dialogue,
+    soldier2_after_dialogue,
+    soldier3_before_dialogue,
+    soldier3_after_dialogue,
+    soldier4_dialogue,
     BOSS_TIPS
 )
 
@@ -315,6 +326,7 @@ def init_new_game():
     global grid, current_room_pos, visited_f_rooms, room_portals, current_portal, portal_spawn_at_ms
     global player_hp_max, player_hp, last_hp_visual, ammo_gauge_max, ammo_gauge, last_ammo_visual
     global bullets, scattered_bullets, enemies, field_weapons, room_field_weapons, next_room_enter_sound
+    global room_shop_items, room_drone_rooms, room_acquire_type, room_entry_dir_cache
     import config, world
 
     # 진행상황 초기화
@@ -328,6 +340,17 @@ def init_new_game():
     enemies[:] = []
     field_weapons = []
     room_field_weapons = {}
+    room_shop_items = {}
+    room_drone_rooms = {}
+    room_acquire_type = {}
+    room_entry_dir_cache = {}
+    try:
+        config.dropped_items = []
+        config.effects = []
+        config.active_dots = []
+        config.blood_effects = []
+    except Exception:
+        pass
 
     # 스테이지를 1-1로 리셋하고 맵 재생성
     config.CURRENT_STAGE = "1-1"
@@ -357,6 +380,24 @@ def init_new_game():
     ammo_gauge     = ammo_gauge_max
     last_ammo_visual = float(ammo_gauge)
 
+    # (선택) 무기 인스턴스도 재생성해서 내부 쿨다운/상태 초기화
+    try:
+        global weapons, current_weapon_index, changing_weapon, change_animation_timer, recoil_in_progress
+        weapons = [
+            cls.create_instance(
+                weapon_assets, sounds,
+                lambda: ammo_gauge, consume_ammo, get_player_world_position
+            )
+            for cls in START_WEAPONS
+        ]
+        init_weapon_ui_cache(weapons)
+        current_weapon_index = 0
+        changing_weapon = False
+        change_animation_timer = 0.0
+        recoil_in_progress = False
+    except Exception:
+        pass
+
     # 현재 방을 재로딩해서 실제 오브젝트/벽/스폰 재설정
     next_room_enter_sound = None
     change_room(None)
@@ -367,6 +408,7 @@ pause_scales      = [1.0, 1.0]
 pause_buttons     = [{"id":"resume","label":"계속하기"},{"id":"quit","label":"나가기"}]
 pause_frozen_frame = None
 confirm_quit_active = False
+confirm_left_released = False
 pause_request = False
 confirm_hover = -1
 confirm_scales = [1.0, 1.0]
@@ -589,8 +631,7 @@ last_boss_hp_visual = 0
 damage_flash_alpha = 0
 damage_flash_fade_speed = 5
 
-blood_effects = []
-config.blood_effects = blood_effects
+blood_effects = config.blood_effects
 config.effects = []
 config.active_dots = []
 
@@ -651,11 +692,74 @@ room_drone_rooms = {}
 room_acquire_type = {}
 room_entry_dir_cache = {}
 
+def _guess_entry_dir_for_room(cx_cell, cy_cell):
+    # 현재 E방의 입실 방향(북/남/서/동)을 캐시를 활용해 추정.
+    room_key = (cx_cell, cy_cell)
+    entry_dir = room_entry_dir_cache.get(room_key)
+    if entry_dir is None:
+        for nx, ny in world.neighbors(cx_cell, cy_cell):
+            if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
+                if ny < cy_cell:   entry_dir = "north"
+                elif ny > cy_cell: entry_dir = "south"
+                elif nx < cx_cell: entry_dir = "west"
+                else:              entry_dir = "east"
+                break
+        room_entry_dir_cache[room_key] = entry_dir
+    return entry_dir
+
+def _get_offscreen_spawn_xy(entry_dir):
+    # 입실 방향 기준으로 방 바깥쪽에서 슬라이드 인 하도록 스폰 좌표 계산.
+    eff_w   = world_instance.effective_bg_width
+    eff_h   = world_instance.effective_bg_height
+    center_x = eff_w  / 2
+    center_y = eff_h  / 2
+
+    X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
+    Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
+    OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
+    OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
+    OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
+    OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
+
+    if entry_dir == "north":
+        return center_x - X_OFF_NS, -OUT_TOP
+    elif entry_dir == "south":
+        return center_x - X_OFF_NS, eff_h + OUT_BOT
+    elif entry_dir == "west":
+        return -OUT_LEFT,          center_y - Y_OFF_WE
+    elif entry_dir == "east":
+        return eff_w + OUT_RGHT,   center_y - Y_OFF_WE
+    else:
+        return center_x, center_y
+
+def _spawn_endroom_story_npc(cfg):
+    # E방에 스토리 NPC 1명을 스폰하는 축약 함수.
+    cx_cell, cy_cell = current_room_pos
+    entry_dir = _guess_entry_dir_for_room(cx_cell, cy_cell)
+    x, y = _get_offscreen_spawn_xy(entry_dir)
+    rs = world.room_states[cy_cell][cx_cell]
+    dlg = cfg["after"] if rs == 9 else cfg["before"]
+    npcs.append(cfg["cls"](images[cfg["image"]], x, y, dlg))
+
+# 스테이지별 E방 스토리 NPC 매핑
+ENDROOM_NPC_CONFIG = {
+    "1-1": {"cls": SoldierNPC,  "image": "soldier1",   "before": soldier1_before_dialogue,   "after": soldier1_after_dialogue},
+    "1-2": {"cls": DoctorNFNPC, "image": "doctorNF",   "before": doctorNF12_before_dialogue, "after": doctorNF12_after_dialogue},
+    "1-3": {"cls": SoldierNPC,  "image": "soldier2",   "before": soldier2_before_dialogue,   "after": soldier2_after_dialogue},
+
+    "2-1": {"cls": ScientistNPC,"image": "scientist2", "before": scientist2_before_dialogue,  "after": scientist2_after_dialogue},
+    "2-2": {"cls": SoldierNPC,  "image": "soldier3",   "before": soldier3_before_dialogue,    "after": soldier3_after_dialogue},
+    "2-3": {"cls": ScientistNPC,"image": "scientist3", "before": scientist3_before_dialogue,  "after": scientist3_after_dialogue},
+}
+
 def spawn_room_npcs():
-    # NPC 소환
+    # NPC 소환 시작
     npcs.clear()
-    room_type = grid[current_room_pos[1]][current_room_pos[0]]
-    room_key = (current_room_pos[0], current_room_pos[1])
+
+    cx_cell, cy_cell = current_room_pos
+    room_key = (cx_cell, cy_cell)
+    room_type = grid[cy_cell][cx_cell]
+
     if room_type == 'A' and room_drone_rooms.get(room_key, False):
         center_x = world_instance.effective_bg_width / 2
         center_y = world_instance.effective_bg_height / 2
@@ -664,18 +768,18 @@ def spawn_room_npcs():
                 images["drone"],
                 center_x,
                 center_y - int(100 * PLAYER_VIEW_SCALE),
-                drone_dialogue
+                drone_dialogue,
             )
         )
     elif room_type == 'A' and shop_items:
         center_x = world_instance.effective_bg_width / 2
-        center_y = world_instance.effective_bg_height / 2 - 130
+        center_y = world_instance.effective_bg_height / 2 - 190
         npcs.append(
             MerchantNPC(
                 images["merchant1"],
                 center_x,
                 center_y,
-                merchant_dialogue
+                merchant_dialogue,
             )
         )
 
@@ -687,7 +791,7 @@ def spawn_room_npcs():
                         images["doctorNF"],
                         npc_info["x"],
                         npc_info["y"],
-                        doctorNF_dialogue
+                        doctorNF_dialogue,
                     )
                 )
             elif npc_info["npc_type"] == "scientist1_npc" and config.CURRENT_STAGE == "1-2":
@@ -696,7 +800,16 @@ def spawn_room_npcs():
                         images["scientist1"],
                         npc_info["x"],
                         npc_info["y"],
-                        scientist1_dialogue
+                        scientist1_dialogue,
+                    )
+                )
+            elif npc_info["npc_type"] == "soldier2_npc" and config.CURRENT_STAGE == "2-3":
+                npcs.append(
+                    ScientistNPC(
+                        images["soldier2"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        soldier4_dialogue,
                     )
                 )
             elif npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "1-3":
@@ -705,135 +818,32 @@ def spawn_room_npcs():
                         images["doctorNF"],
                         npc_info["x"],
                         npc_info["y"],
-                        doctorNF13_dialogue
+                        doctorNF13_dialogue,
+                    )
+                )
+            elif npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "2-1":
+                npcs.append(
+                    DoctorNFNPC(
+                        images["doctorNF"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        doctorNF21_dialogue,
+                    )
+                )
+            elif npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "2-2":
+                npcs.append(
+                    DoctorNFNPC(
+                        images["doctorNF"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        doctorNF22_dialogue,
                     )
                 )
 
-    if config.CURRENT_STAGE == "1-1" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
-        cx_cell, cy_cell = current_room_pos
-        room_key = (cx_cell, cy_cell)
-
-        entry_dir = room_entry_dir_cache.get(room_key)
-        if entry_dir is None:
-            for nx, ny in world.neighbors(cx_cell, cy_cell):
-                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
-                    if ny < cy_cell: entry_dir = "north"
-                    elif ny > cy_cell: entry_dir = "south"
-                    elif nx < cx_cell: entry_dir = "west"
-                    else:              entry_dir = "east"
-                    break
-
-        eff_w   = world_instance.effective_bg_width
-        eff_h   = world_instance.effective_bg_height
-        center_x = eff_w  / 2
-        center_y = eff_h  / 2
-
-        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
-        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
-
-        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
-
-        if entry_dir == "north":
-            x = center_x - X_OFF_NS
-            y = -OUT_TOP
-        elif entry_dir == "south":
-            x = center_x - X_OFF_NS
-            y = eff_h + OUT_BOT
-        elif entry_dir == "west":
-            x = -OUT_LEFT
-            y = center_y - Y_OFF_WE
-        elif entry_dir == "east":
-            x = eff_w + OUT_RGHT
-            y = center_y - Y_OFF_WE
-        else:
-            x, y = center_x, center_y
-
-        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
-        dlg = soldier1_after_dialogue if rs == 9 else soldier1_before_dialogue
-        npcs.append(SoldierNPC(images["soldier1"], x, y, dlg))
-
-    if config.CURRENT_STAGE == "1-2" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
-        cx_cell, cy_cell = current_room_pos
-        room_key = (cx_cell, cy_cell)
-        entry_dir = room_entry_dir_cache.get(room_key)
-        if entry_dir is None:
-            for nx, ny in world.neighbors(cx_cell, cy_cell):
-                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
-                    if ny < cy_cell:   entry_dir = "north"
-                    elif ny > cy_cell: entry_dir = "south"
-                    elif nx < cx_cell: entry_dir = "west"
-                    else:              entry_dir = "east"
-                    break
-
-        eff_w   = world_instance.effective_bg_width
-        eff_h   = world_instance.effective_bg_height
-        center_x = eff_w  / 2
-        center_y = eff_h  / 2
-
-        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
-        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
-        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
-
-        if entry_dir == "north":
-            x = center_x - X_OFF_NS; y = -OUT_TOP
-        elif entry_dir == "south":
-            x = center_x - X_OFF_NS; y = eff_h + OUT_BOT
-        elif entry_dir == "west":
-            x = -OUT_LEFT;          y = center_y - Y_OFF_WE
-        elif entry_dir == "east":
-            x = eff_w + OUT_RGHT;   y = center_y - Y_OFF_WE
-        else:
-            x, y = center_x, center_y
-
-        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
-        dlg = doctorNF12_after_dialogue if rs == 9 else doctorNF12_before_dialogue
-        npcs.append(DoctorNFNPC(images["doctorNF"], x, y, dlg))
-
-    if config.CURRENT_STAGE == "1-3" and grid[current_room_pos[1]][current_room_pos[0]] == 'E':
-        cx_cell, cy_cell = current_room_pos
-        room_key = (cx_cell, cy_cell)
-        entry_dir = room_entry_dir_cache.get(room_key)
-        if entry_dir is None:
-            for nx, ny in world.neighbors(cx_cell, cy_cell):
-                if 0 <= nx < world.WIDTH and 0 <= ny < world.HEIGHT and grid[ny][nx] in ('F', 'S'):
-                    if ny < cy_cell:   entry_dir = "north"
-                    elif ny > cy_cell: entry_dir = "south"
-                    elif nx < cx_cell: entry_dir = "west"
-                    else:              entry_dir = "east"
-                    break
-
-        eff_w   = world_instance.effective_bg_width
-        eff_h   = world_instance.effective_bg_height
-        center_x = eff_w  / 2
-        center_y = eff_h  / 2
-
-        X_OFF_NS = int(158 * 0.75) * PLAYER_VIEW_SCALE
-        Y_OFF_WE = int(144 * 0.75) * PLAYER_VIEW_SCALE
-        OUT_TOP  = int(216 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_BOT  = int( 89 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_LEFT = int(170 * 0.80) * PLAYER_VIEW_SCALE
-        OUT_RGHT = int(130 * 0.80) * PLAYER_VIEW_SCALE
-
-        if entry_dir == "north":
-            x = center_x - X_OFF_NS; y = -OUT_TOP
-        elif entry_dir == "south":
-            x = center_x - X_OFF_NS; y = eff_h + OUT_BOT
-        elif entry_dir == "west":
-            x = -OUT_LEFT;          y = center_y - Y_OFF_WE
-        elif entry_dir == "east":
-            x = eff_w + OUT_RGHT;   y = center_y - Y_OFF_WE
-        else:
-            x, y = center_x, center_y
-
-        rs = world.room_states[current_room_pos[1]][current_room_pos[0]]
-        dlg = soldier2_after_dialogue if rs == 9 else soldier2_before_dialogue
-        npcs.append(SoldierNPC(images["soldier2"], x, y, dlg))
+    if room_type == 'E':
+        cfg = ENDROOM_NPC_CONFIG.get(config.CURRENT_STAGE)
+        if cfg is not None:
+            _spawn_endroom_story_npc(cfg)
 
 def on_dialogue_close():
     global mouse_left_released_after_dialogue, dialogue_frozen_frame
@@ -1095,7 +1105,7 @@ def trigger_player_death():
     mouse_left_button_down = False
     mouse_right_button_down = False
     wx, wy = get_player_world_position()
-    blood = ScatteredBlood(wx, wy, num_particles=240)
+    blood = ScatteredBlood(wx, wy, num_particles=500)
     for p in getattr(blood, "particles", []):
         p["vx"] *= 1.5
         p["vy"] *= 1.5
@@ -1147,10 +1157,27 @@ init_weapon_ui_cache(weapons)
 def advance_to_next_stage():
     # 현재 스테이지를 다음 스테이지로 전환하고 시작방으로 이동
     global room_portals, current_portal, portal_spawn_at_ms
+    global room_field_weapons, room_shop_items, room_drone_rooms
+    global room_acquire_type, room_entry_dir_cache
+    global field_weapons, shop_items
     room_portals.clear()
     current_portal = None; portal_spawn_at_ms = None
 
     visited_f_rooms.clear()
+
+    try:
+        room_field_weapons.clear()
+        room_shop_items.clear()
+        room_drone_rooms.clear()
+        room_acquire_type.clear()
+        room_entry_dir_cache.clear()
+    except NameError:
+        pass
+    try:
+        field_weapons.clear()
+        shop_items.clear()
+    except NameError:
+        pass
 
     import config
     stage_order = list(STAGE_DATA.keys())
@@ -1347,7 +1374,7 @@ def change_room(direction):
 
     if new_room_type == 'A':
         if room_key not in room_acquire_type:
-            room_acquire_type[room_key] = random.randint(2, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
+            room_acquire_type[room_key] = random.randint(4, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
         acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
@@ -1543,7 +1570,7 @@ def change_room(direction):
 
     bullets.clear()
     scattered_bullets.clear()
-    blood_effects.clear()
+    config.blood_effects.clear()
     config.dropped_items.clear()
     config.global_enemy_bullets.clear()
     config.effects.clear()
@@ -1583,7 +1610,7 @@ def change_room(direction):
                         kill_callback=increment_kill_count
                     )
                     enemies.append(enemy)
-                    if enemy_type in ("boss1", "boss2"):
+                    if enemy_type in ("boss1", "boss2", "boss3"):
                         current_boss = enemy
                     break
         else:
@@ -1612,7 +1639,7 @@ def change_room(direction):
             )
             enemies.append(enemy)
 
-    if not any("enemy_type" in e_info and e_info["enemy_type"] in ("boss1", "boss2") for e_info in CURRENT_MAP["enemy_infos"]):
+    if not any("enemy_type" in e_info and e_info["enemy_type"] in ("boss1", "boss2", "boss3") for e_info in CURRENT_MAP["enemy_infos"]):
         current_boss = None
 
     config.all_enemies = enemies
@@ -2334,8 +2361,15 @@ def trigger_combat_end():
                 npc.dialogue = soldier1_after_dialogue
             elif config.CURRENT_STAGE == "1-3":
                 npc.dialogue = soldier2_after_dialogue
+            elif config.CURRENT_STAGE == "2-2":
+                npc.dialogue = soldier3_after_dialogue
         elif tname == "DoctorNFNPC" and config.CURRENT_STAGE == "1-2":
             npc.dialogue = doctorNF12_after_dialogue
+        elif tname == "ScientistNPC":
+            if config.CURRENT_STAGE == "2-1":
+                npc.dialogue = scientist2_after_dialogue
+            elif config.CURRENT_STAGE == "2-3":
+                npc.dialogue = scientist3_after_dialogue
 
 def trigger_stage_banner(text):
     stage_banner_fx["text"] = text
@@ -2664,7 +2698,7 @@ while running:
                 cx, cy = current_room_pos
                 for enemy in enemies[:]:
                     if enemy.alive:
-                        enemy.hit(9999, blood_effects)  # 강제로 사망시킴
+                        enemy.hit(9999, config.blood_effects)  # 강제로 사망시킴
                         enemies.remove(enemy)
                 room_key = (cx, cy)
 
@@ -2839,6 +2873,7 @@ while running:
                     elif bid == "quit":
                         confirm_quit_active = True
                         confirm_hover = -1
+                        confirm_left_released = False
 
         if confirm_quit_active:
             popup_w, popup_h = 520, 220
@@ -2865,7 +2900,11 @@ while running:
                 confirm_scales[i] = _lerp(confirm_scales[i], 1.08 if i==confirm_hover else 1.0, 0.16)
 
             for e in events:
-                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                if e.type == pygame.MOUSEBUTTONUP and e.button == 1:
+                    confirm_left_released = True
+                elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                    if not confirm_left_released:
+                        continue
                     if confirm_hover == 0:  # 예
                         sounds["button_click"].play()
                         old = screen.copy()
@@ -2877,7 +2916,8 @@ while running:
                         swipe_curtain_transition(screen, old, go_menu, direction="up", duration=0.5)
                         pause_menu_active = False
                         confirm_quit_active = False
-                    elif confirm_hover == 1:
+                        pause_frozen_frame = None
+                    elif confirm_hover == 1:  # 아니오
                         sounds["button_click"].play()
                         confirm_quit_active = False
 
@@ -2915,7 +2955,7 @@ while running:
                     )
             config.all_enemies = enemies
 
-    melee.update(enemies, blood_effects)
+    melee.update(enemies, config.blood_effects)
 
     for scatter in scattered_bullets[:]:
         scatter.update()
@@ -3510,13 +3550,13 @@ while running:
             else:
                 scatter.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
-    for blood in blood_effects[:]:
+    for blood in config.blood_effects[:]:
         # 피 이펙트 업데이트
         blood.update()
         if blood.alpha <= 0:
-            blood_effects.remove(blood)
+            config.blood_effects.remove(blood)
 
-    for blood in blood_effects:
+    for blood in config.blood_effects:
         blood.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y)
     
     if not config.combat_state and getattr(config, "auto_collect_ready_at", None) is not None:
@@ -3728,7 +3768,7 @@ while running:
                 ):
                     if not getattr(bullet, "ignore_enemy_collision", False):
                         damage = getattr(bullet, "damage", 0)
-                        enemy.hit(damage, blood_effects)
+                        enemy.hit(damage, config.blood_effects)
                         if not enemy.alive:
                             enemies.remove(enemy)
                         bullet.to_remove = True
@@ -3772,7 +3812,7 @@ while running:
         )
 
         obstacle_manager.draw_non_trees(screen, world_x, world_y)
-        for blood in blood_effects:
+        for blood in config.blood_effects:
             blood.draw(screen, world_x, world_y)
         for enemy in enemies:
             enemy.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
@@ -3881,7 +3921,7 @@ while running:
     if not player_dead:
         minimap_rect = draw_minimap(screen, grid, current_room_pos)
         draw_weapon_ui(screen, weapons, current_weapon_index)
-        if current_boss and type(current_boss).__name__ in ("Boss1", "Boss2") and current_boss.alive:
+        if current_boss and type(current_boss).__name__ in ("Boss1", "Boss2", "Boss3") and current_boss.alive:
             last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
         draw_combat_indicators(screen, delta_time, minimap_rect)
 

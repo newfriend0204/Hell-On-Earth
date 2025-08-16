@@ -364,6 +364,9 @@ def load_images():
     boss2_img = pygame.image.load(path_image("Image", "character", "Boss2.png")).convert_alpha()
     boss2_img = pygame.transform.smoothscale(boss2_img, (120, 120))
 
+    boss3_img = pygame.image.load(path_image("Image", "character", "Boss3.png")).convert_alpha()
+    boss3_img = pygame.transform.smoothscale(boss3_img, (120, 120))
+
     drone_img = pygame.image.load(path_image("Image", "entity", "Drone.png")).convert_alpha()
     drone_img = pygame.transform.smoothscale(drone_img, (60, 60))
 
@@ -372,6 +375,12 @@ def load_images():
 
     flame_pillar_img = pygame.image.load(path_image("Image", "entity", "FirePillar.png")).convert_alpha()
     flame_pillar_img = pygame.transform.smoothscale(flame_pillar_img, (300, 300))
+
+    hammer_img = pygame.image.load(path_image("Image", "entity", "Hammer.png")).convert_alpha()
+    hammer_img = pygame.transform.smoothscale(hammer_img, (50, 100))
+
+    anvil_img = pygame.image.load(path_image("Image", "entity", "Anvil.png")).convert_alpha()
+    anvil_img = pygame.transform.smoothscale(anvil_img, (60, 60))
 
     acid_projectile_img = fireball_img.copy()
     acid_projectile_img.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
@@ -464,9 +473,12 @@ def load_images():
         "enemy27": enemy27_img,
         "boss1": boss1_img,
         "boss2": boss2_img,
+        "boss3": boss3_img,
         "drone": drone_img,
         "fireball": fireball_img,
         "flame_pillar": flame_pillar_img,
+        "hammer": hammer_img,
+        "anvil": anvil_img,
         "acid_projectile": acid_projectile_img,
         "acid_pool": acid_pool_img,
         "mine": mine_img,

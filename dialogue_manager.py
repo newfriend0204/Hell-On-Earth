@@ -2,7 +2,6 @@ import pygame
 import ui
 import config
 
-
 class DialogueManager:
     def __init__(self):
         self.active = False

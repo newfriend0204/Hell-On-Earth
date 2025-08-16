@@ -686,7 +686,7 @@ class Enemy3(AIBase):
 
     DASH_DISTANCE = 250
     DASH_SPEED_MULTIPLIER = 3
-    DASH_DAMAGE = 35
+    DASH_DAMAGE = 30
     CHARGE_TIME = 1000
     COOLDOWN_MIN = 1000
     COOLDOWN_MAX = 2000
@@ -694,7 +694,7 @@ class Enemy3(AIBase):
     CLOSE_ATTACK_CHARGE = 1000
     CLOSE_ATTACK_COOLDOWN_MIN = 2000
     CLOSE_ATTACK_COOLDOWN_MAX = 3000
-    CLOSE_ATTACK_DAMAGE = 25
+    CLOSE_ATTACK_DAMAGE = 20
     CLOSE_ATTACK_SWEEP_TIME = 200
     CLOSE_ATTACK_SPEED_PENALTY = 0.7
 
@@ -923,7 +923,7 @@ class Enemy4(AIBase):
         self.image_original = images["enemy4"]
         self.image = self.image_original
         self.kill_callback = kill_callback
-        self.hp = 360
+        self.hp = 300
 
         shield_radius = int(self.radius * 1.2)
         self.shield = ShieldEffect(self, shield_radius, max_hp=200)
@@ -1056,7 +1056,7 @@ class Enemy4(AIBase):
 
         spawn_offset = 30
         vertical_offset = 6
-        angle = self.direction_angle + math.radians(random.uniform(-25, 25))
+        angle = self.direction_angle + math.radians(random.uniform(-15, 15))
         offset_angle = angle + math.radians(90)
         offset_dx = math.cos(offset_angle) * vertical_offset
         offset_dy = math.sin(offset_angle) * vertical_offset
@@ -1073,9 +1073,9 @@ class Enemy4(AIBase):
             target_world_y,
             0,
             self.bullet_image,
-            speed=2.5 * PLAYER_VIEW_SCALE,
+            speed=3 * PLAYER_VIEW_SCALE,
             max_distance=2000 * PLAYER_VIEW_SCALE,
-            damage=40
+            damage=15
         )
         config.global_enemy_bullets.append(new_bullet)
 
@@ -1320,12 +1320,12 @@ class Enemy6(AIBase):
     HP_MAX = 700
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
 
-    FIREBALL_DAMAGE = 60
+    FIREBALL_DAMAGE = 45
     FIREBALL_BURN_DMG = 12
     FIREBALL_BURN_DURATION = 2000
     FIREBALL_COOLDOWN = 1500
 
-    PILLAR_DAMAGE_TICK = 35
+    PILLAR_DAMAGE_TICK = 25
     PILLAR_RADIUS = 150
     PILLAR_DELAY = 700
     PILLAR_DURATION = 3000
@@ -1759,7 +1759,7 @@ class Enemy8(AIBase):
 
 class Enemy9(AIBase):
     rank = 5
-    HP = 480
+    HP = 430
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
     RANGED_COOLDOWN = 1800
     RANGED_RANGE = 1000
@@ -1850,16 +1850,16 @@ class Enemy10(AIBase):
 
     DETECT_MIN = 0
     DETECT_MAX = 1400 * PLAYER_VIEW_SCALE
-    LASER_TRACK_TIME = 1000
-    FIRE_DURATION = 3000
-    OVERHEAT_TIME = 1500
+    LASER_TRACK_TIME = 1500
+    FIRE_DURATION = 2000
+    OVERHEAT_TIME = 1000
     FIRE_INTERVAL = 75
     ROT_SPEED_TRACK = math.radians(100)
     ROT_SPEED_FIRE = math.radians(80)
     BULLET_SPEED = 14 * PLAYER_VIEW_SCALE
     BULLET_RANGE = 700 * PLAYER_VIEW_SCALE
     BULLET_DAMAGE = 7
-    LASER_THICKNESS = 2
+    LASER_THICKNESS = 3
     LASER_COLOR = (255, 0, 0)
 
     DEATH_EXPL_RADIUS = 180 * PLAYER_VIEW_SCALE
@@ -2164,7 +2164,7 @@ class Enemy11(AIBase):
     PREPARE_MS = 2000
 
     EXPLOSION_RADIUS = int(220 * PLAYER_VIEW_SCALE)
-    EXPLOSION_DAMAGE = 75
+    EXPLOSION_DAMAGE = 60
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
                  damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None, rank=rank):
@@ -2348,7 +2348,7 @@ class Enemy11(AIBase):
 class Enemy12(AIBase):
     rank = 6
 
-    HP = 500
+    HP = 450
 
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.56
 
@@ -2360,7 +2360,7 @@ class Enemy12(AIBase):
 
     PELLET_COUNT = 10
     PELLET_SPREAD_DEG = 30
-    PELLET_DAMAGE = 9
+    PELLET_DAMAGE = 7
     PELLET_RANGE = 500 * PLAYER_VIEW_SCALE
     FIRE_INTERVAL = 1800
     SHOT_DISTANCE = 300 * PLAYER_VIEW_SCALE
@@ -2585,7 +2585,7 @@ class Enemy12(AIBase):
 class Enemy13(AIBase):
     rank = 9
 
-    MAX_HP = 1000
+    MAX_HP = 750
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.6
 
     FRONT_ARC_DEG = 120
@@ -2880,7 +2880,7 @@ class Enemy13(AIBase):
 class Enemy14(AIBase):
     rank = 5
 
-    MAX_HP = 650
+    MAX_HP = 420
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.65
 
     NEAR_DISTANCE = int(320 * PLAYER_VIEW_SCALE)
@@ -3167,7 +3167,7 @@ class Enemy14(AIBase):
 class Enemy15(AIBase):
     rank = 7
 
-    MAX_HP = 800
+    MAX_HP = 650
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.80
 
     TRIGGER_RADIUS = int(200 * PLAYER_VIEW_SCALE)
@@ -3179,8 +3179,8 @@ class Enemy15(AIBase):
     LUNGE_WIDTH    = int(48 * PLAYER_VIEW_SCALE)
 
     # 피해
-    ONHIT_DAMAGE        = 20
-    PROX_TICK_MS        = 500
+    ONHIT_DAMAGE        = 15
+    PROX_TICK_MS        = 750
     PROX_EXTRA_MARGIN   = int(6 * PLAYER_VIEW_SCALE)
     PLAYER_RADIUS_EST   = int(15 * PLAYER_VIEW_SCALE)
 
@@ -3708,7 +3708,7 @@ class Enemy16(AIBase):
 class Enemy17(AIBase):
     rank = 4
 
-    MAX_HP = 400
+    MAX_HP = 350
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.80
     RADIUS = int(28 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -3718,7 +3718,7 @@ class Enemy17(AIBase):
     COOLDOWN_MS = 1200
     R_INNER = int(180 * PLAYER_VIEW_SCALE)
     R_THICK = int(80 * PLAYER_VIEW_SCALE)
-    DAMAGE = 22
+    DAMAGE = 20
     TELEGRAPH_ALPHA = 76
 
     PLAYER_RADIUS_EST = int(15 * PLAYER_VIEW_SCALE)
@@ -3934,7 +3934,7 @@ class Enemy17(AIBase):
 class Enemy18(AIBase):
     rank = 2
 
-    MAX_HP = 240
+    MAX_HP = 180
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
     RADIUS = int(28 * PLAYER_VIEW_SCALE)
 
@@ -4255,7 +4255,7 @@ class Enemy18(AIBase):
 class Enemy19(AIBase):
     rank = 8
 
-    MAX_HP = 800
+    MAX_HP = 650
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
     RADIUS = int(32 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -4669,7 +4669,7 @@ class Enemy19(AIBase):
 class Enemy20(AIBase):
     rank = 8
 
-    MAX_HP = 1000
+    MAX_HP = 700
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
     RADIUS = int(36 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -4683,7 +4683,7 @@ class Enemy20(AIBase):
     DASH_TIMEOUT_MS = 1200
     COOLDOWN_MS = 2200
 
-    DAMAGE = 40
+    DAMAGE = 35
     KNOCKBACK_PX = int(260 * PLAYER_VIEW_SCALE)
 
     MARK_ALPHA = 76
@@ -4957,13 +4957,13 @@ class Enemy20(AIBase):
 class Enemy21(AIBase):
     rank = 8
 
-    HP = 900
+    HP = 700
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
     RADIUS = int(34 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
 
     PULSE_RADIUS = int(300 * PLAYER_VIEW_SCALE)
-    DAMAGE = 28
+    DAMAGE = 25
     WINDUP_MS = 1400
     COOLDOWN_MS = 2500
 
@@ -5246,7 +5246,7 @@ class Enemy22(AIBase):
     WAVE_WID = int(60  * PLAYER_VIEW_SCALE)
     WAVE_GAP = int(25  * PLAYER_VIEW_SCALE)
 
-    DMG = 12
+    DMG = 10
     KNOCKBACK = int(140 * PLAYER_VIEW_SCALE)
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
@@ -5445,7 +5445,7 @@ class Enemy22(AIBase):
 class Enemy23(AIBase):
     rank = 8
 
-    HP = 900
+    HP = 700
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
     RADIUS = int(36 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -5715,12 +5715,12 @@ class Enemy24(AIBase):
     STRAFE_SWITCH_MIN = 600
     STRAFE_SWITCH_MAX = 1000
 
-    P1_HP = 600
+    P1_HP = 400
     P1_WINDUP_MS = 250
     P1_IMPACT_MS = 100
     P1_BETWEEN_HITS_MS = 150
     P1_COOLDOWN_MS = 2000
-    P1_DMG = 16
+    P1_DMG = 15
     P1_KNOCKBACK = int(80 * PLAYER_VIEW_SCALE)
     P1_WAVE_LEN = int(160 * PLAYER_VIEW_SCALE)
     P1_WAVE_WID = int(50  * PLAYER_VIEW_SCALE)
@@ -5729,11 +5729,11 @@ class Enemy24(AIBase):
     COCOON_HP = 150
     COCOON_MS = 8000
 
-    P2_HP = 400
+    P2_HP = 300
     P2_WINDUP_MS = 600
     P2_COOLDOWN_MS = 3500
     P2_DASH_SPEED = BASE_SPEED * 2.4
-    P2_DMG = 32
+    P2_DMG = 20
     P2_RADIUS = int(150 * PLAYER_VIEW_SCALE)
     P2_KNOCKBACK = int(220 * PLAYER_VIEW_SCALE)
     P2_MIN_JUMP = int(300 * PLAYER_VIEW_SCALE)
@@ -6131,7 +6131,7 @@ class Enemy24(AIBase):
 class Enemy25(AIBase):
     rank = 8
 
-    HP = 700
+    HP = 650
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.80
     RADIUS = int(32 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.10
@@ -6739,7 +6739,7 @@ class Enemy26(AIBase):
 class Enemy27(AIBase):
     rank = 3
 
-    HP = 450
+    HP = 250
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
     RADIUS = int(30 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.10
@@ -7046,8 +7046,8 @@ class Boss1(AIBase):
         self.sound_gun1 = sounds["boss1_gun1_fire"]
         self.sound_gun2 = sounds["boss1_gun2_fire"]
 
-        self.hp = 1500
-        self.max_hp = 1500
+        self.hp = 1250
+        self.max_hp = 1250
         self.kill_callback = kill_callback
 
         self.half_phase_drop_done = False
@@ -7336,15 +7336,15 @@ class Boss1(AIBase):
 class Boss2(AIBase):
     rank=10
 
-    HP_MAX = 1750
+    HP_MAX = 1500
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
     ORB_DROP_MULTIPLIER = 1.33
     ORB_DROP_ON_HALF_HP_RATIO = 0.5
-    GUN1_DAMAGE = 120
+    GUN1_DAMAGE = 70
     GUN1_RADIUS = 110
     GUN1_COOLDOWN = 2000
     GUN2_DAMAGE = 10
-    GUN2_COOLDOWN = 1500
+    GUN2_COOLDOWN = 2000
     DRONE_SPEED = 4 * PLAYER_VIEW_SCALE
     DRONE_DAMAGE = 150
     DRONE_RADIUS = int(70 * 1.2)
@@ -7504,7 +7504,7 @@ class Boss2(AIBase):
             explosion_sound=self.sound_gun1_explosion,
             live_tracking=True,
             turn_rate=0.03,
-            max_distance=600
+            max_distance=500
         )
         missile.owner = self
         config.global_enemy_bullets.append(missile)
@@ -7519,7 +7519,7 @@ class Boss2(AIBase):
 
         angle = math.atan2(py - self.world_y, px - self.world_x)
         for _ in range(15):
-            spread = math.radians(random.uniform(-30, 30))
+            spread = math.radians(random.uniform(-25, 25))
             dx = math.cos(angle + spread)
             dy = math.sin(angle + spread)
             bullet = Bullet(
@@ -7527,8 +7527,8 @@ class Boss2(AIBase):
                 self.world_x + dx * 100, self.world_y + dy * 100,
                 spread_angle_degrees=0,
                 bullet_image=red_bullet_img,
-                speed=11.25 * PLAYER_VIEW_SCALE,
-                max_distance=600 * PLAYER_VIEW_SCALE,
+                speed=6 * PLAYER_VIEW_SCALE,
+                max_distance=500 * PLAYER_VIEW_SCALE,
                 damage=self.GUN2_DAMAGE
             )
             bullet.trail_enabled = False
@@ -7589,3 +7589,480 @@ class Boss2(AIBase):
         screen.blit(boss_rot, rect)
         for drone in self.drones:
             drone.draw(screen, world_x, world_y)
+
+class Boss3(AIBase):
+    rank = 10
+
+    HP_MAX = 2100
+    SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
+    RADIUS = 50
+
+    SPRITE_ANGLE_OFFSET_DEG = +90
+    HAMMER_ANGLE_OFFSET_DEG = +270
+
+    MELEE_RANGE = int(170 * 1.5 * PLAYER_VIEW_SCALE)
+    MELEE_ARC = math.radians(120)
+    MELEE_DAMAGE = 35
+    MELEE_COOLDOWN = 1800
+    MELEE_WINDUP_MS = 500
+    MELEE_ATTACK_SHOW_MS = 120
+
+    THROW_COOLDOWN = 2200
+    THROW_SPEED = 18 * PLAYER_VIEW_SCALE
+    THROW_MAX_DIST = 1200 * PLAYER_VIEW_SCALE
+    THROW_DAMAGE = 26
+
+    CYCLONE_LINES = 8
+    CYCLONE_CHARGE_MS = 2000
+    CYCLONE_SWEEP_MS = 120
+    CYCLONE_LINE_THICKNESS = int(42 * PLAYER_VIEW_SCALE)
+    CYCLONE_SWEEP_DAMAGE = 55
+    CYCLONE_ROT_SPEED = math.radians(60)
+    CYCLONE_DR = 0.5
+
+    ANVIL_HP = 200
+    ANVIL_COUNT = 4
+    ANVIL_RADIUS = int(26 * 1.5 * PLAYER_VIEW_SCALE)
+    ANVIL_DRAW_SCALE = 1.5
+    ANVIL_BUFF_PER = 0.12
+    ANVIL_SPEED_PER = 0.04
+    ANVIL_BEAM_SHAKE = True
+
+    HOLD_DIST = 170
+    MIN_KEEP_DIST = 70
+    PUSH_STRENGTH = 0.05
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.SPEED, near_threshold=300, far_threshold=700,
+            radius=self.RADIUS, push_strength=self.PUSH_STRENGTH, alert_duration=0,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.kill_callback = kill_callback
+
+        self.image_original = images["boss3"]
+        self.hammer_img = images["hammer"]
+        self.anvil_img = images["anvil"]
+
+        self.direction_angle = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+
+        self.bullets = []
+        self.scattered_bullets = []
+
+        self.last_melee_time = 0
+        self.last_throw_time = 0
+
+        self.melee_windup_end = 0
+        self.melee_center_angle = 0.0
+        self.melee_attack_show_start = 0
+        self.melee_attack_show_end = 0
+        self.melee_swing_from = 0.0
+        self.melee_swing_to = 0.0
+
+        self.hammers = []
+
+        self.cyclone_state = "idle"
+        self.cyclone_start_ms = 0
+        self.cyclone_base_angle = 0.0
+        self.spin_thresholds = [int(self.HP_MAX * r) for r in (0.8, 0.6, 0.4, 0.2)]
+        self.spin_used = set()
+
+        self.anvils = []
+        self.anvils_spawned = False
+
+        self.mid_drop_done = False
+
+    # 유틸
+    def _sound(self, *keys):
+        if not self.sounds:
+            return
+        for k in keys:
+            if k in self.sounds:
+                try: self.sounds[k].play()
+                except: pass
+                return
+
+    def _player_world_pos(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _add_player_knockback(self, px, py, from_x, from_y, strength):
+        dx, dy = px - from_x, py - from_y
+        d = math.hypot(dx, dy) or 1.0
+        nx, ny = dx / d, dy / d
+        if not hasattr(config, "knockback_impulse_x"): config.knockback_impulse_x = 0.0
+        if not hasattr(config, "knockback_impulse_y"): config.knockback_impulse_y = 0.0
+        config.knockback_impulse_x = max(-30.0, min(30.0, config.knockback_impulse_x + nx * strength))
+        config.knockback_impulse_y = max(-30.0, min(30.0, config.knockback_impulse_y + ny * strength))
+
+    def get_damage_multiplier(self):
+        return 1.0 + sum(1 for a in self.anvils if a.alive) * self.ANVIL_BUFF_PER
+
+    def get_speed_bonus(self):
+        return sum(1 for a in self.anvils if a.alive) * self.ANVIL_SPEED_PER
+
+    # 드랍/피격
+    def hit(self, damage, blood_effects, force=False):
+        if self.cyclone_state in ("charge", "sweep"):
+            damage = int(damage * (1.0 - self.CYCLONE_DR))
+        prev = self.hp
+        super().hit(damage, blood_effects, force)
+        if (not self.mid_drop_done) and prev > self.HP_MAX // 2 and self.hp <= self.HP_MAX // 2 and self.alive:
+            self.spawn_dropped_items(3, 4)
+            self.mid_drop_done = True
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        for a in self.anvils:
+            a.alive = False
+        self.spawn_dropped_items(10, 15)
+
+    # 모루
+    class AnvilObj:
+        def __init__(self, boss, x, y, img):
+            self.boss = boss
+            self.world_x = x
+            self.world_y = y
+            self.image = img
+            self.hp = boss.ANVIL_HP
+            self.radius = boss.ANVIL_RADIUS
+            self.alive = True
+            self.bullets = []
+            self.scattered_bullets = []
+
+        def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+            return
+
+        def hit(self, damage, blood_effects, force=False):
+            if not self.alive: return
+            self.hp -= damage
+            if self.hp <= 0:
+                self.alive = False
+                self.boss._sound("anvil_break", "AnvilBreak")
+                self.boss.spawn_dropped_items(1, 2)
+
+        def draw(self, screen, world_x, world_y, sx=0, sy=0):
+            if not self.alive: return
+            cx = self.world_x - world_x + sx
+            cy = self.world_y - world_y + sy
+            img = pygame.transform.rotozoom(self.image, 0, self.boss.ANVIL_DRAW_SCALE)
+            screen.blit(img, img.get_rect(center=(int(cx), int(cy))))
+            if self.boss.ANVIL_BEAM_SHAKE and self.boss.alive:
+                bx = self.boss.world_x - world_x + sx
+                by = self.boss.world_y - world_y + sy
+                self._draw_wobbly_beam(screen, (cx, cy), (bx, by))
+
+        def _draw_wobbly_beam(self, screen, p1, p2):
+            (x1, y1), (x2, y2) = p1, p2
+            t = pygame.time.get_ticks() * 0.006
+            segs = 14
+            pts = []
+            ang = math.atan2(y2 - y1, x2 - x1)
+            nx, ny = -math.sin(ang), math.cos(ang)
+            for i in range(segs + 1):
+                s = i / segs
+                x = x1 + (x2 - x1) * s
+                y = y1 + (y2 - y1) * s
+                amp = 2 + 4 * abs(math.sin(s * math.pi))
+                off = math.sin(t + s * 12.0) * amp
+                pts.append((int(x + nx * off), int(y + ny * off)))
+            pygame.draw.lines(screen, (255, 80, 80), False, pts, 6)
+            pygame.draw.lines(screen, (255, 255, 255), False, pts, 2)
+
+    def spawn_anvils(self, enemies_list):
+        if self.anvils_spawned: return
+        self.anvils_spawned = True
+        self._sound("anvil_spawn", "AnvilSpawn")
+        margin = 120 * PLAYER_VIEW_SCALE
+        for _ in range(self.ANVIL_COUNT):
+            ax = random.uniform(margin, self.map_width - margin)
+            ay = random.uniform(margin, self.map_height - margin)
+            anvil = Boss3.AnvilObj(self, ax, ay, self.anvil_img)
+            self.anvils.append(anvil)
+            enemies_list.append(anvil)
+
+    # 투척 해머
+    class ThrownHammer:
+        def __init__(self, boss, angle):
+            self.boss = boss
+            self.x = boss.world_x
+            self.y = boss.world_y
+            self.angle = angle
+            self.state = 'out'
+            self.dist_travelled = 0.0
+            self.v = Boss3.THROW_SPEED
+            self.alive = True
+
+        def update(self, dt):
+            if not self.alive: return
+            if self.state == 'out':
+                dx = math.cos(self.angle) * self.v
+                dy = math.sin(self.angle) * self.v
+                self.x += dx; self.y += dy
+                self.dist_travelled += math.hypot(dx, dy)
+                if self.dist_travelled >= Boss3.THROW_MAX_DIST:
+                    self.state = 'return'
+            else:
+                ang = math.atan2(self.boss.world_y - self.y, self.boss.world_x - self.x)
+                self.angle = ang
+                self.x += math.cos(self.angle) * self.v
+                self.y += math.sin(self.angle) * self.v
+                if math.hypot(self.boss.world_x - self.x, self.boss.world_y - self.y) < 40:
+                    self.alive = False
+
+        def try_hit_player(self, px, py, boss):
+            if not self.alive: return False
+            if math.hypot(px - self.x, py - self.y) <= 40 * PLAYER_VIEW_SCALE:
+                dmg = int(Boss3.THROW_DAMAGE * boss.get_damage_multiplier())
+                if boss.damage_player: boss.damage_player(dmg)
+                boss._add_player_knockback(px, py, self.x, self.y, 12.0)
+                boss._sound("stab_hit", "Stab_Hit")
+                self.alive = False
+                return True
+            return False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            sx, sy = self.x - world_x, self.y - world_y
+            img = pygame.transform.rotozoom(
+                self.boss.hammer_img,
+                -math.degrees(self.angle) + self.boss.HAMMER_ANGLE_OFFSET_DEG,
+                1.0
+            )
+            screen.blit(img, img.get_rect(center=(int(sx), int(sy))))
+
+    # 사이클론
+    def _start_cyclone(self):
+        self.cyclone_state = "charge"
+        self.cyclone_start_ms = pygame.time.get_ticks()
+        self.cyclone_base_angle = random.uniform(0, math.pi * 2)
+        self._sound("ShieldCharged", "shield_charged")
+
+    def _update_cyclone(self, now_ms):
+        if self.cyclone_state == "charge":
+            if now_ms - self.cyclone_start_ms >= self.CYCLONE_CHARGE_MS:
+                self.cyclone_state = "sweep"
+                self.cyclone_start_ms = now_ms
+                self._sound("ShockBurst", "shock_burst")
+        elif self.cyclone_state == "sweep":
+            if now_ms - self.cyclone_start_ms >= self.CYCLONE_SWEEP_MS:
+                self.cyclone_state = "idle"
+
+    def _draw_cyclone_and_hit(self, screen, world_x, world_y, px, py):
+        if self.cyclone_state not in ("charge", "sweep"):
+            return
+        now = pygame.time.get_ticks()
+        t = (now - self.cyclone_start_ms) / 1000.0
+        angle = self.cyclone_base_angle + self.CYCLONE_ROT_SPEED * t
+        cx = self.world_x - world_x
+        cy = self.world_y - world_y
+        N = self.CYCLONE_LINES
+        L = max(self.map_width, self.map_height)
+        W = self.CYCLONE_LINE_THICKNESS
+
+        for i in range(N):
+            th = angle + (2 * math.pi) * i / N
+            x2 = cx + math.cos(th) * L
+            y2 = cy + math.sin(th) * L
+            color = (255, 0, 0) if self.cyclone_state == "charge" else (255, 255, 255)
+            width = W if self.cyclone_state == "charge" else max(2, W // 4)
+            pygame.draw.line(screen, color, (cx, cy), (x2, y2), width)
+
+        if self.cyclone_state == "sweep":
+            for i in range(N):
+                th = angle + (2 * math.pi) * i / N
+                x1w, y1w = self.world_x, self.world_y
+                x2w, y2w = self.world_x + math.cos(th) * L, self.world_y + math.sin(th) * L
+                vx, vy = x2w - x1w, y2w - y1w
+                wx, wy = px - x1w, py - y1w
+                v2 = vx * vx + vy * vy
+                if v2 <= 1e-6: continue
+                tproj = max(0.0, min(1.0, (wx * vx + wy * vy) / v2))
+                nx = x1w + vx * tproj
+                ny = y1w + vy * tproj
+                d = math.hypot(px - nx, py - ny)
+                if d <= self.CYCLONE_LINE_THICKNESS / 2:
+                    dmg = int(self.CYCLONE_SWEEP_DAMAGE * self.get_damage_multiplier())
+                    if self.damage_player: self.damage_player(dmg)
+                    self._add_player_knockback(px, py, self.world_x, self.world_y, 14.0)
+                    break
+
+    # 근접(텔레그래프 → 빠른 스윕)
+    def _start_melee(self, now, center_angle):
+        self.melee_windup_end = now + self.MELEE_WINDUP_MS
+        self.melee_center_angle = center_angle
+
+    def _update_melee(self, now, px, py):
+        # 텔레그래프 끝 → 판정 + 스윕 애니 시작
+        if self.melee_windup_end and now >= self.melee_windup_end:
+            self.melee_windup_end = 0
+            self.melee_attack_show_start = now
+            self.melee_attack_show_end = now + self.MELEE_ATTACK_SHOW_MS
+            self.melee_swing_from = self.melee_center_angle - self.MELEE_ARC * 0.5
+            self.melee_swing_to   = self.melee_center_angle + self.MELEE_ARC * 0.5
+
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            if dist <= self.MELEE_RANGE:
+                ang = math.atan2(dy, dx)
+                diff = (ang - self.melee_center_angle + 3*math.pi) % (2*math.pi) - math.pi
+                if abs(diff) <= self.MELEE_ARC * 0.5:
+                    dmg = int(self.MELEE_DAMAGE * self.get_damage_multiplier())
+                    if self.damage_player: self.damage_player(dmg)
+                    self._add_player_knockback(px, py, self.world_x, self.world_y, 12.0)
+                    self._sound("stab_hit", "Stab_Hit")
+
+        # 스윙 애니 종료
+        if self.melee_attack_show_end and now >= self.melee_attack_show_end:
+            self.melee_attack_show_start = 0
+            self.melee_attack_show_end = 0
+
+    def _draw_melee(self, screen, world_x, world_y):
+        # 텔레그래프(붉은 반투명 부채꼴)
+        if self.melee_windup_end:
+            cx = self.world_x - world_x
+            cy = self.world_y - world_y
+            r = self.MELEE_RANGE
+            steps = 32
+            pts = [(cx, cy)]
+            start = self.melee_center_angle - self.MELEE_ARC * 0.5
+            end   = self.melee_center_angle + self.MELEE_ARC * 0.5
+            for i in range(steps + 1):
+                a = start + (end - start) * (i / steps)
+                pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
+            srf = pygame.Surface((self.map_width, self.map_height), pygame.SRCALPHA)
+            pygame.draw.polygon(srf, (255, 50, 50, 110), pts)
+            screen.blit(srf, (0, 0))
+
+        # 공격 프레임: 해머가 부채꼴을 빠르게 스윕(모션블러 2~3장)
+        if self.melee_attack_show_end:
+            now = pygame.time.get_ticks()
+            cx = self.world_x - world_x
+            cy = self.world_y - world_y
+            dur = max(1, self.MELEE_ATTACK_SHOW_MS)
+            prog = max(0.0, min(1.0, (now - self.melee_attack_show_start) / dur))
+            # 현재 각도
+            ang = self.melee_swing_from + (self.melee_swing_to - self.melee_swing_from) * prog
+
+            # 모션블러용 과거 샘플(2개)
+            samples = [prog, max(0.0, prog - 0.4), max(0.0, prog - 0.7)]
+            alphas = [255, 140, 80]
+            for s, a in zip(samples, alphas):
+                a_ang = self.melee_swing_from + (self.melee_swing_to - self.melee_swing_from) * s
+                hx = cx + math.cos(a_ang) * (self.MELEE_RANGE * 0.55)
+                hy = cy + math.sin(a_ang) * (self.MELEE_RANGE * 0.55)
+                img = pygame.transform.rotozoom(
+                    self.hammer_img,
+                    -math.degrees(a_ang) + self.HAMMER_ANGLE_OFFSET_DEG,
+                    1.0
+                )
+                # 반투명 블렌딩
+                img2 = img.copy()
+                img2.set_alpha(a)
+                screen.blit(img2, img2.get_rect(center=(int(hx), int(hy))))
+
+    # 이동
+    def _update_motion(self, dt, px, py):
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy) + 1e-6
+        base_speed = (self.SPEED + self.get_speed_bonus())
+
+        if dist > self.HOLD_DIST:
+            t = pygame.time.get_ticks() * 0.004
+            strafe = base_speed * 0.6 * math.sin(t)
+            nx, ny = -dy / dist, dx / dist
+            vx_des = (dx / dist) * base_speed + nx * strafe
+            vy_des = (dy / dist) * base_speed + ny * strafe
+        elif dist < self.MIN_KEEP_DIST:
+            vx_des = -(dx / dist) * (base_speed * 0.6)
+            vy_des = -(dy / dist) * (base_speed * 0.6)
+        else:
+            orbit = 1 if ((pygame.time.get_ticks() // 800) % 2) == 0 else -1
+            ang = math.atan2(dy, dx) + orbit * math.pi / 2
+            vx_des = math.cos(ang) * base_speed * 0.75
+            vy_des = math.sin(ang) * base_speed * 0.75
+
+        lerp = 0.18
+        self.vx += (vx_des - self.vx) * lerp
+        self.vy += (vy_des - self.vy) * lerp
+
+        if self.cyclone_state == "idle":
+            self.world_x += self.vx
+            self.world_y += self.vy
+
+        self.direction_angle = math.atan2(dy, dx)
+
+    # 업데이트 / 드로잉
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        if not self.alive or not config.combat_state:
+            return
+
+        px, py = self._player_world_pos(world_x, world_y, player_rect)
+        now = pygame.time.get_ticks()
+
+        for th in self.spin_thresholds:
+            if self.hp <= th and th not in self.spin_used:
+                self.spin_used.add(th)
+                self._start_cyclone()
+                break
+
+        if not self.anvils_spawned and self.hp <= self.HP_MAX * 0.5:
+            self.spawn_anvils(enemies)
+            self.anvils_spawned = True
+
+        self._update_motion(dt, px, py)
+
+        self._update_melee(now, px, py)
+        if (not self.melee_windup_end) and (not self.melee_attack_show_end):
+            if now - self.last_melee_time >= self.MELEE_COOLDOWN:
+                if math.hypot(px - self.world_x, py - self.world_y) <= self.MELEE_RANGE * 0.9:
+                    self._start_melee(now, self.direction_angle)
+                    self.last_melee_time = now
+
+        if now - self.last_throw_time >= self.THROW_COOLDOWN and self.cyclone_state == "idle":
+            dist = math.hypot(px - self.world_x, py - self.world_y)
+            if dist >= 350:
+                self.hammers.append(Boss3.ThrownHammer(self, self.direction_angle))
+                self.last_throw_time = now
+                self._sound("stab_hit", "Stab_Hit")
+
+        for h in self.hammers:
+            h.update(dt)
+            h.try_hit_player(px, py, self)
+        self.hammers = [h for h in self.hammers if h.alive]
+
+        if self.cyclone_state != "idle":
+            self._update_cyclone(now)
+
+    def draw(self, screen, world_x, world_y, sx=0, sy=0):
+        if not self.alive:
+            return
+
+        player_px = config.world_x + config.player_rect.centerx
+        player_py = config.world_y + config.player_rect.centery
+        self._draw_cyclone_and_hit(screen, world_x, world_y, player_px, player_py)
+
+        scr_x = self.world_x - world_x + sx
+        scr_y = self.world_y - world_y + sy
+        scaled = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        rotated = pygame.transform.rotate(
+            scaled,
+            -math.degrees(self.direction_angle) + self.SPRITE_ANGLE_OFFSET_DEG
+        )
+        screen.blit(rotated, rotated.get_rect(center=(int(scr_x), int(scr_y))))
+
+        self._draw_melee(screen, world_x, world_y)
+
+        for h in self.hammers:
+            h.draw(screen, world_x, world_y)

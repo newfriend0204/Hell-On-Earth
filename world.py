@@ -113,7 +113,7 @@ def neighbors(x, y):
             if 0 <= x+dx < WIDTH and 0 <= y+dy < HEIGHT]
 
 def find_end_room(grid):
-    """E(보스방/종점) 좌표 반환."""
+    # E(보스방/종점) 좌표 반환.
     for y in range(HEIGHT):
         for x in range(WIDTH):
             if grid[y][x] == 'E':
@@ -121,10 +121,6 @@ def find_end_room(grid):
     return None
 
 def find_boss_entry_room(grid):
-    """
-    E와 인접한 유일한 진입 방(F)을 찾아 반환.
-    맵 규칙상 E 주변의 F는 1개 이하로 제한되어 있음.
-    """
     epos = find_end_room(grid)
     if not epos:
         return None
@@ -214,7 +210,19 @@ def generate_map():
         all_f_reachable = all(pos in visited for pos in f_positions)
         if not all_f_reachable:
             continue
+        
 
+        # # 디버그 
+        # grid = [
+        #     ['S', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['E', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
+        #     ['N', 'N', 'N', 'N', 'N', 'N', 'N', 'N']
+        # ]
         return grid
     
 def place_acquire_rooms(grid, count=3):

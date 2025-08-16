@@ -6,7 +6,7 @@ weapon_stats = {
         "spread": 8,
         "cost": 5,
         "rank": "1",
-        "desc": "NF 코퍼레이션이 지급하는 기본 권총입니다. 모든 경비가 차고 다닙니다.",
+        "desc": "NF 코퍼레이션이 지급하는 기본 권총입니다. 모든 경비원이 휴대합니다.",
         "usage": "좌클릭\n단발 사격."
     },
     "gun2": {
@@ -43,7 +43,7 @@ weapon_stats = {
         "cost": 6,
         "rank": "2",
         "desc": "강력한 연사력의 기관총입니다. 발사 전 약간의 예열 시간이 필요합니다.",
-        "usage": "좌클릭\n0.8간의 예열 시간 후 강력한 연사력으로 발사\n마우스를 놓으면 1.0간의 과열 시간이 존재하며, 시간이 지날때까지 다시 예열 불가능"
+        "usage": "좌클릭\n0.8초간의 예열 시간 후 강력한 연사력으로 발사\n마우스를 놓으면 1.0초간의 과열 시간이 존재하며, 시간이 지날 때까지 다시 예열 불가능"
     },
     "gun6": {
         "name": "개조된 기관단총",
@@ -168,7 +168,7 @@ weapon_stats = {
         "spread": "-",
         "cost": "-",
         "rank": "4",
-        "desc": "강력한 내구성의 방패로, 전방에서 오는 공격을 막아냅니다. 방어 시 탄약 게이지가 감소합니다. 다만, 폭발 혹은 장판기은 막지 못합니다.",
+        "desc": "강력한 내구성의 방패로, 전방에서 오는 공격을 막아냅니다. 방어 시 탄약 게이지가 감소합니다. 다만, 폭발 혹은 장판기는 막지 못합니다.",
         "usage": "좌클릭\n방패 전개 및 방어 상태 유지(계속 누르기)"
     },
     "gun20": {
@@ -177,7 +177,7 @@ weapon_stats = {
         "spread": 0,
         "cost": 35,
         "rank": "4",
-        "desc": "일정 시간 후 폭발하며 넓은 범위에 피해를 입히는 투척 무기입니다. 3발이 동시에 부채꼴로 발사됩니다.",
+        "desc": "일정 시간 후 폭발하며 넓은 범위에 피해를 입히는 투척 무기입니다. 3개가 동시에 부채꼴로 발사됩니다.",
         "usage": "좌클릭\n핀 뽑은 후 잠시 뒤 3발 부채꼴 투척\n0.8초 후 폭발"
     },
     "gun21": {
@@ -214,7 +214,7 @@ weapon_stats = {
         "cost": "좌: 5 / 우: 12",
         "rank": "2",
         "desc": "VALORANT라는 조직에서 쓰이는 기관단총입니다. 탄퍼짐이 높지만, 그만큼의 준수한 위력을 자랑합니다.",
-        "usage": "좌클릭\n고속 연발 사격\n\n우클릭\n냦은 퍼짐의 4연속 버스트."
+        "usage": "좌클릭\n고속 연발 사격\n\n우클릭\n낮은 퍼짐의 4연속 버스트."
     },
     "gun25": {
         "name": "더블 배럴 샷건",
@@ -272,12 +272,12 @@ AMMO_BUCKET_SENTENCES = [
 
 # 스테이지 설명(코드 대신 보여줄 문장)
 STAGE_DESCRIPTIONS = {
-    "1-1": "(나중에 스토리 짜고 재작성 필요)",
-    "1-2": "(나중에 스토리 짜고 재작성 필요)",
-    "1-3": "(나중에 스토리 짜고 재작성 필요)",
-    "2-1": "(나중에 스토리 짜고 재작성 필요)",
-    "2-2": "(나중에 스토리 짜고 재작성 필요)",
-    "2-3": "(나중에 스토리 짜고 재작성 필요)",
+    "1-1": "폭스트롯 기지를 탈출했습니다.",
+    "1-2": "폭스트롯 기지가 파괴되었습니다. 조난 신호를 보내고 있습니다.",
+    "1-3": "근처의 리마 기지를 찾았습니다. 곧 도심으로 도착합니다.",
+    "2-1": "도심에 도착했습니다. 리마 기지로 가야 합니다.",
+    "2-2": "지옥으로 갈 수 있는 방법을 찾았습니다.",
+    "2-3": "드디어, 지옥으로 가서 원인을 제거할 수 있습니다.",
     "3-1": "(나중에 스토리 짜고 재작성 필요)",
     "3-2": "(나중에 스토리 짜고 재작성 필요)",
     "3-3": "(나중에 스토리 짜고 재작성 필요)",
@@ -335,13 +335,13 @@ AMMO_MAX_SENTENCES  = [
 BOSS_TIPS = {
     "1-1": "보스 이름: 카베이라\n\"숨을순 있지만, 도망칠 순 없다.\"",
     "1-2": "보스 이름: 포보스\n\"내 드론이 너를 산산조각 내기를 기다리고 있다.\"",
-    "1-3": "패턴 요약: 근접 압박.\n팁: 돌진 후 빈틈에 카운터.",
-    "2-1": "패턴 요약: 유도탄.\n팁: 원형 이동으로 탄 타이밍 빼기.",
-    "2-2": "패턴 요약: 장판기.\n팁: 바닥 경고 후 안전지대 유지.",
-    "2-3": "패턴 요약: 분열탄.\n팁: 첫탄 피한 뒤 간격 유지.",
-    "3-1": "패턴 요약: 순간이동.\n팁: 사라진 자리의 반대편을 의식.",
-    "3-2": "패턴 요약: 연사+돌진.\n팁: 돌진 유도 후 사선으로 탈출.",
-    "3-3": "패턴 요약: 패턴 혼합.\n팁: 장판-돌진-탄막 순서 기억.",
+    "1-3": "(미정)",
+    "2-1": "(미정)",
+    "2-2": "보스 이름: 피의 대장장이\n\"동포를 죽인 너를 망치로 제련해서 죽여주마!\"",
+    "2-3": "(미정)",
+    "3-1": "(미정)",
+    "3-2": "(미정)",
+    "3-3": "(미정)",
 }
 
 merchant_dialogue = [
@@ -395,7 +395,7 @@ merchant_dialogue = [
         "text": "몸 다치지 말고, 조심하게나!",
         "choices": None,
         "effect": None,
-        "next": None  # None == 대화 종료
+        "next": None
     }
 ]
 
@@ -513,7 +513,7 @@ doctorNF_dialogue = [
     {"speaker": "새친 연구원", "text": "W/A/S/D로 이동, Shift로 달릴 수 있어. 하지만 사격을 시작하면 다시 걷는 속도로 돌아가.", "choices": None, "effect": None, "next": 13},
     {"speaker": "새친 연구원", "text": "방의 출입구로 가면 자동으로 이동 애니메이션과 함께 방이 전환돼.", "choices": None, "effect": None, "next": 11},
 
-    {"speaker": "새친 연구원", "text": "좌/우클릭으로 무기를 발사해. 탄약 게이지를 소모돼. 탄약이 바닥나면 V키로 근접 공격해서 충전 오브를 노려봐.", "choices": None, "effect": None, "next": 15},
+    {"speaker": "새친 연구원", "text": "좌/우클릭으로 무기를 발사해. 하지만 탄약 게이지를 소모할 거야. 탄약이 바닥나면 V키로 근접 공격해서 충전 오브를 노려봐.", "choices": None, "effect": None, "next": 15},
     {"speaker": "새친 연구원", "text": "무기는 Space 키로 주워 슬롯을 채우거나 교체할 수 있어. 탄약이 모두 바닥나면 자동으로 근접 공격이 나가.", "choices": None, "effect": None, "next": 11},
 
     {"speaker": "새친 연구원", "text": "ESC 키를 눌러 게임을 일시정지할 수 있어.", "choices": None, "effect": None, "next": 17},
@@ -653,7 +653,7 @@ soldier1_before_dialogue = [
     },
     {
         "speaker": "NF 경비원1",
-        "text": "내가 시설이 난리 난 틈에 문서를 좀 읽어봤는데… 저 특수대원의 주특기는 은신 후 접근이라 적혀있어. 은신을 풀 때 갑자기 공격을 하니 바로 맞는건 감수해야 해.",
+        "text": "내가 시설이 난리 난 틈에 문서를 좀 읽어봤는데… 저 특수대원의 주특기는 은신 후 접근이라 적혀있어. 은신을 풀 때 갑자기 공격을 하니 바로 맞는 건 감수해야 해.",
         "choices": None,
         "effect": None,
         "next": 2
@@ -667,7 +667,7 @@ soldier1_before_dialogue = [
     },
     {
         "speaker": "NF 경비원1",
-        "text": "내가 설명할 수 있는건 여기까지야. 무운을 빌게. 나도 돕고 싶지만… 역시, 동료였던 자를 죽이는게 탐탁지 않기도 하고, 나는 일개 경비원이라, 하하.",
+        "text": "내가 설명할 수 있는 건 여기까지야. 무운을 빌게. 나도 돕고 싶지만… 역시, 동료였던 자를 죽이는게 탐탁지 않기도 하고, 나는 일개 경비원이라, 하하.",
         "choices": None,
         "effect": None,
         "next": None
@@ -826,7 +826,7 @@ doctorNF12_after_dialogue = [
     },
     {
         "speaker": "새친 연구원",
-        "text": "내가 도심 근처에 있는 기지를 하나 찾아볼께. 거기를 통해 협력하면 일이 수월해지기 시작할 거야.",
+        "text": "내가 도심 근처에 있는 기지를 하나 찾아볼게. 거기를 통해 협력하면 일이 수월해지기 시작할 거야.",
         "choices": None,
         "effect": None,
         "next": None
@@ -836,7 +836,7 @@ doctorNF12_after_dialogue = [
 doctorNF13_dialogue = [
     {
         "speaker": "새친 연구원",
-        "text": "너도 넘어왔구나. 현재 상황을 알려 줄께.",
+        "text": "너도 넘어왔구나. 현재 상황을 알려 줄게.",
         "choices": None,
         "effect": None,
         "next": 1
@@ -864,7 +864,7 @@ doctorNF13_dialogue = [
     },
     {
         "speaker": "새친 연구원",
-        "text": "그곳의 기지에게 도움을 요청했는데, 에너지는 충분히 있는 상황이라네. 추가로 우리에게 적극적으로 협조한다고 했어.",
+        "text": "그곳의 기지에 도움을 요청했는데, 에너지는 충분히 있는 상황이라네. 추가로 우리에게 적극적으로 협조한다고 했어.",
         "choices": None,
         "effect": None,
         "next": 5
@@ -878,7 +878,7 @@ doctorNF13_dialogue = [
     },
     {
         "speaker": "새친 연구원",
-        "text": "일단은 내 예상으로는 포탈을 한번 더 타면 바로 도심으로 넘어갈 수 있을 거 같아. 그러면 가보자고.",
+        "text": "일단은 내 예상으로는 포탈을 한 번 더 타면 바로 도심으로 넘어갈 수 있을 것 같아. 그러면 가보자고.",
         "choices": None,
         "effect": None,
         "next": None
@@ -902,7 +902,7 @@ soldier2_before_dialogue = [
     },
     {
         "speaker": "NF 군인1",
-        "text": "너라도 저것을 처치해 줬으면 좋겠어. 내가 대신 저 괴물의 특징을 알려줄께…",
+        "text": "너라도 저것을 처치해 줬으면 좋겠어. 내가 대신 저 괴물의 특징을 알려 줄게…",
         "choices": None,
         "effect": None,
         "next": 3
@@ -916,12 +916,13 @@ soldier2_before_dialogue = [
     },
     {
         "speaker": "NF 군인1",
-        "text": "제발 부탁이야… 내가 저것을 없애줘… 부탁할게…",
+        "text": "제발 부탁이야… 너가 저것을 없애줘… 부탁할게…",
         "choices": None,
         "effect": None,
         "next": None
     },
 ]
+
 soldier2_after_dialogue = [
     {
         "speaker": "NF 군인1",
@@ -947,6 +948,362 @@ soldier2_after_dialogue = [
     {
         "speaker": "NF 군인1",
         "text": "아니야. 난 이미 결심을 했으니 뒤로 물러설 순 없어. 도심으로 넘어가서 나머지 괴물들을 소탕하자.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+doctorNF21_dialogue = [
+    {
+        "speaker": "새친 연구원",
+        "text": "리마 기지에서 보고받은 그대로네. 도심이 심각하게 파괴되었어.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "다행인 점은, 비상 대피령을 받아서 시민들은 모두 대피했다는거야.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "그러나… 포탈은 도심에서 더 많이 열리고 있는 것 같아. 현재 도심의 위험도를 분석해봤는데, 숲보다 2배 이상의 수치가 나왔어.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "리마 기지로 가야 한다 해도 거기까지 가는 길이 현재 괴물과 홀린 군인들로 막힌 상태야. 먼저 그들부터 처리해서 리마 기지로 가자고.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+scientist2_before_dialogue = [
+    {
+        "speaker": "NF 과학자2",
+        "text": "아, 너도 왔구나? 새친 연구원에게 들었어. 너에게는 적극적으로 협력하라고 연락이 왔거든.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "현재 나랑 새친 연구원이 조사해서 확인한 바로는, 리마 기지에는 현재 방대한 에너지가 있어. 이것을 이용하면 지옥 차원에게 간섭할 수 있을 거야.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "물론 어떻게 간섭할 것인지는 그때 가서 알아야하지만, 현재로써는 너가 곧 마주칠 적에 대해서 알려주는게 좋겠지.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "(대충 패턴 말하기)",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "그러면, 무운을 빌게.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+scientist2_after_dialogue = [
+    {
+        "speaker": "NF 과학자2",
+        "text": "오! 그것을 처치했구나, 역시 새친 연구원이 말한 대로야.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "아무리 도심이라 해도 리마 기지까지 가는 길은 매우 멀 거야. 적을 제압하고 포탈에 타면 가는 시간을 획기적으로 줄일 수 있을 거야.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 과학자2",
+        "text": "우리에겐 시간이 얼마 남지 않았으니, 얼른 가보자고.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+doctorNF22_dialogue = [
+    {
+        "speaker": "새친 연구원",
+        "text": "난 여기까지 힘들게 왔는데, 자네는 포탈 하나 타고 넘어왔다니, 내가 죽을 고생을 한 거 같네.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "어쨌거나, 찾기 힘들었지만, 지옥에 간섭할 방법을 하나 찾았어.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "리마 기지의 대량 에너지와 포탈 에너지를 융합하고 재출력하면, 오히려 지옥 차원으로 갈 수 있는 포탈이 생성될 거야.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "그렇게 해서 지옥으로 넘어간 후, 괴물들과 에너지를 보내는 근원을 찾아 제압하면 끝이지.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "새친 연구원",
+        "text": "이제 곧 리마 기지에 도착할 거야. 나와 과학자들을 위해서 길을 뚫어주었으면 고맙겠네.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+soldier3_before_dialogue = [
+    {
+        "speaker": "NF 군인2",
+        "text": "아, 자네도 왔는가? 이제 곧 리마 기지에 가까워진 것 같네.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "문제는 가까워졌다 한들, 저기 앞에 있는 적이 있어서 가기 힘들단 말이지…",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "다행히도 나와 정찰대가 미리 조사를 한 결과, 대략 저것의 행동범위를 알 수 있었네.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "저것은 망치를 주로 쓰는 것 처럼 보이더군. 자네가 저것과 가까이 있으면, 망치를 휘둘러서 자네를 멀리 날릴거고, 멀리 있으면, 망치를 던져서 계속 견제할거네.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "또한, 체력이 20%만큼 깎일 때마다 사이클론을 쓰는 모양이더군. 이 사이클론에 맞으면 큰 피해와 함께 뒤로 밀려나니 조심해!",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "마지막으로, 체력이 절반 이하가 되면, 저것은 모루를 소환할거네. 모루는 저것에게 힘을 줄 것이며 더더욱 자네를 위협할게야. 자네는 저 모루들을 빨리 처리하지 않으면 위험할걸세.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "그러면, 다치지 말고 조심해서 저것을 처치하게나. 부탁하네.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+soldier3_after_dialogue = [
+    {
+        "speaker": "NF 군인2",
+        "text": "저것을 잡았군! 역시 자네야.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "덕분에 리마 기지로 진입할 수 있게 되었어. 나는 저기서 보급을 받고 거기 군대와 합류할 계획일세.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 군인2",
+        "text": "자네도 자네의 할 일이 있겠지. 부디 이 현상을 해결해주게.",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+soldier4_dialogue = [
+    {
+        "speaker": "NF 군인3",
+        "text": "아, 오셨군요. 새친 연구원에게 당신이 곧 여기로 온다고 들었습니다.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 군인3",
+        "text": "현재 연구원님은 리마 기지로 무사히 들어가셨어요. 당신 덕분입니다.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 군인3",
+        "text": "곧 리마 기지 인원들과 협력해서 지옥으로 가는 포탈을 열어주신다고 하셨어요.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "NF 군인3",
+        "text": "그래도 역시… 앞의 적이 많으니 뚫으면서 가야 합니다.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 군인3",
+        "text": "하지만 당신이라면 충분히 가능하겠죠. 행운을 빌어요!",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+scientist3_before_dialogue = [
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "드디어 오셨네요! 기다리고 있었습니다. 예측하지 못한 일이 발생했어요.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "포탈을 열려고 하고 있습니다만… 앞의 괴물이 그것을 막고 있어요.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "저희와 새친 연구원님이 함께 분석해본 결과, 저 괴물을 처치하면 즉시 포탈 에너지가 안정화되어서 바로 지옥으로 가는 길이 열릴거에요.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "그래도, 저 괴물의 행동을 알고 있는게 중요하겠죠. 제가 분석해봤어요.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "(대충 패턴 말하기)",
+        "choices": None,
+        "effect": None,
+        "next": 5
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "꼭 저 괴물을 찾고 포탈 에너지를 안정화해주셨으면 해요.",
+        "choices": None,
+        "effect": None,
+        "next": 6
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "새친 연구원께서 말씀하신 예측하지 못한 결과에 대비하라는게 이것을 뜻하는 것이었나요…",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+scientist3_after_dialogue = [
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "처치하셨군요! 제가 말씀드린 것이 도움이 되셨으면 좋겠네요.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "하지만 지금부터 조심해야 해요. 저 포탈을 타면 이제 매우 힘들어질 것이에요.",
+        "choices": None,
+        "effect": None,
+        "next": 2
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "심지어 저희는 갈 수도 없습니다. 지옥에서의 포탈 에너지는 아무리 내성이 있는 사람이라 해도, 결국 홀리게 돼요.",
+        "choices": None,
+        "effect": None,
+        "next": 3
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "오직 당신만이 새친 연구원님이 만들어주신 그 슈트로 인해 영향을 받지 않아요.",
+        "choices": None,
+        "effect": None,
+        "next": 4
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "새친 연구원님이 장착하신 자기보호 장치도 결국 급조용이지, 당신 슈트만큼 에너지를 막아주진 못해요.",
+        "choices": None,
+        "effect": None,
+        "next": 5
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "즉, 저 포탈에는 당신만 들어가야해요.",
+        "choices": None,
+        "effect": None,
+        "next": 6
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "다만 걱정마세요. 새친 연구원님이 드론을 보내서 수시로 정보들을 알려줄 거에요",
+        "choices": None,
+        "effect": None,
+        "next": 7
+    },
+    {
+        "speaker": "NF 리마 기지 과학자1",
+        "text": "당신은 혼자가 아니에요. 부디, 지옥으로 넘어가서 이 현상을 해결해 주세요.",
         "choices": None,
         "effect": None,
         "next": None

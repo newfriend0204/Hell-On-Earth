@@ -96,6 +96,8 @@ def load_sounds():
         "pulse_tick":  pygame.mixer.Sound(path_sound("Sound", "Entity", "PulseTick.mp3")),
         "cocoon_shatter":  pygame.mixer.Sound(path_sound("Sound", "Entity", "CocoonShatter.mp3")),
         "burster_explode":  pygame.mixer.Sound(path_sound("Sound", "Entity", "BursterExplode.mp3")),
+        "anvil_spawn":  pygame.mixer.Sound(path_sound("Sound", "Entity", "AnvilSpawn.mp3")),
+        "anvil_break":  pygame.mixer.Sound(path_sound("Sound", "Entity", "AnvilBreak.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

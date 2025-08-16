@@ -63,10 +63,10 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 22, 2: 52, 3: 22, 4: 4}
     },
     "2-2": {
-        "boss_map": 1,
+        "boss_map": 2,
         "enemy_rank_range": (3, 6),
-        "min_f_rooms": 6,
-        "max_f_rooms": 7,
+        "min_f_rooms": 6, # 6
+        "max_f_rooms": 7, # 7
         "acquire_rooms": 2,
         "weapon_tier_weights": {1: 12, 2: 50, 3: 32, 4: 6}
     },
@@ -103,18 +103,18 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "1-3"
+CURRENT_STAGE = "2-2"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
-    "1-2": 1.15,
-    "1-3": 1.30,
-    "2-1": 1.45,
-    "2-2": 1.60,
-    "2-3": 1.80,
-    "3-1": 2.00,
-    "3-2": 2.25,
-    "3-3": 2.50,
+    "1-2": 1.10,
+    "1-3": 1.20,
+    "2-1": 1.35,
+    "2-2": 1.45,
+    "2-3": 1.55,
+    "3-1": 1.70,
+    "3-2": 1.85,
+    "3-3": 1.90,
 }
 
 def get_stage_price_mult(stage=None):
@@ -125,9 +125,9 @@ def get_stage_price_mult(stage=None):
 DRONE_HP_MAX_STEP = 20
 DRONE_AMMO_MAX_STEP = 20
 # 시작 비용(악의 정수), 업그레이드할수록 성장률로 증가
-DRONE_HP_UP_BASE_COST = 30
-DRONE_AMMO_UP_BASE_COST = 30
-DRONE_COST_GROWTH = 1.35
+DRONE_HP_UP_BASE_COST = 20
+DRONE_AMMO_UP_BASE_COST = 20
+DRONE_COST_GROWTH = 1.15
 # 누적 업그레이드 횟수(런타임 저장용)
 drone_hp_up_count = 0
 drone_ammo_up_count = 0
