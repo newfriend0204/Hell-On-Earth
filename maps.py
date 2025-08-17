@@ -33,7 +33,13 @@ BOSS_MAP_2 = {
 
 BOSS_MAP_3 = {
     "obstacles": [],
-    "enemy_infos": [{"x": 1080, "y": 810, "enemy_type": "boss3"}],  # 디버그용
+    "enemy_infos": [{"x": 1080, "y": 810, "enemy_type": "boss3"}],
+    "crop_rect": {"x_ratio": 2, "y_ratio": 2}
+}
+
+BOSS_MAP_4 = {
+    "obstacles": [],
+    "enemy_infos": [{"x": 1080, "y": 810, "enemy_type": "boss4"}],
     "crop_rect": {"x_ratio": 2, "y_ratio": 2}
 }
 
@@ -2564,5 +2570,5 @@ S3_FIGHT_MAPS = [
 ]
 
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
-BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3]
+BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3, BOSS_MAP_4]
 FIGHT_MAPS = S1_FIGHT_MAPS

@@ -8066,3 +8066,580 @@ class Boss3(AIBase):
 
         for h in self.hammers:
             h.draw(screen, world_x, world_y)
+
+class Boss4(AIBase):
+    rank = 10
+
+    HP_MAX = 2200
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
+    RADIUS = 46
+
+    SPRITE_ANGLE_OFFSET_DEG = +90
+
+    HOLD_DIST = int(260 * PLAYER_VIEW_SCALE)
+    MIN_KEEP_DIST = int(60 * PLAYER_VIEW_SCALE)
+
+    TURN_SPEED_DEG = 30.0
+    TURN_SPEED_BASH = 360.0
+
+    GUARD_DR = 0.70
+    GUARD_FOV_DEG = 120
+    SHIELD_SCALE = 1.6
+    SHIELD_OFFSET = 40
+    SHIELD_PUNCH_AMP = 32
+    SHIELD_PUNCH_MS = 180
+
+    CHARGE_WINDUP_MS = 500
+    CHARGE_RUN_MS = 800
+    CHARGE_SPEED_MUL = 2.0
+    CHARGE_DAMAGE = 30
+    CHARGE_KNOCKBACK = 18.0
+    CHARGE_STUN_MS = 1000
+    CHARGE_COOLDOWN_MS = 6000
+    CHARGE_HIT_RADIUS = int(42 * PLAYER_VIEW_SCALE)
+    CHARGE_TELEGRAPH_ALPHA = 120
+
+    BASH_RANGE = int(260 * PLAYER_VIEW_SCALE)
+    BASH_ARC_DEG = 110
+    BASH_WINDUP_MS = 450
+    BASH_DAMAGE = 22
+    BASH_KNOCKBACK = 24.0
+    BASH_COOLDOWN_MS = 900
+
+    SMG_BULLETS = 8
+    SMG_PER_SHOT_MS = 70
+    SMG_DAMAGE = 10
+    SMG_SPREAD_DEG = 12
+    SMG_BULLET_SPEED = 18 * PLAYER_VIEW_SCALE
+    SMG_RANGE = 700 * PLAYER_VIEW_SCALE
+    SMG_MUZZLE_FLASH_MS = 80
+    SMG_FAR_TRIGGER_DIST = int(560 * PLAYER_VIEW_SCALE)
+    SMG_EXTRA_COOLDOWN_MS = 2500
+    GUN_ANGLE_OFFSET_DEG = +90
+
+    GRENADE_COOLDOWN_MS = 3000
+    GRENADE_SPEED = 18 * PLAYER_VIEW_SCALE
+    GRENADE_THROW_DISTANCE = int(500 * PLAYER_VIEW_SCALE)
+    GRENADE_RADIUS = int(160 * PLAYER_VIEW_SCALE)
+    GRENADE_STUN_MS = 1500
+    GRENADE_DAMAGE_BLAST = 10
+    GRENADE_SLOW_MS = 1200
+    GRENADE_SLOW_FACTOR = 0.5
+    GRENADE_SPIN_DEG_PER_MS = 0.25
+    GRENADE_IMPACT_DAMAGE = 6
+    GRENADE_IMPACT_STUN_MS = 600
+    GRENADE_IMPACT_KNOCKBACK = 6.0
+    GRENADE_IMPACT_RADIUS = int(28 * PLAYER_VIEW_SCALE)
+    GRENADE_BLAST_KNOCKBACK = 10.0
+
+    PUSH_STRENGTH = 0.00
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0,
+            far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=self.PUSH_STRENGTH,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.kill_callback = kill_callback
+
+        self.body_img = images["boss4"]
+        self.grenade_img = images["electric_grenade"]
+        self.shield_img = images.get("gun19")
+        self.enemy_bullet_img = images.get("enemy_bullet", images.get("bullet1"))
+        self.gun_img = images.get("gun2")
+
+        self.block_sound = sounds.get("gun19_defend")
+        self.gun_sound = sounds.get("gun2_fire") or sounds.get("gun2")
+        self.stab_hit_sound = sounds.get("stab_hit") or sounds.get("Stab_Hit")
+        self.shock_burst_snd = sounds.get("shock_burst") or sounds.get("ShockBurst")
+
+        self.state = "CHASE"   # CHASE / CHARGE_WINDUP / CHARGE_RUN / SMG_BURST / BASH_WINDUP
+        self.state_until = 0
+        self.charge_dir = 0.0
+        self.charge_hit_done = False
+
+        self.smg_shots_left = 0
+        self.smg_next_shot_at = 0
+        self.last_muzzle_at = 0
+        self.smg_ready_at = 0
+
+        self.bash_angle = 0.0
+        self.bash_ready_at = 0
+
+        self.shield_punch_end = 0
+
+        self.guard_active = False
+        self._last_block_sfx_at = 0
+
+        self._last_rot_update = pygame.time.get_ticks()
+
+        now = pygame.time.get_ticks()
+        self.charge_ready_at = now
+        self.grenade_ready_at = now
+
+        self.grenades = []
+
+        self.half_drop_done = False
+
+    # 유틸
+    def _sound(self, snd):
+        try:
+            if snd: snd.play()
+        except:
+            pass
+
+    def _player_world(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _add_knockback(self, px, py, from_x, from_y, strength):
+        dx, dy = px - from_x, py - from_y
+        d = math.hypot(dx, dy) or 1.0
+        nx, ny = dx/d, dy/d
+        if not hasattr(config, "knockback_impulse_x"): config.knockback_impulse_x = 0.0
+        if not hasattr(config, "knockback_impulse_y"): config.knockback_impulse_y = 0.0
+        config.knockback_impulse_x = max(-30.0, min(30.0, config.knockback_impulse_x + nx*strength))
+        config.knockback_impulse_y = max(-30.0, min(30.0, config.knockback_impulse_y + ny*strength))
+
+    def _stun_player_soft(self, ms):
+        now = pygame.time.get_ticks()
+        for fn_name in ("stun_player", "apply_player_stun", "request_player_stun"):
+            fn = getattr(config, fn_name, None)
+            if callable(fn):
+                try: fn(ms)
+                except: pass
+                return
+        try:
+            config.player_stun_until = max(getattr(config, "player_stun_until", 0), now + ms)
+            config.player_is_stunned = True
+        except:
+            pass
+
+    def _apply_electric_explosion(self, ex, ey):
+        # enemy21 규격 전기충격: 피해/스턴/슬로우/넉백
+        now = pygame.time.get_ticks()
+        px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+        dist = math.hypot(px - ex, py - ey)
+        if dist <= self.GRENADE_RADIUS:
+            try:
+                if self.damage_player:
+                    self.damage_player(int(self.GRENADE_DAMAGE_BLAST))
+                else:
+                    config.damage_player(int(self.GRENADE_DAMAGE_BLAST))
+            except Exception:
+                pass
+            try:
+                config.stunned_until_ms = max(getattr(config, "stunned_until_ms", 0), now + self.GRENADE_STUN_MS)
+                config.slow_until_ms    = max(getattr(config, "slow_until_ms", 0), now + self.GRENADE_SLOW_MS)
+                config.move_slow_factor = self.GRENADE_SLOW_FACTOR
+                config.slow_started_ms  = now
+                config.slow_duration_ms = self.GRENADE_SLOW_MS
+            except Exception:
+                pass
+            self._add_knockback(px, py, ex, ey, self.GRENADE_BLAST_KNOCKBACK)
+
+    # 각도 보간
+    def _normalize_angle(self, a):
+        return (a + math.pi) % (2 * math.pi) - math.pi
+
+    def _rotate_towards_speed(self, target_angle, now_ms, deg_per_sec, instant=False):
+        if instant:
+            self.direction_angle = target_angle
+            self._last_rot_update = now_ms
+            return
+        dt = max(0, now_ms - self._last_rot_update)
+        max_step = math.radians(deg_per_sec) * (dt / 1000.0)
+        diff = self._normalize_angle(target_angle - self.direction_angle)
+        if abs(diff) <= max_step:
+            self.direction_angle = target_angle
+        else:
+            self.direction_angle = self._normalize_angle(self.direction_angle + math.copysign(max_step, diff))
+        self._last_rot_update = now_ms
+
+    def _rotate_towards(self, target_angle, now_ms, instant=False):
+        self._rotate_towards_speed(target_angle, now_ms, self.TURN_SPEED_DEG, instant)
+
+    # 방패 전방 판정/감소
+    def _is_in_front(self, from_x, from_y):
+        dx, dy = from_x - self.world_x, from_y - self.world_y
+        a = math.atan2(dy, dx)
+        diff = (a - self.direction_angle + math.pi*3) % (math.pi*2) - math.pi
+        return abs(math.degrees(diff)) <= self.GUARD_FOV_DEG * 0.5
+
+    def hit(self, damage, blood_effects, force=False):
+        # 전방 가드 적용
+        self.guard_active = (self.state in ("CHASE", "CHARGE_WINDUP", "CHARGE_RUN", "BASH_WINDUP"))
+        if self.guard_active:
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if self._is_in_front(px, py):
+                damage = int(damage * (1.0 - self.GUARD_DR))
+                now = pygame.time.get_ticks()
+                if self.block_sound and now - self._last_block_sfx_at > 120:
+                    self._sound(self.block_sound)
+                    self._last_block_sfx_at = now
+
+        # 실제 체력 감소 처리
+        super().hit(damage, blood_effects, force)
+
+        if (not self.half_drop_done) and self.alive and self.hp <= (self.max_hp * 0.5):
+            self.half_drop_done = True
+            try:
+                self.spawn_dropped_items(7, 7)
+            except Exception:
+                pass
+
+    def die(self, blood_effects):
+        super().die(blood_effects)
+        self.spawn_dropped_items(10, 12)
+
+    # 보조
+    def _charge_length_exact(self):
+        return int(self.BASE_SPEED * self.CHARGE_SPEED_MUL * (self.CHARGE_RUN_MS / 1000.0))
+
+    def _compute_grenade_travel_ms(self):
+        # 던지는 거리(px)를 기준으로 퓨즈(ms) 계산.
+        dt_ms = max(1, int(getattr(config, "dt_ms", 16)))
+        return int(self.GRENADE_THROW_DISTANCE * dt_ms / max(1.0, self.GRENADE_SPEED))
+
+    # FSM 보조
+    def _maybe_start_charge(self, now, dist):
+        if now < self.charge_ready_at:
+            return False
+        if int(260 * PLAYER_VIEW_SCALE) <= dist <= int(900 * PLAYER_VIEW_SCALE):
+            self.state = "CHARGE_WINDUP"
+            self.state_until = now + self.CHARGE_WINDUP_MS
+            self.charge_dir = self.direction_angle
+            self.charge_hit_done = False
+            return True
+        return False
+
+    def _start_smg_burst(self, now):
+        self.state = "SMG_BURST"
+        self.smg_shots_left = self.SMG_BULLETS
+        self.smg_next_shot_at = now
+        self.last_muzzle_at = 0
+        self.smg_ready_at = now + self.SMG_EXTRA_COOLDOWN_MS
+
+    def _throw_grenade(self, now, px, py):
+        if now < self.grenade_ready_at:
+            return
+        ang = math.atan2(py - self.world_y, px - self.world_x)
+        vx = math.cos(ang) * self.GRENADE_SPEED
+        vy = math.sin(ang) * self.GRENADE_SPEED
+        travel_ms = self._compute_grenade_travel_ms()
+        self.grenades.append(Boss4.ElecGrenade(self, self.world_x, self.world_y, vx, vy, now + travel_ms))
+        self.grenade_ready_at = now + self.GRENADE_COOLDOWN_MS
+        self._sound(self.stab_hit_sound)
+
+    def _maybe_start_bash(self, now, dist, ang_to_player):
+        if now < self.bash_ready_at:
+            return False
+        if dist <= self.BASH_RANGE:
+            self.state = "BASH_WINDUP"
+            self.state_until = now + self.BASH_WINDUP_MS
+            self.bash_angle = ang_to_player
+            return True
+        return False
+
+    # 목표/행동
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive or not config.combat_state:
+            return
+
+        now = pygame.time.get_ticks()
+        px, py = self._player_world(world_x, world_y, player_rect)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        desired_ang = math.atan2(dy, dx) if (dx or dy) else self.direction_angle
+
+        # 상태별 회전 정책
+        if self.state == "SMG_BURST":
+            self._rotate_towards_speed(desired_ang, now, deg_per_sec=720.0, instant=True)
+        elif self.state == "BASH_WINDUP":
+            self._rotate_towards_speed(desired_ang, now, deg_per_sec=self.TURN_SPEED_BASH, instant=False)
+        elif self.state in ("CHASE", "CHARGE_WINDUP"):
+            self._rotate_towards(desired_ang, now, instant=False)
+        elif self.state == "CHARGE_RUN":
+            self.direction_angle = self.charge_dir
+            self._last_rot_update = now
+
+        # 접근 중 방패 활성
+        self.guard_active = (self.state in ("CHASE", "CHARGE_WINDUP", "CHARGE_RUN", "BASH_WINDUP"))
+
+        if self.state == "CHASE":
+            base = self.BASE_SPEED
+            self.speed = base
+            if dist > self.HOLD_DIST:
+                t = now * 0.002
+                strafe = base * 0.25 * math.sin(t)
+                nx, ny = -dy/(dist+1e-6), dx/(dist+1e-6)
+                gx = self.world_x + (dx/(dist+1e-6)) * 140 + nx * 60 * strafe
+                gy = self.world_y + (dy/(dist+1e-6)) * 140 + ny * 60 * strafe
+                self.goal_pos = (gx, gy)
+            elif dist < self.MIN_KEEP_DIST:
+                ang = self.direction_angle + math.pi
+                self.goal_pos = (self.world_x + math.cos(ang) * 140,
+                                 self.world_y + math.sin(ang) * 140)
+            else:
+                orbit = 1 if ((now//800)%2)==0 else -1
+                ang = self.direction_angle + orbit*math.pi/2
+                self.goal_pos = (self.world_x + math.cos(ang) * 100,
+                                 self.world_y + math.sin(ang) * 100)
+
+            if dist >= self.SMG_FAR_TRIGGER_DIST and now >= self.smg_ready_at:
+                self._start_smg_burst(now)
+            elif self._maybe_start_charge(now, dist):
+                pass
+            elif self._maybe_start_bash(now, dist, self.direction_angle):
+                pass
+
+            if now >= self.grenade_ready_at and dist > int(220 * PLAYER_VIEW_SCALE):
+                self._throw_grenade(now, px, py)
+
+        elif self.state == "CHARGE_WINDUP":
+            self.speed = 0.0
+            self.goal_pos = (self.world_x, self.world_y)
+            if now >= self.state_until:
+                self.state = "CHARGE_RUN"
+                self.state_until = now + self.CHARGE_RUN_MS
+                self.charge_hit_done = False
+                self.charge_ready_at = now + self.CHARGE_COOLDOWN_MS
+                L = self._charge_length_exact()
+                end_x = self.world_x + math.cos(self.charge_dir) * L
+                end_y = self.world_y + math.sin(self.charge_dir) * L
+                self.speed = self.BASE_SPEED * self.CHARGE_SPEED_MUL
+                self.goal_pos = (end_x, end_y)
+
+        elif self.state == "CHARGE_RUN":
+            self.speed = self.BASE_SPEED * self.CHARGE_SPEED_MUL
+            L = self._charge_length_exact()
+            end_x = self.world_x + math.cos(self.charge_dir) * L
+            end_y = self.world_y + math.sin(self.charge_dir) * L
+            self.goal_pos = (end_x, end_y)
+
+            if (not self.charge_hit_done) and (math.hypot(px - self.world_x, py - self.world_y) <= self.CHARGE_HIT_RADIUS):
+                self.charge_hit_done = True
+                if self.damage_player:
+                    self.damage_player(self.CHARGE_DAMAGE)
+                self._add_knockback(px, py, self.world_x, self.world_y, self.CHARGE_KNOCKBACK)
+                self._stun_player_soft(self.CHARGE_STUN_MS)
+                self._start_smg_burst(now)
+                self._sound(self.stab_hit_sound)
+
+            if now >= self.state_until:
+                if self.state != "SMG_BURST":
+                    self.state = "CHASE"
+
+        elif self.state == "SMG_BURST":
+            self.speed = 0.0
+            self.goal_pos = (self.world_x, self.world_y)
+            if self.smg_shots_left > 0 and now >= self.smg_next_shot_at:
+                self.smg_shots_left -= 1
+                self.smg_next_shot_at = now + self.SMG_PER_SHOT_MS
+                self.last_muzzle_at = now
+                if self.gun_sound:
+                    self._sound(self.gun_sound)
+                spread = math.radians(random.uniform(-self.SMG_SPREAD_DEG, self.SMG_SPREAD_DEG))
+                ang = self.direction_angle + spread
+                mx = self.world_x + math.cos(ang) * 30
+                my = self.world_y + math.sin(ang) * 30
+                tx = mx + math.cos(ang) * 2000
+                ty = my + math.sin(ang) * 2000
+                from entities import Bullet
+                b = Bullet(mx, my, tx, ty, 0, self.enemy_bullet_img,
+                           speed=self.SMG_BULLET_SPEED,
+                           max_distance=self.SMG_RANGE,
+                           damage=self.SMG_DAMAGE)
+                b.owner = self
+                config.global_enemy_bullets.append(b)
+            if self.smg_shots_left <= 0:
+                self.state = "CHASE"
+
+        elif self.state == "BASH_WINDUP":
+            self.speed = 0.0
+            self.goal_pos = (self.world_x, self.world_y)
+            # 붉은 부채꼴 텔레그래프가 시선과 동기화되도록 고속 선회
+            self._rotate_towards_speed(math.atan2(dy, dx) if (dx or dy) else self.direction_angle,
+                                       now, deg_per_sec=self.TURN_SPEED_BASH, instant=False)
+            self.bash_angle = self.direction_angle
+            if now >= self.state_until:
+                ang_to_player = math.atan2(dy, dx) if (dx or dy) else self.direction_angle
+                diff = self._normalize_angle(ang_to_player - self.bash_angle)
+                in_arc = abs(math.degrees(diff)) <= (self.BASH_ARC_DEG * 0.5)
+                if dist <= self.BASH_RANGE and in_arc:
+                    if self.damage_player:
+                        self.damage_player(self.BASH_DAMAGE)
+                    self._add_knockback(px, py, self.world_x, self.world_y, self.BASH_KNOCKBACK)
+                    self._sound(self.stab_hit_sound)
+                self.bash_ready_at = now + self.BASH_COOLDOWN_MS
+                self.shield_punch_end = now + self.SHIELD_PUNCH_MS
+                self.state = "CHASE"
+
+        # 수류탄 갱신
+        for g in self.grenades[:]:
+            g.update(world_x, world_y)
+            if (not g.exploding):
+                if math.hypot(px - g.world_x, py - g.world_y) <= self.GRENADE_IMPACT_RADIUS:
+                    if self.damage_player and self.GRENADE_IMPACT_DAMAGE > 0:
+                        self.damage_player(self.GRENADE_IMPACT_DAMAGE)
+                    self._stun_player_soft(self.GRENADE_IMPACT_STUN_MS)
+                    self._add_knockback(px, py, g.world_x, g.world_y, self.GRENADE_IMPACT_KNOCKBACK)
+                    if self.shock_burst_snd: self._sound(self.shock_burst_snd)
+                    self._apply_electric_explosion(g.world_x, g.world_y)
+                    g.start_explosion()
+            if g.should_explode():
+                self._apply_electric_explosion(g.world_x, g.world_y)
+                if self.shock_burst_snd: self._sound(self.shock_burst_snd)
+                g.start_explosion()
+            if g.done:
+                self.grenades.remove(g)
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        cx = self.world_x - world_x + shake_offset_x
+        cy = self.world_y - world_y + shake_offset_y
+
+        # CHASE 상태 사전 예고 텔레그래프
+        if self.state == "CHASE":
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            dist = math.hypot(px - self.world_x, py - self.world_y)
+            if now >= self.charge_ready_at and int(260 * PLAYER_VIEW_SCALE) <= dist <= int(900 * PLAYER_VIEW_SCALE):
+                self._draw_charge_rect(screen, cx, cy, self.direction_angle)
+
+        # 돌진 WINDUP 예고
+        if self.state == "CHARGE_WINDUP":
+            self._draw_charge_rect(screen, cx, cy, self.charge_dir)
+
+        # 밀치기 텔레그래프(붉은 부채꼴)
+        if self.state == "BASH_WINDUP":
+            self._draw_fan(screen, cx, cy, self.bash_angle, self.BASH_ARC_DEG, self.BASH_RANGE, (255, 0, 0, 100))
+
+        # 방패(보스 뒤에 먼저 그리기)
+        if self.guard_active or now < self.shield_punch_end:
+            if self.shield_img:
+                extra = 0.0
+                if now < self.shield_punch_end:
+                    t = 1.0 - max(0.0, (self.shield_punch_end - now) / float(self.SHIELD_PUNCH_MS))
+                    extra = math.sin(t * math.pi) * self.SHIELD_PUNCH_AMP
+                ang_deg = -math.degrees(self.direction_angle) + 270  # 180° 보정
+                icon = pygame.transform.rotozoom(self.shield_img, ang_deg, self.SHIELD_SCALE)
+                ix = cx + math.cos(self.direction_angle) * (self.SHIELD_OFFSET + extra)
+                iy = cy + math.sin(self.direction_angle) * (self.SHIELD_OFFSET + extra)
+                screen.blit(icon, icon.get_rect(center=(int(ix), int(iy))))
+
+        # 본체(방패 위에 덮음)
+        scaled = pygame.transform.smoothscale(
+            self.body_img,
+            (int(self.body_img.get_width() * PLAYER_VIEW_SCALE),
+             int(self.body_img.get_height() * PLAYER_VIEW_SCALE))
+        )
+        rotated = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + self.SPRITE_ANGLE_OFFSET_DEG)
+        screen.blit(rotated, rotated.get_rect(center=(int(cx), int(cy))))
+
+        # SMG 총 이미지/플래시
+        show_gun = (self.state == "SMG_BURST") or (self.last_muzzle_at and now - self.last_muzzle_at <= self.SMG_MUZZLE_FLASH_MS)
+        if show_gun and self.gun_img:
+            gx = cx + math.cos(self.direction_angle) * 26
+            gy = cy + math.sin(self.direction_angle) * 26
+            gun = pygame.transform.rotozoom(self.gun_img, -math.degrees(self.direction_angle) + self.GUN_ANGLE_OFFSET_DEG, 0.8)
+            screen.blit(gun, gun.get_rect(center=(int(gx), int(gy))))
+        if self.last_muzzle_at and now - self.last_muzzle_at <= self.SMG_MUZZLE_FLASH_MS:
+            fx = cx + math.cos(self.direction_angle) * 38
+            fy = cy + math.sin(self.direction_angle) * 38
+            pygame.draw.circle(screen, (255,255,255), (int(fx), int(fy)), 6)
+            ex = fx + math.cos(self.direction_angle) * 16
+            ey = fy + math.sin(self.direction_angle) * 16
+            pygame.draw.line(screen, (255,255,255), (int(fx), int(fy)), (int(ex), int(ey)), 3)
+
+        # 수류탄
+        for g in self.grenades:
+            g.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+
+    def _draw_charge_rect(self, screen, cx, cy, ang):
+        L = max(1, self._charge_length_exact())
+        T = max(1, int(self.radius * 2))
+        dx = math.cos(ang)
+        dy = math.sin(ang)
+        nx, ny = -dy, dx
+        hx, hy = dx * (L * 0.5), dy * (L * 0.5)
+        tx, ty = nx * (T * 0.5), ny * (T * 0.5)
+        p1 = (int(cx - hx - tx), int(cy - hy - ty))
+        p2 = (int(cx - hx + tx), int(cy - hy + ty))
+        p3 = (int(cx + hx + tx), int(cy + hy + ty))
+        p4 = (int(cx + hx - tx), int(cy + hy - ty))
+        srf = pygame.Surface((self.map_width, self.map_height), pygame.SRCALPHA)
+        pygame.draw.polygon(srf, (255, 0, 0, self.CHARGE_TELEGRAPH_ALPHA), [p1, p2, p3, p4])
+        screen.blit(srf, (0, 0))
+
+    def _draw_fan(self, screen, cx, cy, center_ang, fov_deg, radius, color_rgba):
+        steps = 28
+        start = center_ang - math.radians(fov_deg*0.5)
+        end = center_ang + math.radians(fov_deg*0.5)
+        pts = [(cx, cy)]
+        for i in range(steps+1):
+            a = start + (end-start) * (i/steps)
+            pts.append((cx + math.cos(a)*radius, cy + math.sin(a)*radius))
+        srf = pygame.Surface((self.map_width, self.map_height), pygame.SRCALPHA)
+        pygame.draw.polygon(srf, color_rgba, pts)
+        screen.blit(srf, (0, 0))
+
+    # 내부: 전기 수류탄
+    class ElecGrenade:
+        def __init__(self, boss, x, y, vx, vy, explode_at_ms):
+            self.boss = boss
+            self.world_x = x
+            self.world_y = y
+            self.vx = vx
+            self.vy = vy
+            self.explode_at = explode_at_ms
+            self.exploding = False
+            self.explode_end = 0
+            self.done = False
+            self.angle_deg = 0.0
+
+        def should_explode(self):
+            return (not self.exploding) and pygame.time.get_ticks() >= self.explode_at
+
+        def start_explosion(self):
+            self.exploding = True
+            self.explode_end = pygame.time.get_ticks() + 280
+            self.vx = self.vy = 0
+
+        def update(self, world_x, world_y):
+            if self.done:
+                return
+            if not self.exploding:
+                self.world_x += self.vx
+                self.world_y += self.vy
+                dt_ms = getattr(config, "dt_ms", 16)
+                self.angle_deg = (self.angle_deg + self.boss.GRENADE_SPIN_DEG_PER_MS * dt_ms) % 360
+            else:
+                if pygame.time.get_ticks() >= self.explode_end:
+                    self.done = True
+
+        def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+            if self.done:
+                return
+            cx = int(self.world_x - world_x + shake_offset_x)
+            cy = int(self.world_y - world_y + shake_offset_y)
+            if not self.exploding:
+                img = pygame.transform.rotozoom(self.boss.grenade_img, -self.angle_deg, 1.0)
+                screen.blit(img, img.get_rect(center=(cx, cy)))
+            else:
+                t = 1.0 - max(0.0, (self.explode_end - pygame.time.get_ticks()) / 280.0)
+                r = int(self.boss.GRENADE_RADIUS * t)
+                pygame.draw.circle(screen, (255,255,255), (cx, cy), max(6, r), 4)
+                pygame.draw.circle(screen, (160,200,255), (cx, cy), max(4, int(r*0.65)), 3)

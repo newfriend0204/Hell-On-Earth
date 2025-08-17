@@ -73,6 +73,15 @@ def load_sounds():
         "gun24_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun24Fire.mp3")),
         "gun25_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun25Fire.mp3")),
         "gun26_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun26Fire.mp3")),
+        "gun27_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun27LeftFire.mp3")),
+        "gun27_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun27RightFire.mp3")),
+        "gun27_charge_loop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun27ChargeLoop.mp3")),
+        "gun28_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28LeftFire.mp3")),
+        "gun28_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28RightFire.mp3")),
+        "gun29_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun29Fire.mp3")),
+        "gun30_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun30Fire.mp3")),
+        "gun31_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun31Fire.mp3")),
+        "gun32_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun32Fire.mp3")),
     }
 
     entity_sounds = {

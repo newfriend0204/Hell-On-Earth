@@ -142,7 +142,5 @@ class Collider:
                 )
             else:
                 return None
-        if penetration < 0.5:
-            penetration = 0.5
 
         return None

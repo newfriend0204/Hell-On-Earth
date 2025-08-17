@@ -55,7 +55,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 42, 2: 38, 3: 18, 4: 2}
     },
     "2-1": {
-        "boss_map": 0,
+        "boss_map": 3,
         "enemy_rank_range": (2, 5),
         "min_f_rooms": 5,
         "max_f_rooms": 6,
@@ -65,8 +65,8 @@ STAGE_DATA = {
     "2-2": {
         "boss_map": 2,
         "enemy_rank_range": (3, 6),
-        "min_f_rooms": 6, # 6
-        "max_f_rooms": 7, # 7
+        "min_f_rooms": 6,
+        "max_f_rooms": 7,
         "acquire_rooms": 2,
         "weapon_tier_weights": {1: 12, 2: 50, 3: 32, 4: 6}
     },
@@ -103,7 +103,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "2-2"
+CURRENT_STAGE = "2-3"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,

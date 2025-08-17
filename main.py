@@ -46,7 +46,6 @@ from text_data import (
     soldier1_after_dialogue,
     soldier2_before_dialogue,
     soldier2_after_dialogue,
-    soldier2_before_dialogue,
     soldier2_after_dialogue,
     soldier3_before_dialogue,
     soldier3_after_dialogue,
@@ -126,7 +125,7 @@ _exit_requested  = False
 
 START_WEAPONS = [
     WEAPON_CLASSES[0],
-    WEAPON_CLASSES[1],
+    WEAPON_CLASSES[26],
 ]
 
 def _apply_stage_theme_images():
@@ -621,7 +620,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 300
+ammo_gauge_max = 30000 # 디버그 원래는 300
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 
@@ -805,7 +804,7 @@ def spawn_room_npcs():
                 )
             elif npc_info["npc_type"] == "soldier2_npc" and config.CURRENT_STAGE == "2-3":
                 npcs.append(
-                    ScientistNPC(
+                    SoldierNPC(
                         images["soldier2"],
                         npc_info["x"],
                         npc_info["y"],
@@ -1610,7 +1609,7 @@ def change_room(direction):
                         kill_callback=increment_kill_count
                     )
                     enemies.append(enemy)
-                    if enemy_type in ("boss1", "boss2", "boss3"):
+                    if enemy_type.lower().startswith("boss"):
                         current_boss = enemy
                     break
         else:
@@ -1639,7 +1638,7 @@ def change_room(direction):
             )
             enemies.append(enemy)
 
-    if not any("enemy_type" in e_info and e_info["enemy_type"] in ("boss1", "boss2", "boss3") for e_info in CURRENT_MAP["enemy_infos"]):
+    if not any(str(e_info.get("enemy_type", "")).lower().startswith("boss") for e_info in CURRENT_MAP.get("enemy_infos", [])):
         current_boss = None
 
     config.all_enemies = enemies
@@ -3910,6 +3909,11 @@ while running:
                 rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
                 rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
                 screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
+                if hasattr(render_weapon, "draw_overlay"):
+                    try:
+                        render_weapon.draw_overlay(screen)
+                    except Exception:
+                        pass
     melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
     if not player_dead:
         screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
@@ -3921,7 +3925,7 @@ while running:
     if not player_dead:
         minimap_rect = draw_minimap(screen, grid, current_room_pos)
         draw_weapon_ui(screen, weapons, current_weapon_index)
-        if current_boss and type(current_boss).__name__ in ("Boss1", "Boss2", "Boss3") and current_boss.alive:
+        if current_boss and current_boss.alive:
             last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
         draw_combat_indicators(screen, delta_time, minimap_rect)
 

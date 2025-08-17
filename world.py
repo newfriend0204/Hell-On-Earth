@@ -212,7 +212,7 @@ def generate_map():
             continue
         
 
-        # # 디버그 
+        # 디버그 
         # grid = [
         #     ['S', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],
         #     ['E', 'N', 'N', 'N', 'N', 'N', 'N', 'N'],

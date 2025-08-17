@@ -187,11 +187,9 @@ class WeaponBase:
         self._prev_right_down = False
 
     def _filter_inputs(self, left_down: bool, right_down: bool):
-        """
-        배타 입력 규칙을 적용해 이번 프레임에 허용되는 (left, right) 입력을 리턴.
-        - active 버튼이 잡혀 있으면 그 버튼만 허용
-        - 둘 다 눌렸을 때는 '먼저 눌린' 버튼을 유지(동시 에지는 좌 우선)
-        """
+        # 배타 입력 규칙을 적용해 이번 프레임에 허용되는 (left, right) 입력을 리턴.
+        # active 버튼이 잡혀 있으면 그 버튼만 허용
+        # 둘 다 눌렸을 때는 '먼저 눌린' 버튼을 유지(동시 에지는 좌 우선)
         if not self.exclusive_inputs:
             # 배타 처리 비활성: 그대로 통과
             self._prev_left_down, self._prev_right_down = left_down, right_down
@@ -218,7 +216,7 @@ class WeaponBase:
                 else:
                     self._active_button = 'L'
         else:
-            # ✨ 프리엠션: 반대쪽이 "새로 눌리면" 즉시 전환
+            # 반대쪽이 "새로 눌리면" 즉시 전환
             if self._active_button == 'L' and right_edge:
                 self._active_button = 'R'
             elif self._active_button == 'R' and left_edge:
@@ -235,6 +233,10 @@ class WeaponBase:
         self._prev_left_down, self._prev_right_down = left_down, right_down
         return allow_left, allow_right
 
+    def draw_overlay(self, screen):
+        # 무기 전용 HUD를 그릴 때 오버라이드
+        return
+    
     def on_left_click(self):
         # 좌클릭 발사 동작 (하위 클래스에서 구현)
         pass
@@ -3238,6 +3240,354 @@ class Gun26(WeaponBase):
             scatter = ScatteredBullet(px, py, evx, evy, self.cartridge_images[0])
             config.scattered_bullets.append(scatter)
 
+class Gun27(WeaponBase):
+    TIER = 5
+    CHARGE_TIME_MS = 800
+    LEFT_DAMAGE = 180
+    RIGHT_DAMAGE = int(180 * 0.6)
+
+    LEFT_AMMO_COST = 35
+    RIGHT_AMMO_COST = 18
+
+    RANGE_LEFT  = int(4600 * config.PLAYER_VIEW_SCALE)
+    RANGE_RIGHT = int(3800 * config.PLAYER_VIEW_SCALE)
+    BEAM_VIS_LEFT_MS  = 120
+    BEAM_VIS_RIGHT_MS = 80
+    LEFT_WIDTH = 10
+    RIGHT_WIDTH = 6
+
+    HEAT_PER_LEFT = 50
+    HEAT_PER_RIGHT = 14
+    HEAT_COOL_PER_SEC = 40
+    OVERHEAT_THRESHOLD = 100
+    OVERHEAT_LOCK_MS = 1000
+
+    LEFT_COOLDOWN = 350
+    RIGHT_COOLDOWN = 200
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun27(
+            name="레일 랜서",
+            front_image=weapon_assets["gun27"]["front"],
+            topdown_image=weapon_assets["gun27"]["topdown"],
+            uses_bullets=False, bullet_images=weapon_assets["gun27"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun27"]["cartridges"],
+            can_left_click=True, can_right_click=True,
+            left_click_ammo_cost=Gun27.LEFT_AMMO_COST, right_click_ammo_cost=Gun27.RIGHT_AMMO_COST,
+            tier=Gun27.TIER,
+            sounds_dict={
+                "left_fire":   sounds["gun27_leftfire"],
+                "right_fire":  sounds["gun27_rightfire"],
+                "charge_loop": sounds["gun27_charge_loop"],
+                "overheat": sounds.get("gun5_overheat"),
+            },
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False, get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = 120
+        self.recoil_strength = 10
+        self.speed_penalty = 0.0
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+        self.shake_strength = 12
+
+        self.state = "idle"  # idle / charging / overheat
+        self.charge_start_ms = 0
+        self.last_left_fire_time = 0
+        self.last_right_click_time = 0
+
+        self.heat = 0.0
+        self.overheat_until_ms = 0
+
+        self._charge_channel = None
+
+        self.left_fire_delay = self.LEFT_COOLDOWN
+        self.right_fire_delay = self.RIGHT_COOLDOWN
+        self._last_cool_ms = pygame.time.get_ticks()
+
+        self._beam_until_ms = 0
+        self._beam_width_px = 0
+        self._beam_is_left = True
+        self._beam_ang = 0.0
+
+        self._no_ammo_flash_until = 0
+
+        self._prev_left_down = False
+        self._prev_right_down = False
+
+        self.last_shot_time = 0
+
+    # 사운드 제어
+    def _start_charge_sound(self):
+        try:
+            s = self.sounds.get("charge_loop")
+            if not s:
+                return
+            ch = pygame.mixer.find_channel()
+            if ch:
+                ch.play(s, loops=-1, fade_ms=80)
+                self._charge_channel = ch
+        except Exception:
+            self._charge_channel = None
+
+    def _stop_charge_sound(self):
+        if self._charge_channel:
+            try:
+                self._charge_channel.fadeout(120)
+            except Exception:
+                pass
+        self._charge_channel = None
+
+    # 유틸
+    def get_heat_ratio(self):
+        return max(0.0, min(1.0, self.heat / float(self.OVERHEAT_THRESHOLD)))
+
+    def _apply_overheat_if_needed(self, add_heat):
+        self.heat += add_heat
+        if self.heat >= self.OVERHEAT_THRESHOLD:
+            self.state = "overheat"
+            self.overheat_until_ms = pygame.time.get_ticks() + self.OVERHEAT_LOCK_MS
+            s = self.sounds.get("overheat")
+            if s:
+                try: s.play()
+                except Exception: pass
+            self._stop_charge_sound()
+            return True
+        return False
+
+    def _cool_heat(self, now_ms):
+        if self.state != "overheat" and self.heat > 0:
+            dt = max(0, now_ms - self._last_cool_ms)
+            self.heat = max(0.0, self.heat - self.HEAT_COOL_PER_SEC * (dt / 1000.0))
+        self._last_cool_ms = now_ms
+
+    def _unit_from_mouse(self):
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    # 히트스캔 + 내부 빔 비주얼 기록
+    def _raycast_and_damage(self, width_px, damage, is_left):
+        # 월드 기준 시작/끝점
+        px, py = self.get_player_world_position()
+        (vx, vy), ang = self._unit_from_mouse()
+        sx, sy = px + vx * 30 * config.PLAYER_VIEW_SCALE, py + vy * 30 * config.PLAYER_VIEW_SCALE
+        rng = self.RANGE_LEFT if is_left else self.RANGE_RIGHT
+        ex, ey = sx + vx * rng, sy + vy * rng
+
+        # 빔 비주얼(overlay에서 화면좌표로 직접 그림)
+        now = pygame.time.get_ticks()
+        self._beam_until_ms = now + (self.BEAM_VIS_LEFT_MS if is_left else self.BEAM_VIS_RIGHT_MS)
+        self._beam_width_px = width_px
+        self._beam_is_left = is_left
+        self._beam_ang = ang
+
+        # 판정: 선분-원 최소거리
+        def point_segment_distance(px0, py0, x1, y1, x2, y2):
+            vx0 = x2 - x1; vy0 = y2 - y1
+            wx = px0 - x1; wy = py0 - y1
+            seg_len2 = vx0*vx0 + vy0*vy0
+            if seg_len2 <= 1e-6:
+                return math.hypot(wx, wy)
+            t = max(0.0, min(1.0, (wx*vx0 + wy*vy0) / seg_len2))
+            projx = x1 + t * vx0
+            projy = y1 + t * vy0
+            return math.hypot(px0 - projx, py0 - projy)
+
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        hit_count = 0
+        for e in list(enemies_list):
+            if not getattr(e, "alive", False):
+                continue
+            ex0 = getattr(e, "world_x", getattr(e, "x", None))
+            ey0 = getattr(e, "world_y", getattr(e, "y", None))
+            if ex0 is None or ey0 is None:
+                continue
+            rad = int(getattr(e, "radius", 26))
+            if point_segment_distance(ex0, ey0, sx, sy, ex, ey) <= (rad + width_px // 2):
+                try:
+                    if hasattr(e, "hit"):
+                        e.hit(damage, None)
+                    elif hasattr(e, "on_hit"):
+                        e.on_hit(damage, knockback=0, hit_type="laser")
+                    else:
+                        e.hp = getattr(e, "hp", 0) - damage
+                        if e.hp <= 0:
+                            e.alive = False
+                except Exception:
+                    pass
+                hit_count += 1
+
+        # 카메라 흔들림(좌가 우보다 더 강하게)
+        base = self.shake_strength + (2 if is_left else 0)
+        try:
+            config.shake_strength = max(getattr(config, "shake_strength", 0), base + min(8, int(hit_count * 1.5)))
+            config.shake_timer = max(getattr(config, "shake_timer", 0), 8)
+        except Exception:
+            pass
+
+    # 입력/상태
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+        self._cool_heat(now)
+
+        if self.state == "overheat":
+            if now >= self.overheat_until_ms:
+                self.state = "idle"
+            return
+
+        left_down  = mouse_left_down
+        right_down = mouse_right_down
+
+        # 좌클릭: '쿨다운에 상관없이' 차지는 바로 시작 → 완료 시점에 발사 조건 확인
+        if self.can_left_click:
+            if (not self._prev_left_down) and left_down and self.state == "idle":
+                self.state = "charging"
+                self.charge_start_ms = now
+                self.speed_penalty = 0.10
+                self._start_charge_sound()
+            elif left_down and self.state == "charging":
+                # 차지 완료 → 쿨/탄약 검사 후 즉시 발사, 아니면 유지
+                if (now - self.charge_start_ms) >= self.CHARGE_TIME_MS:
+                    can_cd   = (now - self.last_left_fire_time) >= self.left_fire_delay
+                    has_ammo = self.get_ammo_gauge() >= self.left_click_ammo_cost
+                    if can_cd and has_ammo:
+                        self._fire(mode="left")
+                        self.last_left_fire_time = now
+                        self.state = "idle"
+                        self._stop_charge_sound()
+                        self.speed_penalty = 0.0
+                    elif not has_ammo:
+                        self._no_ammo_flash_until = now + 500
+                        # 유지하다가 떼면 취소
+            elif self._prev_left_down and (not left_down) and self.state == "charging":
+                # 차지 중 취소
+                self.state = "idle"
+                self._stop_charge_sound()
+                self.speed_penalty = 0.0
+
+        # 우클릭: 즉발(차지 중엔 무시)
+        if self.can_right_click and self.state != "charging":
+            if right_down and (now - self.last_right_click_time) >= self.right_fire_delay:
+                if self.get_ammo_gauge() >= self.right_click_ammo_cost:
+                    self._fire(mode="right")
+                    self.last_right_click_time = now
+                else:
+                    self._no_ammo_flash_until = now + 500
+
+        self._prev_left_down  = left_down
+        self._prev_right_down = right_down
+
+    def _fire(self, mode="left"):
+        if mode == "left":
+            dmg = self.LEFT_DAMAGE
+            width_px = self.LEFT_WIDTH
+            heat_add = self.HEAT_PER_LEFT
+            cost = self.left_click_ammo_cost
+            is_left = True
+            shake_boost = 4
+        else:
+            dmg = self.RIGHT_DAMAGE
+            width_px = self.RIGHT_WIDTH
+            heat_add = self.HEAT_PER_RIGHT
+            cost = self.right_click_ammo_cost
+            is_left = False
+            shake_boost = 2
+
+        # 자원 소모
+        self.reduce_ammo(cost)
+
+        self.last_shot_time = pygame.time.get_ticks()
+
+        # 사운드
+        key = "left_fire" if mode == "left" else "right_fire"
+        s = self.sounds.get(key)
+        if s:
+            try: s.play()
+            except Exception: pass
+
+        # 판정 + 내부 빔 비주얼 세팅
+        self._raycast_and_damage(width_px, dmg, is_left)
+
+        # 열 처리/과열
+        was_overheated = self._apply_overheat_if_needed(heat_add)
+
+        # 발사 순간에도 보정 흔들림(중첩 허용)
+        try:
+            base = self.shake_strength + (shake_boost if is_left else shake_boost - 1)
+            config.shake_strength = max(getattr(config, "shake_strength", 0), base)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), 8)
+        except Exception:
+            pass
+
+        # 좌클릭 발사 순간에는 차지음 정리
+        if is_left:
+            self._stop_charge_sound()
+
+    def on_weapon_switch(self):
+        # 무기 변경 시 상태/사운드/빔 모두 리셋
+        self._stop_charge_sound()
+        self.state = "idle"
+        self.speed_penalty = 0.0
+        self._beam_until_ms = 0
+
+    # HUD/오버레이: 플레이어 위에 HEAT/CHARGE/빔
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        now = pygame.time.get_ticks()
+
+        if now <= self._beam_until_ms and self._beam_width_px > 0:
+            ang = self._beam_ang
+            vx, vy = math.cos(ang), math.sin(ang)
+            sx = cx + vx * (30 * config.PLAYER_VIEW_SCALE)
+            sy = cy + vy * (30 * config.PLAYER_VIEW_SCALE)
+            rng = self.RANGE_LEFT if self._beam_is_left else self.RANGE_RIGHT
+            ex = sx + vx * min(rng, 9999)
+            ey = sy + vy * min(rng, 9999)
+
+            beam_surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            w = self._beam_width_px
+
+            pygame.draw.line(beam_surf, (80, 220, 255, 90),   (sx, sy), (ex, ey), max(1, int(w * 2.5)))
+            pygame.draw.line(beam_surf, (140, 240, 255, 140), (sx, sy), (ex, ey), max(1, int(w * 1.6)))
+            pygame.draw.line(beam_surf, (255, 255, 255, 220), (sx, sy), (ex, ey), max(1, int(w)))
+            screen.blit(beam_surf, (0, 0))
+
+        bar_w = 120
+        bar_h = 8
+        gap = 6
+        base_y = cy - 56
+
+        heat_ratio = self.get_heat_ratio()
+        heat_col = (255, 90, 90) if self.state == "overheat" else (90, 210, 255)
+        bg = pygame.Rect(cx - bar_w // 2, base_y, bar_w, bar_h)
+        pygame.draw.rect(screen, (35, 35, 45), bg, border_radius=6)
+        pygame.draw.rect(screen, heat_col, (bg.x, bg.y, int(bar_w * heat_ratio), bar_h), border_radius=6)
+        pygame.draw.rect(screen, (120, 140, 180), bg, width=2, border_radius=6)
+
+        if self.state == "charging":
+            t = max(0, now - self.charge_start_ms) / float(self.CHARGE_TIME_MS)
+            t = max(0.0, min(1.0, t))
+            cbg = pygame.Rect(cx - bar_w // 2, base_y - (bar_h + gap), bar_w, bar_h)
+            pygame.draw.rect(screen, (30, 30, 38), cbg, border_radius=6)
+            pygame.draw.rect(screen, (120, 240, 255), (cbg.x, cbg.y, int(bar_w * t), bar_h), border_radius=6)
+            pygame.draw.rect(screen, (120, 160, 200), cbg, width=2, border_radius=6)
+
+        if now <= self._no_ammo_flash_until:
+            try:
+                font = pygame.font.SysFont(None, 18)
+                txt = font.render("NO AMMO", True, (255, 200, 80))
+                screen.blit(txt, (cx - txt.get_width() // 2, base_y - (bar_h + gap) - 18))
+            except Exception:
+                pass
+
 WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10,
                   Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18, Gun19, Gun20,
-                  Gun21, Gun22, Gun23, Gun24, Gun25, Gun26]
+                  Gun21, Gun22, Gun23, Gun24, Gun25, Gun26, Gun27]
