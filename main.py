@@ -125,7 +125,7 @@ _exit_requested  = False
 
 START_WEAPONS = [
     WEAPON_CLASSES[0],
-    WEAPON_CLASSES[26],
+    WEAPON_CLASSES[31],
 ]
 
 def _apply_stage_theme_images():
@@ -620,7 +620,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 30000 # 디버그 원래는 300
+ammo_gauge_max = 300 # 디버그 원래는 300
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 

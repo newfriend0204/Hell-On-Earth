@@ -3,6 +3,7 @@ import random
 import math
 from entities import Bullet, ScatteredBullet
 import config
+import os
 
 class MeleeController:
     # V키로 발동하는 근접 공격. 총기와 별도(현재 무기 유지).
@@ -3588,6 +3589,2043 @@ class Gun27(WeaponBase):
             except Exception:
                 pass
 
+class Gun28(WeaponBase):
+    TIER = 5
+
+    LEFT_AMMO_COST = 40
+    RIGHT_AMMO_COST = 0
+    LEFT_COOLDOWN = 1200
+    RIGHT_COOLDOWN = 250
+
+    ORB_SPEED = 8 * config.PLAYER_VIEW_SCALE
+    ORB_MAX_TRAVEL = 2400 * config.PLAYER_VIEW_SCALE
+    ORB_RADIUS_HIT = 14
+
+    FIELD_RADIUS = 180
+    FIELD_DURATION_MS = 1600
+    FIELD_TICKS = 8
+    FIELD_TICK_DAMAGE = 35
+    FIELD_TICK_INTERVAL_MS = FIELD_DURATION_MS // FIELD_TICKS
+
+    FIELD_PULL_SPEED_MAX = 220.0
+    FIELD_SWIRL_SPEED     = 160.0
+    FIELD_CORE_EPS        = 6.0
+    FIELD_SHAKE_ON_SPAWN  = 10
+
+    ORB_GLOW_COLOR   = (130, 120, 250, 140)
+    FIELD_COLOR_OUT  = (90, 110, 255,  70)
+    FIELD_COLOR_IN   = (180, 220, 255, 110)
+
+    PRTCL_COUNT = 36
+    PRTCL_MIN_R = 40
+    PRTCL_MAX_R = 180
+    PRTCL_MIN_SZ = 2
+    PRTCL_MAX_SZ = 5
+    PRTCL_ANG_SPD = 4.2
+    PRTCL_RAD_SPD = -90.0
+    PULSE_RING_COUNT = 2
+    PULSE_RING_SPD   = 220.0
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun28(
+            name="심연 특이점 발사기",
+            front_image=weapon_assets["gun28"]["front"],
+            topdown_image=weapon_assets["gun28"]["topdown"],
+            uses_bullets=False, bullet_images=weapon_assets["gun28"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun28"]["cartridges"],
+            can_left_click=True, can_right_click=True,
+            left_click_ammo_cost=Gun28.LEFT_AMMO_COST, right_click_ammo_cost=Gun28.RIGHT_AMMO_COST,
+            tier=Gun28.TIER,
+            sounds_dict={
+                "left_fire":  sounds["gun28_leftfire"],
+                "right_fire": sounds["gun28_rightfire"],
+                "singularity_loop": sounds.get("gun28_singularity_loop"),
+                "orb_pop": sounds.get("gun28_pop"),
+            },
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False, get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = self.LEFT_COOLDOWN
+        self.recoil_strength = 8
+        self.speed_penalty = 0.0
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+        self.shake_strength = 10
+
+        self.last_left_fire_time = 0
+        self.last_right_fire_time = 0
+
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._orbs = []
+        self._fields = []
+
+        self.last_shot_time = 0
+
+        self._prev_left_down = False
+        self._prev_right_down = False
+
+    # 내부 유틸
+    def _unit_from_mouse(self):
+        # 마우스 방향 단위 벡터와 각도(라디안)를 반환.
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    def _world_to_screen(self, wx, wy):
+        # 플레이어를 스크린 중앙 기준으로 월드->스크린 좌표 변환(상대좌표).
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        px, py = self.get_player_world_position()
+        return (cx + (wx - px), cy + (wy - py))
+
+    def _apply_shake(self, strength, timer=8):
+        try:
+            config.shake_strength = max(getattr(config, "shake_strength", 0), strength)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), timer)
+        except Exception:
+            pass
+
+    # 구체/특이점 제어
+    def _spawn_orb(self):
+        # 발사 방향(마우스)
+        (ux, uy), ang = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+        sx = px + ux * 30 * config.PLAYER_VIEW_SCALE
+        sy = py + uy * 30 * config.PLAYER_VIEW_SCALE
+        vx = ux * self.ORB_SPEED
+        vy = uy * self.ORB_SPEED
+        self._orbs.append({
+            "x": sx, "y": sy, "vx": vx, "vy": vy,
+            "spawn_ms": pygame.time.get_ticks(),
+            "traveled": 0.0
+        })
+
+    def _make_particles_for_field(self, x, y, radius):
+        # 특이점 연출용 파티클/펄스 생성.
+        now = pygame.time.get_ticks()
+        particles = []
+        for i in range(self.PRTCL_COUNT):
+            ang = random.random() * math.tau
+            r = random.uniform(self.PRTCL_MIN_R, min(self.PRTCL_MAX_R, radius))
+            size = random.randint(self.PRTCL_MIN_SZ, self.PRTCL_MAX_SZ)
+            # 살짝 제각각 돌도록 각속도에 난수
+            ang_spd = self.PRTCL_ANG_SPD * random.uniform(0.7, 1.3)
+            rad_spd = self.PRTCL_RAD_SPD * random.uniform(0.7, 1.3)
+            particles.append({
+                "ang": ang, "r": r, "size": size,
+                "ang_spd": ang_spd, "rad_spd": rad_spd,
+                "born_ms": now
+            })
+        # 펄스 링(외곽에서 퍼지는 동심원)
+        pulses = []
+        for k in range(self.PULSE_RING_COUNT):
+            pulses.append({
+                "r": max(30, radius * 0.6),
+                "alpha": 160,
+                "born_ms": now + k * 60
+            })
+        return particles, pulses
+
+    def _detonate_orb_to_field(self, orb):
+        now = pygame.time.get_ticks()
+        particles, pulses = self._make_particles_for_field(orb["x"], orb["y"], self.FIELD_RADIUS)
+        field = {
+            "x": orb["x"], "y": orb["y"], "radius": self.FIELD_RADIUS,
+            "end_ms": now + self.FIELD_DURATION_MS,
+            "next_tick_ms": now + self.FIELD_TICK_INTERVAL_MS,
+            "ticks_done": 0,
+            "loop_ch": None,
+            "particles": particles,
+            "pulses": pulses
+        }
+        if self.sounds.get("orb_pop"):
+            try: self.sounds["orb_pop"].play()
+            except Exception: pass
+        # 화면 흔들림
+        self._apply_shake(self.FIELD_SHAKE_ON_SPAWN, timer=10)
+
+        # 루프음(선택)
+        if self.sounds.get("singularity_loop"):
+            try:
+                ch = pygame.mixer.find_channel()
+                if ch:
+                    ch.play(self.sounds["singularity_loop"], loops=-1, fade_ms=60)
+                    field["loop_ch"] = ch
+            except Exception:
+                field["loop_ch"] = None
+
+        self._fields.append(field)
+
+    def _remote_detonate(self):
+        if not self._orbs:
+            return False
+        # 가장 최근 구체를 기폭
+        orb = self._orbs.pop(-1)
+        self._detonate_orb_to_field(orb)
+        return True
+
+    def _update_orbs(self, dt_ms):
+        # 구체 이동 및 충돌/도달 처리.
+        to_det = []
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        for i, o in enumerate(self._orbs):
+            # 이동(프레임 기반)
+            o["x"] += o["vx"]
+            o["y"] += o["vy"]
+            o["traveled"] += (abs(o["vx"]) + abs(o["vy"])) * 0.5
+
+            # 적 충돌 체크
+            hit = False
+            for e in list(enemies_list):
+                if not getattr(e, "alive", False): continue
+                ex0 = getattr(e, "world_x", getattr(e, "x", None))
+                ey0 = getattr(e, "world_y", getattr(e, "y", None))
+                if ex0 is None or ey0 is None: continue
+                if math.hypot(ex0 - o["x"], ey0 - o["y"]) <= (self.ORB_RADIUS_HIT + int(getattr(e, "radius", 26))):
+                    hit = True
+                    break
+
+            # 최대거리 도달
+            if o["traveled"] >= self.ORB_MAX_TRAVEL:
+                hit = True
+
+            if hit:
+                to_det.append(i)
+
+        # 뒤에서부터 제거/전환
+        for idx in reversed(to_det):
+            orb = self._orbs.pop(idx)
+            self._detonate_orb_to_field(orb)
+
+    def _apply_field_forces(self, f, dt_sec):
+        # 매 프레임 부드러운 흡인 + 소용돌이(접선) 성분을 적용.
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        cx, cy, r = f["x"], f["y"], f["radius"]
+        for e in list(enemies_list):
+            if not getattr(e, "alive", False): continue
+            ex0 = getattr(e, "world_x", getattr(e, "x", None))
+            ey0 = getattr(e, "world_y", getattr(e, "y", None))
+            if ex0 is None or ey0 is None: continue
+            dx, dy = cx - ex0, cy - ey0
+            dist = math.hypot(dx, dy)
+            if dist <= r and dist > self.FIELD_CORE_EPS:
+                ux, uy = dx / dist, dy / dist  # 중심 방향
+                # 가중치: 안쪽으로 갈수록 강(0.15~1.0)
+                w = max(0.15, (1.0 - dist / r))
+                pull_speed = self.FIELD_PULL_SPEED_MAX * w
+                swirl_speed = self.FIELD_SWIRL_SPEED * w
+                # 접선 벡터(시계 방향)
+                tx, ty = -uy, ux
+                # 이동량 = (흡인 + 소용돌이) * dt
+                mvx = (ux * pull_speed + tx * swirl_speed) * dt_sec
+                mvy = (uy * pull_speed + ty * swirl_speed) * dt_sec
+                # 적용(엔티티 위치계가 world_x/y 또는 x/y 중 무엇이든 대응)
+                if hasattr(e, "world_x"): e.world_x += mvx
+                if hasattr(e, "world_y"): e.world_y += mvy
+                if hasattr(e, "x"): e.x += mvx
+                if hasattr(e, "y"): e.y += mvy
+
+    def _tick_field_damage(self, f):
+        # 대미지 틱만 담당(움직임은 프레임마다 _apply_field_forces).
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        cx, cy, r = f["x"], f["y"], f["radius"]
+        for e in list(enemies_list):
+            if not getattr(e, "alive", False): continue
+            ex0 = getattr(e, "world_x", getattr(e, "x", None))
+            ey0 = getattr(e, "world_y", getattr(e, "y", None))
+            if ex0 is None or ey0 is None: continue
+            if math.hypot(cx - ex0, cy - ey0) <= r:
+                try:
+                    if hasattr(e, "hit"): e.hit(self.FIELD_TICK_DAMAGE, None)
+                    elif hasattr(e, "on_hit"): e.on_hit(self.FIELD_TICK_DAMAGE, knockback=0, hit_type="singularity")
+                    else:
+                        e.hp = getattr(e, "hp", 0) - self.FIELD_TICK_DAMAGE
+                        if e.hp <= 0: e.alive = False
+                except Exception:
+                    pass
+
+    def _update_fields(self, now, dt_ms):
+        # 필드 수명/틱/입자 업데이트 + 루프음 정리.
+        dt_sec = max(0.0, dt_ms / 1000.0)
+        for f in list(self._fields):
+            # 매 프레임 부드러운 흡인 적용
+            self._apply_field_forces(f, dt_sec)
+
+            # 대미지 틱
+            if now >= f["next_tick_ms"] and f["ticks_done"] < self.FIELD_TICKS:
+                self._tick_field_damage(f)
+                f["ticks_done"] += 1
+                f["next_tick_ms"] += self.FIELD_TICK_INTERVAL_MS
+
+            # 파티클/펄스 업데이트
+            self._update_field_fx(f, dt_sec)
+
+            # 수명 종료
+            if now >= f["end_ms"]:
+                ch = f.get("loop_ch")
+                if ch:
+                    try: ch.fadeout(120)
+                    except Exception: pass
+                self._fields.remove(f)
+
+    def _update_field_fx(self, f, dt_sec):
+        # 특이점 파티클 소용돌이 + 펄스 링 확장.
+        # 파티클
+        for p in f["particles"]:
+            p["ang"] += p["ang_spd"] * dt_sec
+            p["r"]   += p["rad_spd"] * dt_sec
+            # 반경이 너무 작아지면 살짝 튕기듯 유지
+            if p["r"] < self.PRTCL_MIN_R * 0.4:
+                p["r"] = self.PRTCL_MIN_R * 0.4
+                p["rad_spd"] *= -0.6
+        # 펄스 링
+        for ring in f["pulses"]:
+            ring["r"] += self.PULSE_RING_SPD * dt_sec
+            ring["alpha"] = max(0, ring["alpha"] - 140 * dt_sec)
+
+    # 입력/프레임
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+        dt = now - self._last_update_ms
+        self._last_update_ms = now
+
+        # 구체/필드 업데이트(먼저)
+        self._update_orbs(dt)
+        self._update_fields(now, dt)
+
+        # 입력
+        left_down, right_down = mouse_left_down, mouse_right_down
+
+        # 좌클릭: 구체 생성(쿨/탄 약 검사)
+        if left_down and (now - self.last_left_fire_time) >= self.LEFT_COOLDOWN:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self._fire_orb()
+                self.last_left_fire_time = now
+
+        # 우클릭: 원격 기폭
+        if right_down and (now - self.last_right_fire_time) >= self.RIGHT_COOLDOWN:
+            if self._remote_detonate():
+                # 우클릭 사운드/반동/흔들림
+                s = self.sounds.get("right_fire")
+                if s:
+                    try: s.play()
+                    except Exception: pass
+                self.last_right_fire_time = now
+                self.last_shot_time = now
+                self._apply_shake(self.shake_strength + 2, timer=8)
+
+    def _fire_orb(self):
+        # 자원
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.last_shot_time = pygame.time.get_ticks()
+
+        # 사운드
+        s = self.sounds.get("left_fire")
+        if s:
+            try: s.play()
+            except Exception: pass
+
+        # 구체 생성
+        self._spawn_orb()
+
+        # 반동/흔들림
+        self._apply_shake(self.shake_strength + 1, timer=8)
+
+    # 렌더/HUD
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+
+        # 1) 구체 표시(글로우)
+        if self._orbs:
+            orb_surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for o in self._orbs:
+                sx, sy = self._world_to_screen(o["x"], o["y"])
+                pygame.draw.circle(orb_surf, (80, 70, 200, 70), (int(sx), int(sy)), 24)
+                pygame.draw.circle(orb_surf, self.ORB_GLOW_COLOR, (int(sx), int(sy)), 14)
+                pygame.draw.circle(orb_surf, (255, 255, 255, 200), (int(sx), int(sy)), 6)
+            screen.blit(orb_surf, (0, 0))
+
+        # 2) 특이점 표시(이중 링 + 약한 채움 + 파티클 + 펄스 링)
+        if self._fields:
+            f_surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for f in self._fields:
+                sx, sy = self._world_to_screen(f["x"], f["y"])
+                r = int(f["radius"])
+
+                # 링 & 채움
+                pygame.draw.circle(f_surf, self.FIELD_COLOR_OUT, (int(sx), int(sy)), int(r * 1.02), width=3)
+                pygame.draw.circle(f_surf, self.FIELD_COLOR_IN,  (int(sx), int(sy)), int(r * 0.82), width=2)
+                pygame.draw.circle(f_surf, (60, 80, 160, 35), (int(sx), int(sy)), int(r * 0.78))
+
+                # 파티클 (소용돌이)
+                now = pygame.time.get_ticks()
+                for p in f["particles"]:
+                    pr = max(0, p["r"])
+                    px = sx + math.cos(p["ang"]) * pr
+                    py = sy + math.sin(p["ang"]) * pr
+                    sz = p["size"]
+                    # 살짝 깜빡이는 느낌
+                    alpha = 140 + int(80 * (0.5 + 0.5 * math.sin((now - p["born_ms"]) * 0.02)))
+                    color = (180, 220, 255, max(40, min(220, alpha)))
+                    pygame.draw.circle(f_surf, color, (int(px), int(py)), sz)
+
+                # 펄스 링
+                for ring in f["pulses"]:
+                    alpha = int(ring["alpha"])
+                    if alpha > 0:
+                        col = (120, 200, 255, alpha)
+                        pygame.draw.circle(f_surf, col, (int(sx), int(sy)), int(ring["r"]), width=2)
+
+            screen.blit(f_surf, (0, 0))
+
+class Gun29(WeaponBase):
+    TIER = 5
+
+    PRIMARY_DAMAGE = 120
+    CHAIN_DAMAGE   = 70
+
+    LEFT_AMMO_COST  = 20
+    RIGHT_AMMO_COST = 28
+    LEFT_COOLDOWN   = 250
+    RIGHT_COOLDOWN  = 320
+
+    CHAIN_MAX_LEFT     = 5
+    CHAIN_RADIUS_LEFT  = 260
+    CHAIN_MAX_RIGHT    = 7
+    CHAIN_RADIUS_RIGHT = 360
+
+    PROJ_SPEED = 22 * config.PLAYER_VIEW_SCALE
+    PROJ_MAX_TRAVEL = 2400 * config.PLAYER_VIEW_SCALE
+    PROJ_RADIUS_HIT = 10
+
+    ARC_LIFETIME_MS   = 180
+    ARC_SEGMENTS      = 10
+    ARC_W_LEFT        = 4
+    ARC_W_RIGHT       = 6
+    TRACER_LIFETIME_MS = 140
+    SPARK_FLASH_MS    = 160
+    SPARK_RADIUS_IN   = 14 
+    SPARK_RADIUS_OUT  = 24
+
+    SHAKE_BASE = 11
+    SHAKE_RIGHT_BOOST = 3
+
+    HOMING_ANGLE_DEG_LEFT  = 10
+    HOMING_ANGLE_DEG_RIGHT = 10
+    HOMING_RANGE_LEFT      = 900
+    HOMING_RANGE_RIGHT     = 1100
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun29(
+            name="천둥 연쇄 번개",
+            front_image=weapon_assets["gun29"]["front"],
+            topdown_image=weapon_assets["gun29"]["topdown"],
+            uses_bullets=False, bullet_images=weapon_assets["gun29"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun29"]["cartridges"],
+            can_left_click=True, can_right_click=True,
+            left_click_ammo_cost=Gun29.LEFT_AMMO_COST, right_click_ammo_cost=Gun29.RIGHT_AMMO_COST,
+            tier=Gun29.TIER,
+            sounds_dict={"fire": sounds["gun29_fire"]},
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False, get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+
+        self.speed_penalty = 0.0
+        self.recoil_strength = 8
+
+        self.last_left_fire_time = 0
+        self.last_right_fire_time = 0
+        self.last_shot_time = 0
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._shots = []
+        self._arcs = []
+        self._sparks = []
+        self._tracers = []
+
+    # 유틸
+    def _unit_from_mouse(self):
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    def _world_to_screen(self, wx, wy):
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        px, py = self.get_player_world_position()
+        return (cx + (wx - px), cy + (wy - py))
+
+    def _shake(self, strength, timer=8):
+        try:
+            config.shake_strength = max(getattr(config, "shake_strength", 0), strength)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), timer)
+        except Exception:
+            pass
+
+    # 입력/업데이트
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+        dt = now - self._last_update_ms
+        self._last_update_ms = now
+
+        # 투사체 이동/충돌
+        self._update_shots()
+
+        # 비주얼 만료 정리
+        self._arcs[:] = [a for a in self._arcs if now <= a["until_ms"]]
+        self._sparks[:] = [s for s in self._sparks if now <= s["until_ms"]]
+        self._tracers[:] = [t for t in self._tracers if now <= t["until_ms"]]
+
+        # 입력 처리
+        if mouse_left_down and (now - self.last_left_fire_time) >= self.LEFT_COOLDOWN:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self._fire(overcharge=False)
+                self.last_left_fire_time = now
+
+        if mouse_right_down and (now - self.last_right_fire_time) >= self.RIGHT_COOLDOWN:
+            if self.get_ammo_gauge() >= self.right_click_ammo_cost:
+                self._fire(overcharge=True)
+                self.last_right_fire_time = now
+
+    # 발사/효과
+    def _fire(self, overcharge=False):
+        # 자원
+        cost = self.right_click_ammo_cost if overcharge else self.left_click_ammo_cost
+        self.reduce_ammo(cost)
+        self.last_shot_time = pygame.time.get_ticks()
+
+        # 사운드
+        s = self.sounds.get("fire")
+        if s:
+            try: s.play()
+            except Exception: pass
+
+        # 시작 위치/방향
+        (ux, uy), _ = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+        sx = px + ux * 30 * config.PLAYER_VIEW_SCALE
+        sy = py + uy * 30 * config.PLAYER_VIEW_SCALE
+
+        # ▶ 에임 보조(초기 유도): ±10°/사거리 내 적에게 방향 보정
+        ux, uy = self._apply_aim_assist(sx, sy, ux, uy, overcharge)
+
+        # 투사체 생성
+        vx = ux * self.PROJ_SPEED
+        vy = uy * self.PROJ_SPEED
+        self._shots.append({"x": sx, "y": sy, "vx": vx, "vy": vy, "traveled": 0.0, "overcharge": overcharge})
+
+        # ▶ 머즐 FX: 항상 보임
+        self._spawn_muzzle_fx(sx, sy, ux, uy, overcharge)
+
+        # 흔들림(우클릭 보정)
+        shake = self.SHAKE_BASE + (self.SHAKE_RIGHT_BOOST if overcharge else 0)
+        self._shake(shake, timer=8)
+
+    def _apply_aim_assist(self, sx, sy, ux, uy, overcharge):
+        # 가장 각도 차가 작은 적(콘 내부) 선택
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        max_deg = self.HOMING_ANGLE_DEG_RIGHT if overcharge else self.HOMING_ANGLE_DEG_LEFT
+        max_rad = math.radians(max_deg)
+        max_dist = self.HOMING_RANGE_RIGHT if overcharge else self.HOMING_RANGE_LEFT
+        best = None
+        best_ang = None
+        for e in list(enemies_list):
+            if not getattr(e, "alive", False): continue
+            ex = getattr(e, "world_x", getattr(e, "x", None))
+            ey = getattr(e, "world_y", getattr(e, "y", None))
+            if ex is None or ey is None: continue
+            dx, dy = ex - sx, ey - sy
+            dist = math.hypot(dx, dy)
+            if dist <= 1e-3 or dist > max_dist: 
+                continue
+            vx, vy = dx / dist, dy / dist
+            # 전방 콘 체크
+            dot = max(-1.0, min(1.0, ux * vx + uy * vy))
+            ang = math.acos(dot)
+            if ang <= max_rad:
+                if best is None or ang < best_ang:
+                    best, best_ang = (vx, vy), ang
+        if best:
+            return best
+        return ux, uy
+
+    def _spawn_muzzle_fx(self, sx, sy, ux, uy, overcharge):
+        import random
+        # 짧은 가지 아크 다발
+        forks = 3 if not overcharge else 5
+        base_len = 80 if not overcharge else 120
+        w = self.ARC_W_LEFT if not overcharge else self.ARC_W_RIGHT
+        for i in range(forks):
+            t = (i + 1) / (forks + 1)
+            # 진행 방향 약간의 각도 랜덤
+            ang_off = (random.random() - 0.5) * 0.35  # rad
+            ca, sa = math.cos(ang_off), math.sin(ang_off)
+            fux, fuy = ux * ca - uy * sa, ux * sa + uy * ca
+            L = base_len * (0.7 + 0.6 * random.random())
+            ex, ey = sx + fux * L, sy + fuy * L
+            self._add_arc(sx, sy, ex, ey, width=w)
+        # 스파크(머즐 플래시)
+        self._sparks.append({"x": sx, "y": sy, "until_ms": pygame.time.get_ticks() + self.SPARK_FLASH_MS})
+        # 짧은 트레이서
+        self._tracers.append({"a": (sx, sy), "b": (sx + ux * 90, sy + uy * 90),
+                              "until_ms": pygame.time.get_ticks() + self.TRACER_LIFETIME_MS})
+
+    def _air_burst_fx(self, x, y, overcharge):
+        import random
+        # 끝점에서 방사형 스파크 + 짧은 가지 아크
+        branches = 6 if not overcharge else 9
+        radius = 120 if not overcharge else 160
+        w = self.ARC_W_LEFT if not overcharge else self.ARC_W_RIGHT
+        for i in range(branches):
+            ang = random.random() * math.tau
+            L = radius * (0.6 + 0.5 * random.random())
+            ex = x + math.cos(ang) * L
+            ey = y + math.sin(ang) * L
+            self._add_arc(x, y, ex, ey, width=w)
+        # 중앙 스파크 더 크게
+        self._sparks.append({"x": x, "y": y, "until_ms": pygame.time.get_ticks() + self.SPARK_FLASH_MS})
+
+    # 투사체/체인
+    def _update_shots(self):
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        for i in reversed(range(len(self._shots))):
+            s = self._shots[i]
+            # 이동
+            s["x"] += s["vx"]
+            s["y"] += s["vy"]
+            s["traveled"] += (abs(s["vx"]) + abs(s["vy"])) * 0.5
+
+            # 충돌 검사
+            hit_enemy = None
+            for e in list(enemies_list):
+                if not getattr(e, "alive", False): continue
+                ex0 = getattr(e, "world_x", getattr(e, "x", None))
+                ey0 = getattr(e, "world_y", getattr(e, "y", None))
+                if ex0 is None or ey0 is None: continue
+                rad = int(getattr(e, "radius", 26))
+                if math.hypot(ex0 - s["x"], ey0 - s["y"]) <= (self.PROJ_RADIUS_HIT + rad):
+                    hit_enemy = e
+                    break
+
+            out = s["traveled"] >= self.PROJ_MAX_TRAVEL
+
+            if hit_enemy or out:
+                # 트레이서 꼬리
+                tail_len = 160  # 120 -> 160 (좀 더 길게)
+                L = max(1e-6, math.hypot(s["vx"], s["vy"]))
+                ux, uy = s["vx"] / L, s["vy"] / L
+                self._tracers.append({"a": (s["x"] - ux * tail_len, s["y"] - uy * tail_len),
+                                      "b": (s["x"], s["y"]),
+                                      "until_ms": pygame.time.get_ticks() + self.TRACER_LIFETIME_MS})
+                if hit_enemy:
+                    self._on_primary_hit(s, hit_enemy)
+                else:
+                    # ▶ 에어버스트(빈 공간 피니시 연출)
+                    self._air_burst_fx(s["x"], s["y"], overcharge=s["overcharge"])
+                self._shots.pop(i)
+
+    def _on_primary_hit(self, shot, first_enemy):
+        # 본탄 대미지
+        self._damage_enemy(first_enemy, self.PRIMARY_DAMAGE)
+
+        # 첫 히트 스파크(조금 더 크게)
+        self._sparks.append({
+            "x": getattr(first_enemy, "world_x", getattr(first_enemy, "x", 0)),
+            "y": getattr(first_enemy, "world_y", getattr(first_enemy, "y", 0)),
+            "until_ms": pygame.time.get_ticks() + self.SPARK_FLASH_MS
+        })
+
+        # 체인 파라미터
+        if shot["overcharge"]:
+            max_hops = self.CHAIN_MAX_RIGHT
+            radius   = self.CHAIN_RADIUS_RIGHT
+            arc_w    = self.ARC_W_RIGHT
+        else:
+            max_hops = self.CHAIN_MAX_LEFT
+            radius   = self.CHAIN_RADIUS_LEFT
+            arc_w    = self.ARC_W_LEFT
+
+        hit_set = {first_enemy}
+        prev_e = first_enemy
+
+        # hop-by-hop: 가장 가까운 적을 찾아 연쇄
+        for _ in range(max_hops):
+            next_e = self._find_next_target(prev_e, hit_set, radius)
+            if not next_e:
+                break
+            # 대미지
+            self._damage_enemy(next_e, self.CHAIN_DAMAGE)
+            # 아크 비주얼
+            ax = getattr(prev_e, "world_x", getattr(prev_e, "x", 0))
+            ay = getattr(prev_e, "world_y", getattr(prev_e, "y", 0))
+            bx = getattr(next_e, "world_x", getattr(next_e, "x", 0))
+            by = getattr(next_e, "world_y", getattr(next_e, "y", 0))
+            self._add_arc(ax, ay, bx, by, width=arc_w)
+            # 스파크
+            self._sparks.append({"x": bx, "y": by, "until_ms": pygame.time.get_ticks() + self.SPARK_FLASH_MS})
+
+            hit_set.add(next_e)
+            prev_e = next_e
+
+    def _find_next_target(self, from_enemy, already, radius):
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+        fx = getattr(from_enemy, "world_x", getattr(from_enemy, "x", 0))
+        fy = getattr(from_enemy, "world_y", getattr(from_enemy, "y", 0))
+        best, best_d2 = None, None
+        for e in list(enemies_list):
+            if e in already or not getattr(e, "alive", False):
+                continue
+            ex = getattr(e, "world_x", getattr(e, "x", None))
+            ey = getattr(e, "world_y", getattr(e, "y", None))
+            if ex is None or ey is None:
+                continue
+            dx, dy = ex - fx, ey - fy
+            d2 = dx*dx + dy*dy
+            if d2 <= radius*radius and (best is None or d2 < best_d2):
+                best, best_d2 = e, d2
+        return best
+
+    def _damage_enemy(self, e, dmg):
+        try:
+            if hasattr(e, "hit"):
+                e.hit(dmg, None)
+            elif hasattr(e, "on_hit"):
+                e.on_hit(dmg, knockback=0, hit_type="electric")
+            else:
+                e.hp = getattr(e, "hp", 0) - dmg
+                if e.hp <= 0:
+                    e.alive = False
+        except Exception:
+            pass
+
+    # 비주얼 생성
+    def _add_arc(self, ax, ay, bx, by, width=3):
+        # 지그재그 번개 폴리라인 생성.
+        import random
+        pts = []
+        segs = max(3, self.ARC_SEGMENTS)
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) + 1e-6
+        nx, ny = -dy / L, dx / L
+        for i in range(segs + 1):
+            t = i / float(segs)
+            x = ax + dx * t
+            y = ay + dy * t
+            # 수직 방향 난수 흔들림(길수록 진폭 증가)
+            amp = 9 + 0.03 * L   # 6->9, 길수록 좀 더 출렁
+            jitter = (random.random() - 0.5) * amp
+            pts.append((x + nx * jitter, y + ny * jitter))
+        self._arcs.append({"points": pts,
+                           "until_ms": pygame.time.get_ticks() + self.ARC_LIFETIME_MS,
+                           "width": width})
+
+    # 렌더
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+
+        # 트레이서
+        if self._tracers:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for t in self._tracers:
+                ax, ay = self._world_to_screen(*t["a"])
+                bx, by = self._world_to_screen(*t["b"])
+                pygame.draw.line(surf, (120, 200, 255, 90), (ax, ay), (bx, by), 8)
+                pygame.draw.line(surf, (255, 255, 255, 200), (ax, ay), (bx, by), 3)
+            screen.blit(surf, (0, 0))
+
+        # 아크(지그재그 번개)
+        if self._arcs:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for a in self._arcs:
+                pts = [self._world_to_screen(px, py) for (px, py) in a["points"]]
+                w = a["width"]
+                if len(pts) >= 2:
+                    # 글로우 3겹(굵기 전반 상향)
+                    pygame.draw.lines(surf, (80, 190, 255, 100), False, pts, max(1, int(w * 3.2)))
+                    pygame.draw.lines(surf, (150, 230, 255, 160), False, pts, max(1, int(w * 1.9)))
+                    pygame.draw.lines(surf, (255, 255, 255, 230), False, pts, max(1, int(w)))
+            screen.blit(surf, (0, 0))
+
+        # 스파크 플래시(크기 ↑)
+        if self._sparks:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for s in self._sparks:
+                sx, sy = self._world_to_screen(s["x"], s["y"])
+                pygame.draw.circle(surf, (200, 240, 255, 180), (int(sx), int(sy)), self.SPARK_RADIUS_IN)
+                pygame.draw.circle(surf, (120, 200, 255, 110), (int(sx), int(sy)), self.SPARK_RADIUS_OUT, width=3)
+            screen.blit(surf, (0, 0))
+
+class Gun30(WeaponBase):
+    TIER = 5
+
+    TICK_MS = 80
+    DAMAGE_PER_TICK = 32
+    AMMO_PER_SEC = 25.0
+    AMMO_PER_TICK = AMMO_PER_SEC * (TICK_MS / 1000.0)
+    HEAT_PER_TICK = 2.0
+    HEAT_COOL_PER_SEC_IDLE = 35.0
+    HEAT_COOL_PER_SEC_FIRING = 5.0
+    OVERHEAT_THRESHOLD = 100.0
+    OVERHEAT_LOCK_MS = 2500
+
+    SPECTRUM_DURATION_MS = 400
+    SPLIT_ANGLE_DEG = 12.0
+    SPLIT_DAMAGE_FACTOR = 0.45
+    SPLIT_RESOURCE_MULT = 1.35
+
+    RANGE = int(4200 * config.PLAYER_VIEW_SCALE)
+    WIDTH_MAIN = 8
+    WIDTH_SIDE = 6
+
+    RING_LIFETIME_MS = 70
+    STARBURST_LIFETIME_MS = 120
+    MUZZLE_ARC_LIFETIME_MS = 110
+    TRACER_LIFETIME_MS = 90
+
+    SHAKE_BASE = 8
+    SHAKE_SPECTRUM_BOOST = 3
+    SPEED_PENALTY_ON = 0.35
+
+    ZIGZAG_SEGS = 18 
+    ZIGZAG_CYCLES = 9.0
+    ZIGZAG_SCROLL_CPS = 1.8
+    ZIGZAG_AMP_MAIN = 6.0
+    ZIGZAG_AMP_SIDE = 4.0
+    ZIGZAG_WOBBLE = 0.35
+
+    HEAT_BAR_W = 120
+    HEAT_BAR_H = 8
+    HEAT_BAR_GAP_Y = 56
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun30(
+            name="프리즘 발사기",
+            front_image=weapon_assets["gun30"]["front"],
+            topdown_image=weapon_assets["gun30"]["topdown"],
+            uses_bullets=False, bullet_images=weapon_assets["gun30"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun30"]["cartridges"],
+            can_left_click=True, can_right_click=True,
+            left_click_ammo_cost=0, right_click_ammo_cost=0,
+            tier=Gun30.TIER,
+            sounds_dict={"fire": sounds["gun30_fire"], "overheat": sounds["gun5_overheat"]},
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False, get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    LEFT_COOLDOWN = 0
+    RIGHT_COOLDOWN = 0
+    LEFT_AMMO_COST = 0
+    RIGHT_AMMO_COST = 0
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+        self.recoil_strength = 6
+        self.speed_penalty = 0.0
+
+        self._left_hold = False
+        self._overheated_until = 0
+        self._heat = 0.0
+        self._tick_next_ms = pygame.time.get_ticks()
+        self._ammo_accum = 0.0
+
+        self._spectrum_until = 0
+        self._prev_right_down = False
+
+        self._loop_ch = None
+
+        self._last_dirs = []
+        self._beam_active = False
+        self._last_update_ms = pygame.time.get_ticks()
+        self.last_shot_time = 0
+
+        self._rings = []
+        self._starbursts = []
+        self._muzzle_arcs = []
+        self._tracers = []
+
+        import random
+        self._jseed = random.random() * 1000.0
+
+    # 유틸
+    def _unit_from_mouse(self):
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    def _world_to_screen(self, wx, wy):
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        px, py = self.get_player_world_position()
+        return (cx + (wx - px), cy + (wy - py))
+
+    def _apply_shake(self, extra=0, timer=6):
+        try:
+            strength = self.SHAKE_BASE + extra
+            config.shake_strength = max(getattr(config, "shake_strength", 0), strength)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), timer)
+        except Exception:
+            pass
+
+    def _start_loop(self):
+        if self._loop_ch:
+            return
+        s = self.sounds.get("fire")
+        if not s:
+            return
+        ch = pygame.mixer.find_channel()
+        if ch:
+            try: ch.play(s, loops=-1, fade_ms=80)
+            except Exception: pass
+            self._loop_ch = ch
+
+    def _stop_loop(self):
+        if not self._loop_ch:
+            return
+        try: self._loop_ch.fadeout(120)
+        except Exception: pass
+        self._loop_ch = None
+
+    def _cool_heat(self, now_ms, dt_ms, firing: bool):
+        if now_ms < self._overheated_until:
+            return
+        rate = self.HEAT_COOL_PER_SEC_FIRING if firing else self.HEAT_COOL_PER_SEC_IDLE
+        if self._heat > 0.0:
+            self._heat = max(0.0, self._heat - rate * (dt_ms / 1000.0))
+
+    def _overheat_trip(self):
+        self._overheated_until = pygame.time.get_ticks() + self.OVERHEAT_LOCK_MS
+        self._stop_loop()
+        s = self.sounds.get("overheat")
+        if s:
+            try: s.play()
+            except Exception: pass
+        self._apply_shake(extra=3, timer=10)
+        self._beam_active = False
+        self._last_dirs = []
+
+    def _is_overheated(self):
+        return pygame.time.get_ticks() < self._overheated_until
+
+    # 입력/업데이트
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+        dt = now - self._last_update_ms
+        self._last_update_ms = now
+
+        # 우클릭(분광) — 홀드 중 0.4s 윈도우 갱신
+        if mouse_right_down and not self._is_overheated():
+            if not self._prev_right_down:
+                self._spawn_prism_pulse()
+                self._apply_shake(extra=self.SHAKE_SPECTRUM_BOOST, timer=8)
+            self._spectrum_until = now + self.SPECTRUM_DURATION_MS
+        self._prev_right_down = mouse_right_down
+
+        # 좌클릭 홀드
+        self._left_hold = bool(mouse_left_down)
+
+        # 출력 의지/가능
+        want_output = self._left_hold or (now < self._spectrum_until)
+        can_output = want_output and (not self._is_overheated())
+
+        # 냉각(사격 여부 반영)
+        self._cool_heat(now, dt, firing=can_output)
+
+        # 사운드/패널티
+        if can_output and self.get_ammo_gauge() > 0:
+            self.speed_penalty = self.SPEED_PENALTY_ON
+            self._start_loop()
+        else:
+            self.speed_penalty = 0.0
+            self._stop_loop()
+            self._beam_active = False
+            self._last_dirs = []
+            return
+
+        # 빔 방향(분광 포함)
+        (ux, uy), _ = self._unit_from_mouse()
+        dirs = [(ux, uy, self.WIDTH_MAIN, False)]
+        if now < self._spectrum_until:
+            off = math.radians(self.SPLIT_ANGLE_DEG)
+            ca, sa = math.cos(off), math.sin(off)
+            # 좌(-off), 우(+off)
+            lx, ly = (ux * math.cos(-off) - uy * math.sin(-off)), (ux * math.sin(-off) + uy * math.cos(-off))
+            rx, ry = (ux * ca - uy * sa), (ux * sa + uy * ca)
+            lL = math.hypot(lx, ly); rL = math.hypot(rx, ry)
+            dirs.append((lx / max(1e-6, lL), ly / max(1e-6, lL), self.WIDTH_SIDE, True))
+            dirs.append((rx / max(1e-6, rL), ry / max(1e-6, rL), self.WIDTH_SIDE, True))
+
+        self._beam_active = True
+        self._last_dirs = dirs
+
+        # 틱(80ms)
+        if now >= self._tick_next_ms:
+            self._tick_next_ms = now + self.TICK_MS
+            self._do_tick(dirs)
+            self.last_shot_time = now
+
+    # 틱 처리
+    def _do_tick(self, dirs):
+        # 자원 소모 (분광시 배수)
+        mult = (self.SPLIT_RESOURCE_MULT if any(d[3] for d in dirs) else 1.0)
+        if not self._consume_resources(mult):
+            self._beam_active = False
+            self._stop_loop()
+            return
+
+        # 히트스캔
+        px, py = self.get_player_world_position()
+        enemies_list = getattr(config, "all_enemies", getattr(config, "enemies", []))
+
+        for (dx, dy, width, is_side) in dirs:
+            sx = px + dx * 30 * config.PLAYER_VIEW_SCALE
+            sy = py + dy * 30 * config.PLAYER_VIEW_SCALE
+            ex = sx + dx * self.RANGE
+            ey = sy + dy * self.RANGE
+
+            dmg = self.DAMAGE_PER_TICK * (self.SPLIT_DAMAGE_FACTOR if is_side else 1.0)
+
+            nearest_t = None
+            nearest_hit_pos = None
+
+            for e in list(enemies_list):
+                if not getattr(e, "alive", False): continue
+                ex0 = getattr(e, "world_x", getattr(e, "x", None))
+                ey0 = getattr(e, "world_y", getattr(e, "y", None))
+                if ex0 is None or ey0 is None: continue
+                t, dist = self._segment_dist_with_t(ex0, ey0, sx, sy, ex, ey)
+                if dist <= (int(getattr(e, "radius", 26)) + width * 0.5):
+                    self._damage_enemy(e, int(dmg))
+                    if nearest_t is None or t < nearest_t:
+                        nearest_t = t
+                        hx = sx + (ex - sx) * t
+                        hy = sy + (ey - sy) * t
+                        nearest_hit_pos = (hx, hy)
+
+            if nearest_hit_pos:
+                self._spawn_ring(*nearest_hit_pos)
+            else:
+                self._spawn_starburst(ex, ey)
+
+        # 열 누적/과열
+        self._heat += self.HEAT_PER_TICK * mult
+        if self._heat >= self.OVERHEAT_THRESHOLD:
+            self._overheat_trip()
+
+        # 화면 미세 흔들림
+        extra = self.SHAKE_SPECTRUM_BOOST if any(d[3] for d in dirs) else 0
+        self._apply_shake(extra=extra, timer=6)
+
+    def _consume_resources(self, mult) -> bool:
+        need = self.AMMO_PER_TICK * mult
+        self._ammo_accum += need
+        deduct = int(self._ammo_accum)
+        if deduct > 0:
+            have = self.get_ammo_gauge()
+            if have <= 0:
+                self._ammo_accum = 0.0
+                return False
+            take = min(deduct, have)
+            self.reduce_ammo(take)
+            self._ammo_accum -= take
+        return True
+
+    # 기하
+    def _segment_dist_with_t(self, px0, py0, x1, y1, x2, y2):
+        vx = x2 - x1; vy = y2 - y1
+        wx = px0 - x1; wy = py0 - y1
+        L2 = vx * vx + vy * vy
+        if L2 <= 1e-6:
+            return 0.0, math.hypot(wx, wy)
+        t = (wx * vx + wy * vy) / L2
+        t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+        projx = x1 + t * vx
+        projy = y1 + t * vy
+        return t, math.hypot(px0 - projx, py0 - projy)
+
+    def _damage_enemy(self, e, dmg):
+        try:
+            if hasattr(e, "hit"):
+                e.hit(dmg, None)
+            elif hasattr(e, "on_hit"):
+                e.on_hit(dmg, knockback=0, hit_type="laser")
+            else:
+                e.hp = getattr(e, "hp", 0) - dmg
+                if e.hp <= 0:
+                    e.alive = False
+        except Exception:
+            pass
+
+    # FX
+    def _spawn_ring(self, x, y):
+        self._rings.append({"x": x, "y": y, "until_ms": pygame.time.get_ticks() + self.RING_LIFETIME_MS})
+
+    def _spawn_starburst(self, x, y):
+        self._starbursts.append({"x": x, "y": y, "until_ms": pygame.time.get_ticks() + self.STARBURST_LIFETIME_MS})
+
+    def _spawn_prism_pulse(self):
+        (ux, uy), _ = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+        sx = px + ux * 30 * config.PLAYER_VIEW_SCALE
+        sy = py + uy * 30 * config.PLAYER_VIEW_SCALE
+        import random
+        forks = 4
+        base_len = 70
+        for i in range(forks):
+            ang = (random.random() - 0.5) * 0.4
+            ca, sa = math.cos(ang), math.sin(ang)
+            fx, fy = ux * ca - uy * sa, ux * sa + uy * ca
+            L = base_len * (0.7 + 0.6 * random.random())
+            ex, ey = sx + fx * L, sy + fy * L
+            self._muzzle_arcs.append({"a": (sx, sy), "b": (ex, ey),
+                                      "until_ms": pygame.time.get_ticks() + self.MUZZLE_ARC_LIFETIME_MS})
+        self._tracers.append({"a": (sx, sy), "b": (sx + ux * 100, sy + uy * 100),
+                              "until_ms": pygame.time.get_ticks() + self.TRACER_LIFETIME_MS})
+
+    def on_weapon_switch(self):
+        self._stop_loop()
+        self._beam_active = False
+        self._last_dirs = []
+        self._spectrum_until = 0
+        self.speed_penalty = 0.0
+
+    # 지그재그 폴리라인
+    def _zigzag_polyline(self, a, b, amp_px, segs, now_ms):
+        # a-b 직선을 '지그재그'로 꺾은 폴리라인으로 변환.
+        # - ZIGZAG_CYCLES 만큼 톱니가 생김
+        # - ZIGZAG_SCROLL_CPS 속도로 시간에 따라 패턴이 흐름(모양이 계속 바뀜)
+        # - 사각파 기반 좌/우 번갈이 오프셋 + 약간의 sine wobble 섞기
+        ax, ay = a; bx, by = b
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) + 1e-6
+        nx, ny = -dy / L, dx / L  # unit normal (좌측)
+        pts = []
+        # 시간 기반 스크롤 (초 단위)
+        phase = (now_ms / 1000.0) * self.ZIGZAG_SCROLL_CPS + self._jseed
+        for i in range(segs + 1):
+            t = i / float(segs)
+            x = ax + dx * t
+            y = ay + dy * t
+            u = t * self.ZIGZAG_CYCLES + phase
+            frac = u - math.floor(u)         # [0,1)
+            sign = 1.0 if frac < 0.5 else -1.0
+            wobble = self.ZIGZAG_WOBBLE * amp_px * math.sin(u * math.tau * 0.65)
+            off = (amp_px * sign) + wobble
+            pts.append((x + nx * off, y + ny * off))
+        return pts
+
+    # 렌더
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+        now = pygame.time.get_ticks()
+
+        # 오래된 FX 정리
+        self._rings[:] = [r for r in self._rings if now <= r["until_ms"]]
+        self._starbursts[:] = [s for s in self._starbursts if now <= s["until_ms"]]
+        self._muzzle_arcs[:] = [m for m in self._muzzle_arcs if now <= m["until_ms"]]
+        self._tracers[:] = [t for t in self._tracers if now <= t["until_ms"]]
+
+        # 레이저 본체 — 지그재그 폴리라인
+        if self._beam_active and self._last_dirs:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            px, py = self.get_player_world_position()
+            for (dx, dy, width, is_side) in self._last_dirs:
+                sx = px + dx * 30 * config.PLAYER_VIEW_SCALE
+                sy = py + dy * 30 * config.PLAYER_VIEW_SCALE
+                ex = sx + dx * self.RANGE
+                ey = sy + dy * self.RANGE
+                a = self._world_to_screen(sx, sy)
+                b = self._world_to_screen(ex, ey)
+
+                amp = self.ZIGZAG_AMP_SIDE if is_side else self.ZIGZAG_AMP_MAIN
+                pts = self._zigzag_polyline(a, b, amp, self.ZIGZAG_SEGS, now)
+
+                # 글로우 3겹
+                pygame.draw.lines(surf, (90, 220, 255, 90),  False, pts, max(1, int(width * 2.8)))
+                pygame.draw.lines(surf, (160, 240, 255, 170), False, pts, max(1, int(width * 1.7)))
+                pygame.draw.lines(surf, (255, 255, 255, 230), False, pts, max(1, int(width)))
+
+                # 크로마틱 가장자리 1px
+                # 평균 노멀로 좌우 offset
+                ax, ay = a; bx, by = b
+                dx0, dy0 = bx - ax, by - ay
+                L0 = math.hypot(dx0, dy0) + 1e-6
+                nx, ny = -dy0 / L0, dx0 / L0
+                off = 1
+                pts_r = [(x + nx * off, y + ny * off) for (x, y) in pts]
+                pts_g = [(x - nx * off, y - ny * off) for (x, y) in pts]
+                pygame.draw.lines(surf, (255, 80, 80, 110),  False, pts_r, 1)
+                pygame.draw.lines(surf, (80, 255, 120, 110), False, pts_g, 1)
+
+            screen.blit(surf, (0, 0))
+
+        # 링 FX
+        if self._rings:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for r in self._rings:
+                t = 1.0 - (r["until_ms"] - now) / float(self.RING_LIFETIME_MS)
+                rad = 22 + int(18 * t)
+                cx, cy = self._world_to_screen(r["x"], r["y"])
+                pygame.draw.circle(surf, (150, 220, 255, 150), (int(cx), int(cy)), rad, width=3)
+                pygame.draw.circle(surf, (255, 255, 255, 120), (int(cx), int(cy)), max(1, rad - 6), width=1)
+            screen.blit(surf, (0, 0))
+
+        # 스타버스트 FX
+        if self._starbursts:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for s in self._starbursts:
+                cx, cy = self._world_to_screen(s["x"], s["y"])
+                life = (s["until_ms"] - now) / float(self.STARBURST_LIFETIME_MS)
+                life = max(0.0, min(1.0, life))
+                alpha = int(200 * life)
+                r1 = 12 + int(20 * (1 - life))
+                r2 = r1 + 8
+                pygame.draw.circle(surf, (200, 240, 255, alpha), (int(cx), int(cy)), r1, width=2)
+                pygame.draw.circle(surf, (120, 200, 255, int(alpha * 0.6)), (int(cx), int(cy)), r2, width=2)
+                for k in range(6):
+                    ang = (math.tau / 6) * k
+                    ex = cx + math.cos(ang) * (r2 + 10)
+                    ey = cy + math.sin(ang) * (r2 + 10)
+                    pygame.draw.line(surf, (255, 255, 255, alpha), (cx, cy), (ex, ey), 2)
+            screen.blit(surf, (0, 0))
+
+        # 머즐 아크/트레이서
+        if self._muzzle_arcs or self._tracers:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for m in self._muzzle_arcs:
+                a = self._world_to_screen(*m["a"])
+                b = self._world_to_screen(*m["b"])
+                pygame.draw.line(surf, (120, 220, 255, 120), a, b, 4)
+                pygame.draw.line(surf, (255, 255, 255, 200), a, b, 2)
+            for t in self._tracers:
+                a = self._world_to_screen(*t["a"])
+                b = self._world_to_screen(*t["b"])
+                pygame.draw.line(surf, (120, 220, 255, 90), a, b, 6)
+                pygame.draw.line(surf, (255, 255, 255, 200), a, b, 2)
+            screen.blit(surf, (0, 0))
+
+        # HEAT 바(플레이어 머리 위)
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        bx = cx - self.HEAT_BAR_W // 2
+        by = cy - self.HEAT_BAR_GAP_Y
+        ratio = max(0.0, min(1.0, self._heat / self.OVERHEAT_THRESHOLD))
+        bg = pygame.Rect(bx, by, self.HEAT_BAR_W, self.HEAT_BAR_H)
+        pygame.draw.rect(screen, (35, 35, 45), bg, border_radius=6)
+        if self._is_overheated() and ((now // 120) % 2 == 0):
+            fill_col = (255, 90, 90)
+        else:
+            fill_col = (90, 210, 255)
+        pygame.draw.rect(screen, fill_col, (bx, by, int(self.HEAT_BAR_W * ratio), self.HEAT_BAR_H), border_radius=6)
+        pygame.draw.rect(screen, (120, 140, 180), bg, width=2, border_radius=6)
+
+class Gun31(WeaponBase):
+    TIER = 5
+
+    MAX_LOCKS = 6
+    LOCK_TIME_MS = 750
+    LOCK_CONE_DEG = 28
+    LOCK_RANGE = int(820 * config.PLAYER_VIEW_SCALE)
+    LOCK_LOST_GRACE_MS = 450
+
+    AMMO_PER_MISSILE = 17
+    COOLDOWN_MS = 1200
+
+    DAMAGE_PER_MISSILE = 80
+    SPLASH_RADIUS = 40
+    SPLASH_FACTOR = 0.3
+
+    MISSILE_SPEED_START = 14.0
+    MISSILE_SPEED_MAX = 24.0
+    MISSILE_ACCEL_TIME = 250.0
+    MISSILE_TURN_DEG_PER_S = 240.0
+    MISSILE_LIFETIME_MS = 2800
+    MISSILE_MAX_TRAVEL = int(2400 * config.PLAYER_VIEW_SCALE)
+    MISSILE_HIT_RADIUS = 10
+
+    TRAIL_LIFE_MS = 220
+    TRAIL_STEP_PX = 18
+    RING_LIFETIME_MS = 120
+    EXPLOSION_RING_MS = 100
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun31(
+            name="마이크로미사일 벌집기",
+            front_image=weapon_assets["gun31"]["front"],
+            topdown_image=weapon_assets["gun31"]["topdown"],
+            uses_bullets=True, bullet_images=weapon_assets["gun31"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun31"]["cartridges"],
+            can_left_click=True, can_right_click=False,
+            left_click_ammo_cost=0, right_click_ammo_cost=0,
+            tier=Gun31.TIER,
+            sounds_dict={
+                "fire": sounds["gun31_fire"],
+                "explosion": sounds["gun31_explosion"],
+                "lock": sounds.get("button_click")
+            },
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+        self.recoil_strength = 7
+        self.speed_penalty = 0.0
+
+        self._locks = []
+        self._prev_left = False
+
+        self._next_fire_ms = 0
+
+        self._missiles = []
+
+        self._rings = []
+        self.last_shot_time = 0
+
+        self._missile_img = self.bullet_images[0] if self.bullet_images else None
+
+        self._last_explo_snd_ms = 0
+
+    # 기본 유틸
+    def _now(self): return pygame.time.get_ticks()
+
+    def _world_to_screen(self, wx, wy):
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        px, py = self.get_player_world_position()
+        return (cx + (wx - px), cy + (wy - py))
+
+    def _unit_from_mouse(self):
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    def _enemies(self):
+        return getattr(config, "all_enemies", getattr(config, "enemies", []))
+
+    # 메인 업데이트
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = self._now()
+        dt = now - getattr(self, "_last_update_ms", now)
+        self._last_update_ms = now
+
+        # 좌클릭: 락온 진행
+        if mouse_left_down:
+            self._update_locks(dt)
+        # 릴리즈 엣지 → 발사 시도
+        if (not mouse_left_down) and self._prev_left:
+            self._release_and_fire()
+
+        self._prev_left = mouse_left_down
+
+        # 미사일 갱신
+        self._update_missiles(dt)
+
+        # 오래된 FX 정리
+        self._rings[:] = [r for r in self._rings if now <= r["until_ms"]]
+
+    # 락온 로직
+    def _update_locks(self, dt):
+        now = self._now()
+        (ux, uy), _ = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+
+        # 후보 수집
+        cand = []
+        for e in list(self._enemies()):
+            if not getattr(e, "alive", False): continue
+            ex = getattr(e, "world_x", getattr(e, "x", None))
+            ey = getattr(e, "world_y", getattr(e, "y", None))
+            if ex is None or ey is None: continue
+            dx, dy = ex - px, ey - py
+            dist = math.hypot(dx, dy)
+            if dist > self.LOCK_RANGE or dist < 1e-3: continue
+            vx, vy = dx / dist, dy / dist
+            dot = max(-1.0, min(1.0, ux * vx + uy * vy))
+            ang = math.degrees(math.acos(dot))
+            if ang <= self.LOCK_CONE_DEG:      # ← 여유각 적용
+                cand.append((ang, dist, e))
+
+        cand.sort(key=lambda x: (x[0], x[1]))  # 각도 우선, 그다음 거리
+
+        # 기존 락 유지 & 진행 업데이트
+        for L in list(self._locks):
+            e = L["e"]
+            if not getattr(e, "alive", False):
+                self._locks.remove(L)
+                continue
+            # 현재 위치/거리
+            ex = getattr(e, "world_x", getattr(e, "x", None))
+            ey = getattr(e, "world_y", getattr(e, "y", None))
+            if ex is None or ey is None:
+                self._locks.remove(L)
+                continue
+            dx_e, dy_e = ex - px, ey - py
+            dist_e = math.hypot(dx_e, dy_e)
+            # 콘 내에 있나?
+            in_cone = any(e is c[2] for c in cand)
+            # 한 번 후보에 들어오면 에임이 벗어나도 사정거리(×1.3) 내면 게이지 지속
+            if in_cone or dist_e <= self.LOCK_RANGE * 1.3:
+                L["t"] += dt
+                if in_cone:
+                    L["last_seen_ms"] = now
+            else:
+                if not L["locked"] and (now - L["last_seen_ms"] > self.LOCK_LOST_GRACE_MS):
+                    self._locks.remove(L)
+                    continue
+            # 잠금 완료 처리(사운드 1회)
+            if (not L["locked"]) and L["t"] >= self.LOCK_TIME_MS:
+                L["locked"] = True
+                if not L.get("clicked", False):
+                    s = self.sounds.get("lock")
+                    if s:
+                        try: s.play()
+                        except Exception: pass
+                    L["clicked"] = True
+
+        # 새 후보 추가(빈자리만, 최대 6)
+        have = {L["e"] for L in self._locks}
+        for _, _, e in cand:
+            if len(self._locks) >= self.MAX_LOCKS:
+                break
+            if e in have:
+                continue
+            self._locks.append({"e": e, "t": 0.0, "locked": False, "last_seen_ms": now, "clicked": False})
+            have.add(e)
+
+        # 초과 제거(오래된 것부터)
+        if len(self._locks) > self.MAX_LOCKS:
+            self._locks = self._locks[:self.MAX_LOCKS]
+
+    def _release_and_fire(self):
+        now = self._now()
+        if now < self._next_fire_ms:
+            self._locks.clear()
+            return
+
+        # 잠근 타겟만 발사
+        targets = [L["e"] for L in self._locks if L["locked"] and getattr(L["e"], "alive", False)]
+        self._locks.clear()
+        if not targets:
+            return
+
+        # 탄 확인 → 발사 수 결정
+        have = self.get_ammo_gauge()
+        can = max(0, int(have // self.AMMO_PER_MISSILE))
+        n = min(len(targets), self.MAX_LOCKS, can)
+        if n <= 0:
+            return
+
+        # 발사 & 자원 소모
+        self._spawn_guided_salvo(targets[:n])
+        self.reduce_ammo(self.AMMO_PER_MISSILE * n)
+        self._after_fire_common()
+
+    def _after_fire_common(self):
+        now = self._now()
+        self._next_fire_ms = now + self.COOLDOWN_MS
+        self.last_shot_time = now
+        # 사운드/반동/쉐이크
+        s = self.sounds.get("fire")
+        if s:
+            try: s.play()
+            except Exception: pass
+        try:
+            config.shake_strength = max(getattr(config, "shake_strength", 0), 8)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), 10)
+        except Exception:
+            pass
+
+    # 발사
+    def _spawn_guided_salvo(self, targets):
+        (ux, uy), _ = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+
+        # 발사 포트 좌우 오프셋 + 미세 퍼짐
+        offsets = [(-8, -4), (8, -4), (-8, 4), (8, 4), (-10, 0), (10, 0)]
+        for i, e in enumerate(targets):
+            if i >= self.MAX_LOCKS: break
+            ox, oy = offsets[i % len(offsets)]
+            sx = px + ux * 28 + ox
+            sy = py + uy * 28 + oy
+            # 초기 방향: 타겟 방향
+            ex = getattr(e, "world_x", getattr(e, "x", None))
+            ey = getattr(e, "world_y", getattr(e, "y", None))
+            if ex is None or ey is None:
+                ex, ey = sx + ux * 50, sy + uy * 50
+            ang = math.atan2(ey - sy, ex - sx)
+            self._spawn_missile(sx, sy, ang, seek=True, target=e)
+
+    def _spawn_straight_salvo(self, n):
+        (ux, uy), ang = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+        base_offsets = [(-10, -4), (10, -4), (-10, 4), (10, 4), (-12, 0), (12, 0)]
+        for i in range(n):
+            ox, oy = base_offsets[i % len(base_offsets)]
+            sx = px + ux * 28 + ox
+            sy = py + uy * 28 + oy
+            spread = math.radians((i - n // 2) * 3.0)
+            self._spawn_missile(sx, sy, ang + spread, seek=False, target=None)
+
+    def _spawn_missile(self, sx, sy, ang, seek, target):
+        now = self._now()
+        self._missiles.append({
+            "x": sx, "y": sy,
+            "dir": ang, "spd": self.MISSILE_SPEED_START,
+            "seek": seek, "target": target,
+            "spawn_ms": now, "life_ms": 0, "dist": 0.0,
+            "trail": [], "last_trail_pos": (sx, sy)
+        })
+
+    # 미사일 갱신/충돌
+    def _update_missiles(self, dt):
+        enemies = list(self._enemies())
+        turn_rad_per_ms = math.radians(self.MISSILE_TURN_DEG_PER_S) / 1000.0
+
+        for i in reversed(range(len(self._missiles))):
+            m = self._missiles[i]
+
+            # 가속
+            if m["life_ms"] < self.MISSILE_ACCEL_TIME:
+                t = m["life_ms"] / self.MISSILE_ACCEL_TIME
+                m["spd"] = self.MISSILE_SPEED_START + (self.MISSILE_SPEED_MAX - self.MISSILE_SPEED_START) * t
+            else:
+                m["spd"] = self.MISSILE_SPEED_MAX
+
+            # 호밍
+            if m["seek"] and m["target"] and getattr(m["target"], "alive", False):
+                tx = getattr(m["target"], "world_x", getattr(m["target"], "x", m["x"]))
+                ty = getattr(m["target"], "world_y", getattr(m["target"], "y", m["y"]))
+                des = math.atan2(ty - m["y"], tx - m["x"])
+                # 각도 차 클램프
+                delta = (des - m["dir"] + math.pi) % (2 * math.pi) - math.pi
+                max_turn = turn_rad_per_ms * dt
+                if delta > max_turn: delta = max_turn
+                elif delta < -max_turn: delta = -max_turn
+                m["dir"] += delta
+            else:
+                wob = 0.015 * math.sin((m["life_ms"] + i * 37) * 0.01)
+                m["dir"] += wob
+
+            # 이동
+            vx, vy = math.cos(m["dir"]) * m["spd"], math.sin(m["dir"]) * m["spd"]
+            m["x"] += vx
+            m["y"] += vy
+            m["life_ms"] += dt
+            m["dist"] += abs(vx) + abs(vy)
+
+            # 트레일
+            lx, ly = m["last_trail_pos"]
+            if math.hypot(m["x"] - lx, m["y"] - ly) >= self.TRAIL_STEP_PX:
+                m["trail"].append((m["x"], m["y"], self._now() + self.TRAIL_LIFE_MS))
+                m["last_trail_pos"] = (m["x"], m["y"])
+            m["trail"][:] = [(x, y, t) for (x, y, t) in m["trail"] if self._now() <= t]
+
+            # === 충돌 검사 ===
+            # 벽/장애물 관통: 의도적으로 '장애물 충돌'은 검사하지 않음
+            # (맵/투명벽 등과의 충돌 무시. 오직 '적 충돌' 또는 '수명/최대거리'로만 소멸)
+            hit_enemy = None
+            for e in enemies:
+                if not getattr(e, "alive", False): continue
+                ex = getattr(e, "world_x", getattr(e, "x", None))
+                ey = getattr(e, "world_y", getattr(e, "y", None))
+                if ex is None or ey is None: continue
+                rad = int(getattr(e, "radius", 26))
+                if math.hypot(ex - m["x"], ey - m["y"]) <= (rad + self.MISSILE_HIT_RADIUS):
+                    hit_enemy = e
+                    break
+
+            # 수명/충돌/최대거리
+            expired = (m["life_ms"] >= self.MISSILE_LIFETIME_MS) or (m["dist"] >= self.MISSILE_MAX_TRAVEL)
+            if hit_enemy or expired:
+                x, y = m["x"], m["y"]
+                self._explode_at(x, y, hit_enemy)
+                self._missiles.pop(i)
+
+    def _explode_at(self, x, y, primary_enemy):
+        # 피해
+        if primary_enemy:
+            self._damage_enemy(primary_enemy, self.DAMAGE_PER_MISSILE)
+        # 스플래시
+        if self.SPLASH_RADIUS > 0 and self.SPLASH_FACTOR > 0:
+            r2 = self.SPLASH_RADIUS * self.SPLASH_RADIUS
+            for e in list(self._enemies()):
+                if e is primary_enemy or not getattr(e, "alive", False): continue
+                ex = getattr(e, "world_x", getattr(e, "x", None))
+                ey = getattr(e, "world_y", getattr(e, "y", None))
+                if ex is None or ey is None: continue
+                if (ex - x) * (ex - x) + (ey - y) * (ey - y) <= r2:
+                    self._damage_enemy(e, int(self.DAMAGE_PER_MISSILE * self.SPLASH_FACTOR))
+
+        # 사운드(중첩 재생 디바운스로 '깨짐' 방지)
+        s = self.sounds.get("explosion")
+        if s:
+            try:
+                now_ms = self._now()
+                if now_ms - getattr(self, "_last_explo_snd_ms", 0) >= 80:
+                    s.play()
+                    self._last_explo_snd_ms = now_ms
+            except Exception:
+                pass
+
+        # 링 FX
+        self._rings.append({"x": x, "y": y, "until_ms": self._now() + self.EXPLOSION_RING_MS, "kind": "boom"})
+
+    def _damage_enemy(self, e, dmg):
+        try:
+            if hasattr(e, "hit"):
+                e.hit(dmg, None)
+            elif hasattr(e, "on_hit"):
+                e.on_hit(dmg, knockback=0, hit_type="explosion")
+            else:
+                e.hp = getattr(e, "hp", 0) - dmg
+                if e.hp <= 0:
+                    e.alive = False
+        except Exception:
+            pass
+
+    # 렌더
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+        now = self._now()
+
+        # 락온 HUD
+        if self._locks:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for L in self._locks:
+                e = L["e"]
+                if not getattr(e, "alive", False): continue
+                x = getattr(e, "world_x", getattr(e, "x", None))
+                y = getattr(e, "world_y", getattr(e, "y", None))
+                if x is None or y is None: continue
+                sx, sy = self._world_to_screen(x, y)
+
+                # 외곽 원
+                col = (90, 210, 255, 180) if not L["locked"] else (255, 255, 255, 220)
+                pygame.draw.circle(surf, col, (int(sx), int(sy)), 26, width=2)
+
+                # 진행도 호(게이지)
+                prog = max(0.0, min(1.0, L["t"] / self.LOCK_TIME_MS))
+                if not L["locked"]:
+                    end_ang = -math.pi / 2 + prog * 2 * math.pi
+                    rect = pygame.Rect(int(sx - 28), int(sy - 28), 56, 56)
+                    pygame.draw.arc(surf, (150, 230, 255, 200), rect, -math.pi/2, end_ang, 3)
+
+                # 점선 연결 (플레이어 → 타겟)
+                px, py = self.get_player_world_position()
+                ax, ay = self._world_to_screen(px, py)
+                self._dotted_line(surf, (ax, ay), (sx, sy), (120, 200, 255, 120), 6, 6)
+
+            # 잠금 최대 텍스트
+            if len([1 for L in self._locks if L["locked"]]) >= self.MAX_LOCKS:
+                mx, my = pygame.mouse.get_pos()
+                self._draw_text(surf, "LOCK MAX", (mx + 14, my - 18), (255, 255, 255, 220))
+
+            screen.blit(surf, (0, 0))
+
+        # 미사일 + 트레일
+        if self._missiles:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for m in self._missiles:
+                # 트레일
+                for (tx, ty, until_ms) in m["trail"]:
+                    a = max(0, min(255, int(255 * (until_ms - now) / self.TRAIL_LIFE_MS)))
+                    sx, sy = self._world_to_screen(tx, ty)
+                    pygame.draw.circle(surf, (120, 200, 255, a), (int(sx), int(sy)), 3)
+
+                # 본체
+                sx, sy = self._world_to_screen(m["x"], m["y"])
+                if self._missile_img:
+                    deg = -math.degrees(m["dir"])
+                    img = pygame.transform.rotate(self._missile_img, deg)
+                    rect = img.get_rect(center=(int(sx), int(sy)))
+                    surf.blit(img, rect)
+                else:
+                    ang = m["dir"]; ca, sa = math.cos(ang), math.sin(ang)
+                    pts = [(sx + ca * 10, sy + sa * 10),
+                           (sx - ca * 8 - sa * 5, sy - sa * 8 + ca * 5),
+                           (sx - ca * 8 + sa * 5, sy - sa * 8 - ca * 5)]
+                    pygame.draw.polygon(surf, (230, 240, 255, 220), [(int(x), int(y)) for x, y in pts])
+            screen.blit(surf, (0, 0))
+
+        # 링 FX (폭발 등)
+        if self._rings:
+            surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for r in self._rings:
+                rx, ry = r["x"], r["y"]
+                sx, sy = self._world_to_screen(rx, ry)
+                life = r["until_ms"] - now
+                if life <= 0: continue
+                t = 1.0 - life / self.EXPLOSION_RING_MS
+                rad = int(32 + 40 * t)
+                a = int(220 * (1.0 - t))
+                pygame.draw.circle(surf, (255, 230, 180, a), (int(sx), int(sy)), rad, width=2)
+            screen.blit(surf, (0, 0))
+
+    # 유틸 렌더
+    def _draw_text(self, surf, text, pos, color):
+        try:
+            font = pygame.font.Font(os.path.join(config.ASSET_DIR, "Font", "SUIT-Bold.ttf"), 14)
+        except Exception:
+            font = pygame.font.SysFont(None, 14)
+        img = font.render(text, True, color[:3])
+        surf.blit(img, pos)
+
+    def _dotted_line(self, surf, a, b, color, seg_len=8, gap_len=5):
+        ax, ay = a; bx, by = b
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy)
+        if L < 1e-3: return
+        ux, uy = dx / L, dy / L
+        t = 0.0
+        while t < L:
+            l = min(seg_len, L - t)
+            x1, y1 = ax + ux * t, ay + uy * t
+            x2, y2 = ax + ux * (t + l), ay + uy * (t + l)
+            pygame.draw.line(surf, color, (int(x1), int(y1)), (int(x2), int(y2)), 2)
+            t += seg_len + gap_len
+
+class Gun32(WeaponBase):
+    TIER = 4
+
+    PELLETS = 18
+    PELLET_DAMAGE = 15
+    PELLET_SPREAD_DEG = 28
+    PELLET_RANGE = int(720 * config.PLAYER_VIEW_SCALE)
+    PELLET_HIT_RADIUS = 6
+    PELLET_SPEED = 21.0
+    PELLET_PIERCE = 1
+    PELLET_SPLASH_RADIUS = 26
+    PELLET_SPLASH_FACTOR = 0.40
+
+    LEFT_COOLDOWN_MS = 550
+    LEFT_AMMO_COST = 25
+
+    SLUGS_PER_BURST = 3
+    SLUG_DAMAGE = 70
+    SLUG_SPREAD_DEG = 1.5
+    SLUG_RANGE = int(1500 * config.PLAYER_VIEW_SCALE)
+    SLUG_HIT_RADIUS = 8
+    SLUG_SPEED = 28.0
+    SLUG_PIERCE = 2
+    SLUG_SPLASH_RADIUS = 34
+    SLUG_SPLASH_FACTOR = 0.35
+
+    RIGHT_COOLDOWN_MS = 800
+    RIGHT_AMMO_COST = 30
+    BURST_INTERVAL_MS = 85
+
+    RING_MS = 100
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun32(
+            name="오메가 쇼트건",
+            front_image=weapon_assets["gun32"]["front"],
+            topdown_image=weapon_assets["gun32"]["topdown"],
+            uses_bullets=True, bullet_images=weapon_assets["gun32"]["bullets"],
+            uses_cartridges=False, cartridge_images=weapon_assets["gun32"]["cartridges"],
+            can_left_click=True, can_right_click=True,
+            left_click_ammo_cost=0, right_click_ammo_cost=0,
+            tier=Gun32.TIER,
+            sounds_dict={
+                "fire": sounds.get("gun32_fire"),
+            },
+            get_ammo_gauge_fn=ammo_gauge, reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.distance_from_center = 48 * config.PLAYER_VIEW_SCALE
+        self.recoil_strength = 8
+        self.speed_penalty = 0.0
+
+        self._next_left_ms = 0
+        self._next_right_ms = 0
+
+        self._burst_active = False
+        self._burst_fired = 0
+        self._burst_next_ms = 0
+
+        self._shots = []
+        self._rings = []
+
+        self._prev_left = False
+        self._prev_right = False
+
+        self._bullet_img_raw = self.bullet_images[0] if (self.bullet_images and self.bullet_images[0]) else None
+        self._bullet_img_cache = {}
+
+    # 유틸
+    def _now(self): return pygame.time.get_ticks()
+
+    def _world_to_screen(self, wx, wy):
+        cx, cy = config.player_rect.centerx, config.player_rect.centery
+        px, py = self.get_player_world_position()
+        return (cx + (wx - px), cy + (wy - py))
+
+    def _unit_from_mouse(self):
+        mx, my = pygame.mouse.get_pos()
+        dx = mx - config.player_rect.centerx
+        dy = my - config.player_rect.centery
+        ang = math.atan2(dy, dx)
+        return (math.cos(ang), math.sin(ang)), ang
+
+    def _enemies(self):
+        return getattr(config, "all_enemies", getattr(config, "enemies", []))
+
+    def _play_fire(self):
+        s = self.sounds.get("fire")
+        if s:
+            try: s.play()
+            except Exception: pass
+
+    def _fire_kick(self, strength=8, timer=10):
+        # 화면 흔들림 + 반동 트리거
+        now = self._now()
+        self.last_shot_time = now
+        try:
+            config.shake_strength = max(getattr(config, "shake_strength", 0), strength)
+            config.shake_timer = max(getattr(config, "shake_timer", 0), timer)
+        except Exception:
+            pass
+
+    # 가능한 범용 '벽 충돌' 확인 (프로젝트 환경에 따라 존재 유무 다름)
+    def _is_solid(self, x, y):
+        try:
+            if hasattr(config, "is_solid_at"):
+                return bool(config.is_solid_at(int(x), int(y)))
+        except Exception:
+            pass
+        try:
+            import collider
+            if hasattr(collider, "point_blocked"):
+                return bool(collider.point_blocked(int(x), int(y)))
+        except Exception:
+            pass
+        return False
+
+    def _damage_enemy(self, e, dmg):
+        try:
+            if hasattr(e, "hit"):
+                e.hit(dmg, None)
+            elif hasattr(e, "on_hit"):
+                e.on_hit(dmg, knockback=0, hit_type="bullet")
+            else:
+                e.hp = getattr(e, "hp", 0) - dmg
+                if e.hp <= 0:
+                    e.alive = False
+        except Exception:
+            pass
+
+    # 입력/업데이트
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = self._now()
+
+        # 버스트(우클릭) 진행
+        if self._burst_active and now >= self._burst_next_ms:
+            if self._burst_fired < self.SLUGS_PER_BURST:
+                self._spawn_slug()
+                self._burst_fired += 1
+                self._burst_next_ms = now + self.BURST_INTERVAL_MS
+                self._play_fire()
+                self._fire_kick(strength=9, timer=12)
+            if self._burst_fired >= self.SLUGS_PER_BURST:
+                self._burst_active = False
+
+        block_left = self._burst_active or mouse_right_down
+        block_right_start = mouse_left_down
+
+        # 좌클릭: 홀드 자동 연사
+        if (mouse_left_down and not block_left and now >= self._next_left_ms):
+            if self.get_ammo_gauge() >= self.LEFT_AMMO_COST:
+                self.reduce_ammo(self.LEFT_AMMO_COST)
+                self._spawn_pellet_salvo()
+                self._play_fire()
+                self._fire_kick(strength=8, timer=10)
+                self._next_left_ms = now + self.LEFT_COOLDOWN_MS
+
+        # 우클릭: 홀드 시 쿨타임마다 버스트 시작(버스트 중복 방지)
+        if (mouse_right_down and not self._burst_active and not block_right_start and now >= self._next_right_ms):
+            if self.get_ammo_gauge() >= self.RIGHT_AMMO_COST:
+                self.reduce_ammo(self.RIGHT_AMMO_COST)
+                self._burst_active = True
+                self._burst_fired = 0
+                self._burst_next_ms = now  # 즉시 첫 발
+                self._next_right_ms = now + self.RIGHT_COOLDOWN_MS
+
+        self._prev_left = mouse_left_down
+        self._prev_right = mouse_right_down
+
+        # 탄환 갱신
+        self._update_shots()
+
+        # FX 정리
+        self._rings[:] = [r for r in self._rings if now <= r["until_ms"]]
+
+    # 발사
+    def _spawn_pellet_salvo(self):
+        (ux, uy), ang = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+
+        for i in range(self.PELLETS):
+            spread_deg = (random.random() * 2 - 1) * self.PELLET_SPREAD_DEG
+            a = ang + math.radians(spread_deg)
+            self._shots.append({
+                "type": "pellet",
+                "x": px, "y": py,
+                "dir": a, "spd": self.PELLET_SPEED,
+                "dist": 0.0, "max": self.PELLET_RANGE,
+                "pierce": self.PELLET_PIERCE,
+                "visited": set(),
+                "hit_r": self.PELLET_HIT_RADIUS,
+                "dmg": self.PELLET_DAMAGE,
+                "splash_r": self.PELLET_SPLASH_RADIUS,
+                "splash_d": max(1, int(self.PELLET_DAMAGE * self.PELLET_SPLASH_FACTOR)),
+            })
+
+    def _spawn_slug(self):
+        (ux, uy), ang = self._unit_from_mouse()
+        px, py = self.get_player_world_position()
+
+        spread_deg = (random.random() * 2 - 1) * self.SLUG_SPREAD_DEG
+        a = ang + math.radians(spread_deg)
+        self._shots.append({
+            "type": "slug",
+            "x": px, "y": py,
+            "dir": a, "spd": self.SLUG_SPEED,
+            "dist": 0.0, "max": self.SLUG_RANGE,
+            "pierce": self.SLUG_PIERCE,
+            "visited": set(),
+            "hit_r": self.SLUG_HIT_RADIUS,
+            "dmg": self.SLUG_DAMAGE,
+            "splash_r": self.SLUG_SPLASH_RADIUS,
+            "splash_d": max(1, int(self.SLUG_DAMAGE * self.SLUG_SPLASH_FACTOR)),
+        })
+
+    # 탄환/충돌
+    def _update_shots(self):
+        enemies = list(self._enemies())
+
+        for i in reversed(range(len(self._shots))):
+            b = self._shots[i]
+            # 이동
+            vx, vy = math.cos(b["dir"]) * b["spd"], math.sin(b["dir"]) * b["spd"]
+            b["x"] += vx
+            b["y"] += vy
+            b["dist"] += abs(vx) + abs(vy)
+
+            # 맵/장애물 충돌 → 소멸 (미니 폭발 없음)
+            if self._is_solid(b["x"], b["y"]):
+                self._shots.pop(i)
+                continue
+
+            # 사거리 초과
+            if b["dist"] >= b["max"]:
+                self._shots.pop(i)
+                continue
+
+            # 적 충돌
+            hit_enemy = None
+            for e in enemies:
+                if not getattr(e, "alive", False): continue
+                if id(e) in b["visited"]: continue
+                ex = getattr(e, "world_x", getattr(e, "x", None))
+                ey = getattr(e, "world_y", getattr(e, "y", None))
+                if ex is None or ey is None: continue
+                rad = int(getattr(e, "radius", 26))
+                if math.hypot(ex - b["x"], ey - b["y"]) <= (rad + b["hit_r"]):
+                    hit_enemy = e
+                    break
+
+            if hit_enemy:
+                # 주 데미지
+                self._damage_enemy(hit_enemy, b["dmg"])
+                b["visited"].add(id(hit_enemy))
+
+                # 미니 폭발(주 대상 제외하고 스플래시)
+                if b["splash_r"] > 0 and b["splash_d"] > 0:
+                    r2 = b["splash_r"] * b["splash_r"]
+                    for e in enemies:
+                        if e is hit_enemy or not getattr(e, "alive", False): continue
+                        ex = getattr(e, "world_x", getattr(e, "x", None))
+                        ey = getattr(e, "world_y", getattr(e, "y", None))
+                        if ex is None or ey is None: continue
+                        if (ex - b["x"]) * (ex - b["x"]) + (ey - b["y"]) * (ey - b["y"]) <= r2:
+                            self._damage_enemy(e, b["splash_d"])
+
+                    # 링 FX
+                    self._rings.append({"x": b["x"], "y": b["y"], "until_ms": self._now() + self.RING_MS})
+
+                # 관통 소비
+                if b["pierce"] > 0:
+                    b["pierce"] -= 1
+                else:
+                    self._shots.pop(i)
+                    continue
+
+    # 렌더
+    def draw_overlay(self, screen):
+        sw, sh = screen.get_size()
+        now = self._now()
+
+        # 탄 시각화: bullet1 사용(회전 블릿)
+        if self._shots:
+            layer = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for b in self._shots:
+                sx, sy = self._world_to_screen(b["x"], b["y"])
+                if self._bullet_img_raw:
+                    # 각도 정수화해서 캐시 사용(부하 완화)
+                    deg = int(-math.degrees(b["dir"])) % 360
+                    img = self._bullet_img_cache.get(deg)
+                    if img is None:
+                        img = pygame.transform.rotate(self._bullet_img_raw, deg)
+                        self._bullet_img_cache[deg] = img
+                    rect = img.get_rect(center=(int(sx), int(sy)))
+                    layer.blit(img, rect)
+                else:
+                    # 폴백: 점
+                    r = 3 if b["type"] == "pellet" else 4
+                    pygame.draw.circle(layer, (255, 245, 220, 230), (int(sx), int(sy)), r)
+            screen.blit(layer, (0, 0))
+
+        # 미니 폭발 링
+        if self._rings:
+            layer = pygame.Surface((sw, sh), pygame.SRCALPHA)
+            for r in self._rings:
+                if now > r["until_ms"]: continue
+                life = r["until_ms"] - now
+                t = 1.0 - life / self.RING_MS
+                rad = int(12 + 10 * t)
+                alpha = int(220 * (1.0 - t))
+                sx, sy = self._world_to_screen(r["x"], r["y"])
+                pygame.draw.circle(layer, (255, 230, 180, alpha), (int(sx), int(sy)), rad, width=2)
+            screen.blit(layer, (0, 0))
+
 WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10,
                   Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18, Gun19, Gun20,
-                  Gun21, Gun22, Gun23, Gun24, Gun25, Gun26, Gun27]
+                  Gun21, Gun22, Gun23, Gun24, Gun25, Gun26, Gun27, Gun28, Gun29, Gun30,
+                  Gun31, Gun32]

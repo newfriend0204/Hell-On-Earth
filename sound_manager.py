@@ -77,11 +77,23 @@ def load_sounds():
         "gun27_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun27RightFire.mp3")),
         "gun27_charge_loop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun27ChargeLoop.mp3")),
         "gun28_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28LeftFire.mp3")),
+        "gun28_singularity_loop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28SingularityLoop.mp3")),
         "gun28_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28RightFire.mp3")),
+        "gun28_pop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun28Pop.mp3")),
         "gun29_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun29Fire.mp3")),
         "gun30_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun30Fire.mp3")),
         "gun31_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun31Fire.mp3")),
+        "gun31_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun31Explosion.mp3")),
         "gun32_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun32Fire.mp3")),
+        "gun33_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun33Fire.wav")),
+        "gun34_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun34LeftFire.wav")),
+        "gun34_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun34RightFire.wav")),
+        "gun35_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun35Explosion.mp3")),
+        "gun35_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun35Fire.mp3")),
+        "gun36_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun36LeftFire.mp3")),
+        "gun36_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun36RightFire.mp3")),
+        "gun37_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun37LeftFire.mp3")),
+        "gun37_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun37RightFire.mp3")),
     }
 
     entity_sounds = {
@@ -113,6 +125,7 @@ def load_sounds():
     weapon_sounds["gun6_leftfire"].set_volume(0.85)
     weapon_sounds["gun15_leftfire"].set_volume(0.3)
     weapon_sounds["gun15_rightfire"].set_volume(0.4)
+    weapon_sounds["gun29_fire"].set_volume(0.7)
 
 
     weapon_sounds["gun1_fire_enemy"] = pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun1Fire.wav"))
