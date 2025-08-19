@@ -4,6 +4,7 @@ import time
 import random
 from collider import Collider
 from config import PLAYER_VIEW_SCALE
+import pygame.sndarray
 import config
 from ui import KOREAN_FONT_28
 
@@ -1035,6 +1036,28 @@ class TeleportFlash:
         pygame.draw.circle(surf, (*self.color, alpha), (40, 40), 40)
         screen.blit(surf, (self.x - 40 - world_x, self.y - 40 - world_y))
 
+def _play_with_variation(sound, vol_scale=1.0, pitch_range=0.06):
+    # 사운드를 살짝 다른 피치/볼륨으로 재생해 동시 재생 시 귀에 거슬리지 않게 함.
+    # numpy/SDL 포맷 문제 등으로 실패하면 기본 재생으로 폴백.
+    try:
+        import numpy as np
+        arr = pygame.sndarray.array(sound)
+        # 1±pitch_range 범위에서 임의 피치(=재생속도) 선택
+        factor = random.uniform(1.0 - pitch_range, 1.0 + pitch_range)
+        new_len = max(1, int(arr.shape[0] / factor))
+        idx = (np.arange(new_len) * factor).astype(np.int32)
+        idx = np.clip(idx, 0, arr.shape[0] - 1)
+        arr2 = arr[idx]
+        snd2 = pygame.sndarray.make_sound(arr2)
+        vol = sound.get_volume() * vol_scale
+        vol = max(0.0, min(1.0, vol))
+        snd2.set_volume(vol)
+        snd2.play()
+    except Exception:
+        ch = sound.play()
+        if ch:
+            ch.set_volume(min(1.0, sound.get_volume() * vol_scale))
+
 class GrenadeProjectile:
     # 발사 후 일정 시간 뒤 폭발하는 수류탄 투사체
     def __init__(self, x, y, vx, vy, speed, image, explosion_radius, max_damage, min_damage,
@@ -1075,24 +1098,29 @@ class GrenadeProjectile:
         t = (elapsed % 500) / 500
         self.scale = 1.0 + 0.3 * math.sin(t * math.pi)
 
-        if elapsed >= self.explosion_delay:
-            if not getattr(self, "ignore_enemy_collision", False):
-                for enemy in config.all_enemies:
-                    if enemy is self.owner:
+        if not getattr(self, "ignore_enemy_collision", False):
+            for enemy in config.all_enemies:
+                if enemy is self.owner:
+                    continue
+                if not getattr(enemy, "alive", True):
+                    continue
+                dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
+                if dist <= self.collider.size:
+                    self.explode()
+                    return
+
+        if obstacle_manager:
+            # bullet_passable=False인 충돌체에 부딪히면 즉시 폭발
+            for obs in obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles + obstacle_manager.placed_obstacles:
+                for c in obs.colliders:
+                    if getattr(c, "bullet_passable", False):
                         continue
-                    if not getattr(enemy, "alive", True):
-                        continue
-                    dist = math.hypot(enemy.world_x - self.x, enemy.world_y - self.y)
-                    if dist <= self.collider.size:
+                    if c.check_collision_circle((self.x, self.y), self.collider.size, (obs.world_x, obs.world_y)):
                         self.explode()
                         return
-            if obstacle_manager:
-                for obs in obstacle_manager.placed_obstacles + obstacle_manager.static_obstacles + obstacle_manager.combat_obstacles:
-                    for c in obs.colliders:
-                        if c.check_collision_circle((self.x, self.y), self.collider.size, (obs.world_x, obs.world_y)):
-                            if not getattr(c, "bullet_passable", False):
-                                self.explode()
-                                return
+
+        # 지연 시간이 지나면 자동 폭발(안 맞고 오래 날아가면)
+        if elapsed >= self.explosion_delay:
             self.explode()
 
     def explode(self):
@@ -1100,7 +1128,7 @@ class GrenadeProjectile:
         if not self.alive:
             return
         self.alive = False
-        self.explosion_sound.play()
+        _play_with_variation(self.explosion_sound, vol_scale=0.9, pitch_range=0.06)
         config.bullets.append(ExplosionEffectPersistent(self.x, self.y, self.explosion_image))
 
         if not config.combat_state:

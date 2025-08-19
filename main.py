@@ -124,8 +124,9 @@ _retry_requested = False
 _exit_requested  = False
 
 START_WEAPONS = [
-    WEAPON_CLASSES[0],
-    WEAPON_CLASSES[31],
+    WEAPON_CLASSES[34],
+    WEAPON_CLASSES[34],
+    WEAPON_CLASSES[32],
 ]
 
 def _apply_stage_theme_images():
@@ -620,7 +621,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 300 # 디버그 원래는 300
+ammo_gauge_max = 4000 # 디버그 원래는 300
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 
@@ -3330,36 +3331,53 @@ while running:
     recoil_strength = weapon.recoil_strength
 
     if weapon:
-        if not changing_weapon:
-            effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon)
-            effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
-            if (mouse_left_released_after_dialogue
-                or mouse_left_released_after_pause
-                or mouse_left_released_after_transition):
-                effective_left = False
-                effective_right = False
+        # 무기 교체 중에는 발사 입력을 완전히 차단
+        effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon)
+        effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
 
-            # 탄약 부족 시 자동 근접(칼) 발동
-            fallback_to_melee = False
-            if effective_left and getattr(weapon, "can_left_click", False):
-                try:
-                    needed = getattr(weapon, "left_click_ammo_cost", 0)
-                    if weapon.get_ammo_gauge() < needed:
-                        fallback_to_melee = True
-                except Exception:
-                    pass
-            elif effective_right and getattr(weapon, "can_right_click", False):
-                try:
-                    needed = getattr(weapon, "right_click_ammo_cost", 0)
-                    if weapon.get_ammo_gauge() < needed:
-                        fallback_to_melee = True
-                except Exception:
-                    pass
+        # 대화/일시정지/전환 직후의 클릭잔상 방지
+        if (mouse_left_released_after_dialogue
+            or mouse_left_released_after_pause
+            or mouse_left_released_after_transition):
+            effective_left = False
+            effective_right = False
 
-            if fallback_to_melee:
-                melee.try_start(is_switching_weapon=changing_weapon)
+        active_weapon = weapon
+
+        if changing_weapon and t >= 0.5:
+            active_weapon = weapons[change_weapon_target]
+
+        # 탄약이 모자라면 자동으로 근접으로 전환
+        fallback_to_melee = False
+        if effective_left and getattr(active_weapon, "can_left_click", False):
+            try:
+                needed = getattr(active_weapon, "left_click_ammo_cost", 0)
+                if active_weapon.get_ammo_gauge() < needed:
+                    fallback_to_melee = True
+            except Exception:
+                pass
+        elif effective_right and getattr(active_weapon, "can_right_click", False):
+            try:
+                needed = getattr(active_weapon, "right_click_ammo_cost", 0)
+                if active_weapon.get_ammo_gauge() < needed:
+                    fallback_to_melee = True
+            except Exception:
+                pass
+
+        if fallback_to_melee:
+            melee.try_start(is_switching_weapon=changing_weapon)
+        else:
+            # 선택한 무기만 입력 처리, 나머지는 유휴 업데이트
+            if changing_weapon:
+                active_weapon.on_update(False, False)
             else:
-                weapon.on_update(effective_left, effective_right)
+                active_weapon.on_update(effective_left, effective_right)
+            for w in weapons:
+                if w is not active_weapon:
+                    try:
+                        w.on_update(False, False)
+                    except Exception:
+                        pass
             if weapon.last_shot_time == pygame.time.get_ticks():
                 recoil_in_progress = True
                 recoil_offset = 0
@@ -3912,6 +3930,12 @@ while running:
                 if hasattr(render_weapon, "draw_overlay"):
                     try:
                         render_weapon.draw_overlay(screen)
+                        for w in weapons:
+                            if w is not render_weapon and hasattr(w, "draw_overlay"):
+                                try:
+                                    w.draw_overlay(screen)
+                                except Exception:
+                                    pass
                     except Exception:
                         pass
     melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
