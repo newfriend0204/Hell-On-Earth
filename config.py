@@ -87,7 +87,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 4, 2: 32, 3: 46, 4: 15, 5: 3}
     },
     "3-2": {
-        "boss_map": 1,
+        "boss_map": 4,
         "enemy_rank_range": (5, 8),
         "min_f_rooms": 7,
         "max_f_rooms": 8,
@@ -103,7 +103,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "2-3"
+CURRENT_STAGE = "3-2"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,

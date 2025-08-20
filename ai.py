@@ -2149,6 +2149,7 @@ class Enemy10(AIBase):
                 dmg = int(round(self.DEATH_EXPL_DMG_MIN + (self.DEATH_EXPL_DMG_MAX - self.DEATH_EXPL_DMG_MIN) * factor))
                 config.damage_player(dmg)
 
+        self.spawn_dropped_items(5, 5)
         super().die([])
 
     def stop_sounds_on_remove(self):
@@ -8643,3 +8644,4 @@ class Boss4(AIBase):
                 r = int(self.boss.GRENADE_RADIUS * t)
                 pygame.draw.circle(screen, (255,255,255), (cx, cy), max(6, r), 4)
                 pygame.draw.circle(screen, (160,200,255), (cx, cy), max(4, int(r*0.65)), 3)
+

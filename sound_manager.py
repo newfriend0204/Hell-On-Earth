@@ -94,6 +94,9 @@ def load_sounds():
         "gun36_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun36RightFire.mp3")),
         "gun37_leftfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun37LeftFire.mp3")),
         "gun37_rightfire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun37RightFire.mp3")),
+        "gun38_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Fire.mp3")),
+        "gun38_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Explosion.mp3")),
+        "gun38_loop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Loop.mp3")),
     }
 
     entity_sounds = {
@@ -119,6 +122,10 @@ def load_sounds():
         "burster_explode":  pygame.mixer.Sound(path_sound("Sound", "Entity", "BursterExplode.mp3")),
         "anvil_spawn":  pygame.mixer.Sound(path_sound("Sound", "Entity", "AnvilSpawn.mp3")),
         "anvil_break":  pygame.mixer.Sound(path_sound("Sound", "Entity", "AnvilBreak.mp3")),
+        "chain_hit":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ChainHit.mp3")),
+        "chain_drag":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ChainDrag.mp3")),
+        "chain_throw":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ChainThrow.mp3")),
+        "whirl":  pygame.mixer.Sound(path_sound("Sound", "Entity", "Whirl.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

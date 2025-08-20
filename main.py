@@ -46,7 +46,6 @@ from text_data import (
     soldier1_after_dialogue,
     soldier2_before_dialogue,
     soldier2_after_dialogue,
-    soldier2_after_dialogue,
     soldier3_before_dialogue,
     soldier3_after_dialogue,
     soldier4_dialogue,
@@ -124,9 +123,10 @@ _retry_requested = False
 _exit_requested  = False
 
 START_WEAPONS = [
-    WEAPON_CLASSES[34],
-    WEAPON_CLASSES[34],
-    WEAPON_CLASSES[32],
+    WEAPON_CLASSES[25],
+    WEAPON_CLASSES[26],
+    WEAPON_CLASSES[27],
+    WEAPON_CLASSES[28],
 ]
 
 def _apply_stage_theme_images():
@@ -3707,14 +3707,6 @@ while running:
                     lines=("대화하기", "(Space)")
                 )
 
-    if not player_dead:
-        ammo_bar_pos = (30, SCREEN_HEIGHT - 80)
-        ammo_bar_size = (400, 20)
-        last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, ammo_gauge_max, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
-        hp_bar_pos = (30, SCREEN_HEIGHT - 50)
-        hp_bar_size = (400, 20)
-        last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)
-
     display_w, display_h = screen.get_size()
 
     # Electric Shock 파티클 (감전 상태일 때만 스폰)
@@ -3795,6 +3787,32 @@ while running:
         if hit:
             bullet.to_remove = True
             continue
+
+    if not player_dead:
+        if weapon and not melee.active:
+            render_weapon = weapon
+            if changing_weapon and t >= 0.5:
+                render_weapon = weapons[change_weapon_target]
+
+            if render_weapon:
+                scaled_image = pygame.transform.smoothscale(
+                    render_weapon.topdown_image,
+                    (
+                        int(render_weapon.topdown_image.get_width() * PLAYER_VIEW_SCALE),
+                        int(render_weapon.topdown_image.get_height() * PLAYER_VIEW_SCALE)
+                    )
+                )
+                rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
+                rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
+                screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
+                if hasattr(render_weapon, "draw_overlay"):
+                    try:
+                        render_weapon.draw_overlay(screen)
+                    except Exception:
+                        pass
+    melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
+    if not player_dead:
+        screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
     
     if not changing_room:
         # 방 전환 위치 체크
@@ -3910,38 +3928,6 @@ while running:
     if len(config.score_gain_texts) > max_stack:
         del config.score_gain_texts[0:len(config.score_gain_texts) - max_stack]
 
-    if not player_dead:
-        if weapon and not melee.active:
-            render_weapon = weapon
-            if changing_weapon and t >= 0.5:
-                render_weapon = weapons[change_weapon_target]
-
-            if render_weapon:
-                scaled_image = pygame.transform.smoothscale(
-                    render_weapon.topdown_image,
-                    (
-                        int(render_weapon.topdown_image.get_width() * PLAYER_VIEW_SCALE),
-                        int(render_weapon.topdown_image.get_height() * PLAYER_VIEW_SCALE)
-                    )
-                )
-                rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
-                rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
-                screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
-                if hasattr(render_weapon, "draw_overlay"):
-                    try:
-                        render_weapon.draw_overlay(screen)
-                        for w in weapons:
-                            if w is not render_weapon and hasattr(w, "draw_overlay"):
-                                try:
-                                    w.draw_overlay(screen)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
-    melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
-    if not player_dead:
-        screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
-
     fps = clock.get_fps()
     fps_surface = DEBUG_FONT.render(f"FPS: {fps:.1f}", True, (255, 255, 0))
     screen.blit(fps_surface, (10, 10))
@@ -3952,6 +3938,14 @@ while running:
         if current_boss and current_boss.alive:
             last_boss_hp_visual = draw_boss_hp_bar(screen, current_boss, last_boss_hp_visual)
         draw_combat_indicators(screen, delta_time, minimap_rect)
+
+    if not player_dead:
+        ammo_bar_pos = (30, SCREEN_HEIGHT - 80)
+        ammo_bar_size = (400, 20)
+        last_ammo_visual = draw_ammo_bar_remodeled(screen, ammo_gauge, ammo_gauge_max, ammo_bar_pos, ammo_bar_size, last_ammo_visual)
+        hp_bar_pos = (30, SCREEN_HEIGHT - 50)
+        hp_bar_size = (400, 20)
+        last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)
 
     if (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING
         and not pause_menu_active
