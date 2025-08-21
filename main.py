@@ -49,7 +49,7 @@ from text_data import (
     soldier3_before_dialogue,
     soldier3_after_dialogue,
     soldier4_dialogue,
-    BOSS_TIPS
+    BOSS_DESC
 )
 
 # 맵 상태 초기화
@@ -612,7 +612,7 @@ running = True
 
 player_radius = int(30 * PLAYER_VIEW_SCALE)
 
-player_hp_max = 200
+player_hp_max = 200000 # 디버그 원래는 200
 player_hp = player_hp_max
 last_hp_visual = player_hp * 1.0
 
@@ -621,7 +621,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 4000 # 디버그 원래는 300
+ammo_gauge_max = 40000 # 디버그 원래는 300
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 
@@ -1068,7 +1068,7 @@ def try_pickup_weapon():
 
 def damage_player(amount):
     # 디버그, 무적
-    #return
+    # return
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
     global player_dead, death_started_ms
@@ -1711,7 +1711,7 @@ def _start_boss_intro():
     left_title = "보스 등장!"
     _boss_left_surf = TITLE_FONT.render(left_title, True, (245, 245, 245))
     header = _render_multiline(KOREAN_FONT_BOLD_20, f"{config.CURRENT_STAGE}", (240, 240, 240))
-    tip_text = BOSS_TIPS.get(config.CURRENT_STAGE, "데이터 없음.\n패턴을 관찰하세요.")
+    tip_text = BOSS_DESC.get(config.CURRENT_STAGE, "데이터 없음.\n패턴을 관찰하세요.")
     tip_block = _render_multiline(KOREAN_FONT_18, tip_text, (220, 220, 220))
     w = max(header.get_width(), tip_block.get_width())
     h = header.get_height() + 8 + tip_block.get_height()

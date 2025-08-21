@@ -8645,3 +8645,1303 @@ class Boss4(AIBase):
                 pygame.draw.circle(screen, (255,255,255), (cx, cy), max(6, r), 4)
                 pygame.draw.circle(screen, (160,200,255), (cx, cy), max(4, int(r*0.65)), 3)
 
+class Boss5(AIBase):
+    rank = 10
+
+    HP_MAX   = 4000
+    SPEED    = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
+    RADIUS   = 50
+    KEEP_MIN = int(220 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(320 * PLAYER_VIEW_SCALE)
+
+    ORIENT_OFFSET_DEG = 270 
+
+    ORB_DROP_ON_HALF_HP = (8, 10)
+    ORB_DROP_ON_DEATH   = (16, 20)
+
+    CHAIN_RANGE         = int(1600 * PLAYER_VIEW_SCALE)
+    CHAIN_SPEED_BASE    = 36 * PLAYER_VIEW_SCALE
+    CHAIN_OUT_FACTOR    = 2.0
+    CHAIN_REEL_FACTOR   = 2.0
+    CHAIN_HIT_REEL_FAC  = 0.5
+    CHAIN_WIDTH         = int(26 * PLAYER_VIEW_SCALE)
+    CHAIN_HIT_RADIUS    = int(34 * PLAYER_VIEW_SCALE)
+    CHAIN_HIT_STUN      = 1000
+    CHAIN_DRAG_MS       = 900                             
+    CHAIN_PULL_STRENGTH = 26.0                            
+    CHAIN_FOLLOW_DMG    = 40
+    CHAIN_COOLDOWN      = 3500
+    CHAIN_TEL_MS        = 700
+    CHAIN_TEL_FREEZE_MS = 300
+    CHAIN_TEL_ROT_SPEED = 0.6 * math.pi
+    CHAIN_FAN_COUNT     = 20
+
+    WHIRL_RADIUS        = int(300 * PLAYER_VIEW_SCALE)
+    WHIRL_DMG           = 35
+    WHIRL_TEL_MS        = 650
+    WHIRL_COOLDOWN      = 4500
+    WHIRL_SPIN_MS       = 300
+    WHIRL_CHAIN_W       = 10
+    WHIRL_PUSH_STRENGTH = 27.5
+
+    SLAM_DMG            = 20
+    SLAM_PULL_STRENGTH  = 40.0
+    SLAM_LINE_W         = int(48 * PLAYER_VIEW_SCALE)
+    SLAM_TEL_MS         = 750
+    SLAM_COOLDOWN       = 4000
+    SLAM_LEN            = int(900 * PLAYER_VIEW_SCALE)
+    SLAM_OUT_MS         = 200
+    SLAM_REEL_MS        = 200
+
+    ENRAGE_COOLDOWN_FACTOR = 0.8
+    DOT_DMG_PER_SEC        = 5
+    DOT_DURATION_MS        = 3000
+
+    CHAIN_COLOR_OUTER = (24, 24, 24)
+    CHAIN_COLOR_INNER = (70, 70, 70)
+    CHAIN_COLOR_HIGHL = (125, 125, 125)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.SPEED, near_threshold=0, far_threshold=0,
+            radius=self.RADIUS, push_strength=0.10, alert_duration=0,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.image_original = images["boss5"]
+        self.image = self.image_original
+
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.enraged = False
+        self.half_hp_triggered = False
+        self.kill_callback = kill_callback
+
+        now = pygame.time.get_ticks()
+        self.last_chain = now - 1500
+        self.last_whirl = now - 2000
+        self.last_slam  = now - 2000
+
+        self.hooks = []
+        self.chain_prep_until = 0
+
+        self.chain_tel_start = 0
+        self.chain_tel_freeze_at = 0
+        self.chain_tel_angle0 = 0.0
+        self.chain_tel_angle_frozen = None
+
+        self._dragging = False
+        self.drag_until = 0
+        self._drag_channel = None
+        self._drag_sound_end_ms = 0
+        self._drag_last_play_ms = 0
+
+        self.whirl_prep_until = 0
+        self.whirl_spin_until = 0
+        self._whirl_base_angle = 0.0
+
+        self.slam_prep_until  = 0
+        self.slam_aim_angle   = 0.0
+        self.slam_phase       = "idle"
+        self.slam_phase_t0    = 0
+        self.slam_done_damage = False
+
+        self.facing_angle = 0.0
+
+        self._strafe_dir = 1
+        self._boss5_drop_done = False
+
+    # 유틸
+    def _cool(self, base_ms):
+        return int(base_ms * (self.ENRAGE_COOLDOWN_FACTOR if self.enraged else 1.0))
+    def _ready(self, last_ts, base_cd):
+        return pygame.time.get_ticks() - last_ts >= self._cool(base_cd)
+    def _player_center(self, player_rect, world_x, world_y):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _ensure_impulse_vars(self):
+        if not hasattr(config, "knockback_impulse_x"): config.knockback_impulse_x = 0.0
+        if not hasattr(config, "knockback_impulse_y"): config.knockback_impulse_y = 0.0
+
+    def _apply_impulse(self, px, py, from_x, from_y, strength, direction="away"):
+        # direction: "toward"(끌기) / "away"(밀기)
+        self._ensure_impulse_vars()
+        dx, dy = px - from_x, py - from_y
+        d = math.hypot(dx, dy) or 1.0
+        nx, ny = dx / d, dy / d
+        if direction == "away":
+            config.knockback_impulse_x = max(-30.0, min(30.0, config.knockback_impulse_x + nx * strength))
+            config.knockback_impulse_y = max(-30.0, min(30.0, config.knockback_impulse_y + ny * strength))
+        else:
+            config.knockback_impulse_x = max(-30.0, min(30.0, config.knockback_impulse_x - nx * strength))
+            config.knockback_impulse_y = max(-30.0, min(30.0, config.knockback_impulse_y - ny * strength))
+
+    # 체인 훅
+    class ChainHook:
+        __slots__ = ("x","y","ux","uy","phase","alive","hit_applied","out_speed","reel_speed")
+        def __init__(self, x, y, ang, out_speed, reel_speed):
+            self.x = x; self.y = y
+            self.ux = math.cos(ang); self.uy = math.sin(ang)
+            self.phase = "out"
+            self.alive = True
+            self.hit_applied = False
+            self.out_speed  = out_speed
+            self.reel_speed = reel_speed
+
+        def update(self, boss_x, boss_y):
+            if not self.alive: return
+            if self.phase == "out":
+                self.x += self.ux * self.out_speed
+                self.y += self.uy * self.out_speed
+            else:
+                dx, dy = boss_x - self.x, boss_y - self.y
+                d = math.hypot(dx, dy) or 1.0
+                self.x += (dx / d) * self.reel_speed
+                self.y += (dy / d) * self.reel_speed
+                if d <= self.reel_speed + 2:
+                    self.alive = False
+
+    # 드랍/사망
+    def die(self, blood_effects):
+        if not self._boss5_drop_done:
+            self.spawn_dropped_items(*self.ORB_DROP_ON_DEATH)
+            self._boss5_drop_done = True
+        super().die(blood_effects)
+
+    def stop_sounds_on_remove(self):
+        # 장면에서 제거 시 드래그 사운드 정리
+        try:
+            if self._drag_channel and self._drag_channel.get_busy():
+                self._drag_channel.stop()
+        except Exception:
+            pass
+        self._drag_channel = None
+
+    # 메인 업데이트
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        if not self.alive:
+            return
+
+        # 플레이어 각도
+        px, py = self._player_center(player_rect, world_x, world_y)
+        self.facing_angle = math.atan2(py - self.world_y, px - self.world_x)
+
+        # 분노 진입
+        if not self.enraged and self.hp <= self.HP_MAX // 2:
+            self.enraged = True
+            if not self.half_hp_triggered:
+                self.spawn_dropped_items(*self.ORB_DROP_ON_HALF_HP)
+                self.half_hp_triggered = True
+
+        dist = math.hypot(px - self.world_x, py - self.world_y)
+        now = pygame.time.get_ticks()
+
+        # 스핀 만료
+        if self.whirl_spin_until and now >= self.whirl_spin_until:
+            self.whirl_spin_until = 0
+
+        # 끌기(toward) 유지 + 사운드 관리(루프 없음)
+        if self._dragging and now < self.drag_until:
+            self._apply_impulse(px, py, self.world_x, self.world_y, strength=self.CHAIN_PULL_STRENGTH, direction="toward")
+            # 빈 채널이면 0.8s 단발 재생(최대 5초 세이프티)
+            if "chain_drag" in self.sounds and now < self._drag_sound_end_ms:
+                if (self._drag_channel is None) or (not self._drag_channel.get_busy()):
+                    try:
+                        self._drag_channel = self.sounds["chain_drag"].play(loops=0)
+                        self._drag_last_play_ms = now
+                    except Exception:
+                        self._drag_channel = None
+        else:
+            self._dragging = False
+            # 즉시 정리
+            if self._drag_channel:
+                try:
+                    if self._drag_channel.get_busy():
+                        self._drag_channel.stop()
+                except Exception:
+                    pass
+                self._drag_channel = None
+
+        # 훅 업데이트 & 충돌 (아웃/리턴 모두 히트)
+        if self.hooks:
+            rng2 = (self.CHAIN_RANGE * self.CHAIN_RANGE)
+            for h in self.hooks:
+                if not h.alive: continue
+                dx, dy = h.x - self.world_x, h.y - self.world_y
+                if h.phase == "out" and (dx*dx + dy*dy) >= rng2:
+                    h.phase = "reel"
+                h.update(self.world_x, self.world_y)
+
+                # 히트 판정 (1회)
+                if not h.hit_applied and math.hypot(px - h.x, py - h.y) <= self.CHAIN_HIT_RADIUS:
+                    h.hit_applied = True
+                    if "chain_hit" in self.sounds: self.sounds["chain_hit"].play()
+                    # 드래그 시작(사운드 세이프티)
+                    self._dragging = True
+                    self.drag_until = max(self.drag_until, now + self.CHAIN_DRAG_MS)
+                    self._drag_sound_end_ms = now + 5000
+                    if self.enraged:
+                        try:
+                            config.active_dots.append({"end_time": now + self.DOT_DURATION_MS,
+                                                       "damage": self.DOT_DMG_PER_SEC})
+                        except Exception: pass
+                    if self.damage_player:
+                        try: self.damage_player(int(self.CHAIN_FOLLOW_DMG))
+                        except Exception: pass
+                    # 즉시 리턴 + 느린 회수
+                    h.phase = "reel"
+                    h.reel_speed = self.CHAIN_SPEED_BASE * self.CHAIN_HIT_REEL_FAC
+            self.hooks = [h for h in self.hooks if h.alive]
+
+        # 슬램 FSM 전환
+        if self.slam_phase == "out" and (now - self.slam_phase_t0) >= self.SLAM_OUT_MS:
+            self.slam_phase = "reel"
+            self.slam_phase_t0 = now
+        elif self.slam_phase == "reel" and (now - self.slam_phase_t0) >= self.SLAM_REEL_MS:
+            self.slam_phase = "idle"
+            self.slam_done_damage = False
+
+        # 패턴 스케줄
+        # 근접: 회전 우선
+        if dist <= int(180 * PLAYER_VIEW_SCALE) and self.whirl_prep_until == 0 and self.whirl_spin_until == 0:
+            if self._ready(self.last_whirl, self.WHIRL_COOLDOWN):
+                self.whirl_prep_until = now + self.WHIRL_TEL_MS
+
+        # 중거리: 내려찍기(시전 중 각도 갱신)
+        if self.slam_prep_until == 0 and self.whirl_prep_until == 0 and not self.chain_prep_until:
+            if int(300 * PLAYER_VIEW_SCALE) <= dist <= int(600 * PLAYER_VIEW_SCALE):
+                if self._ready(self.last_slam, self.SLAM_COOLDOWN):
+                    self.slam_prep_until = now + self.SLAM_TEL_MS
+                    self.slam_aim_angle = self.facing_angle
+        if self.slam_prep_until and now < self.slam_prep_until:
+            self.slam_aim_angle = self.facing_angle
+
+        # 원거리/기타: 전방향 사슬 (텔레그래프 회전 시작)
+        if self.chain_prep_until == 0 and self.whirl_prep_until == 0 and self.slam_prep_until == 0:
+            if self._ready(self.last_chain, self.CHAIN_COOLDOWN) and not self.hooks:
+                self.chain_prep_until = now + self.CHAIN_TEL_MS
+                self.chain_tel_start = now
+                self.chain_tel_freeze_at = self.chain_prep_until - self.CHAIN_TEL_FREEZE_MS
+                self.chain_tel_angle0 = ((now * 0.003) % (2 * math.pi))  # 간단 의사랜덤 시드
+                self.chain_tel_angle_frozen = None
+
+        # -텔레그래프 종료 → 발사/실행
+        # 회전 발사
+        if self.whirl_prep_until and now >= self.whirl_prep_until:
+            if "whirl" in self.sounds: self.sounds["whirl"].play()
+            if math.hypot(px - self.world_x, py - self.world_y) <= self.WHIRL_RADIUS:
+                try: self.damage_player(int(self.WHIRL_DMG))
+                except Exception: pass
+                self._apply_impulse(px, py, self.world_x, self.world_y,
+                                    strength=self.WHIRL_PUSH_STRENGTH, direction="away")
+                if self.enraged:
+                    try: config.active_dots.append({"end_time": now + self.DOT_DURATION_MS,
+                                                    "damage": self.DOT_DMG_PER_SEC})
+                    except Exception: pass
+            self.last_whirl = now
+            self.whirl_prep_until = 0
+            self.whirl_spin_until = now + self.WHIRL_SPIN_MS
+            self._whirl_base_angle = self.facing_angle
+
+        # 내려찍기 발사
+        if self.slam_prep_until and now >= self.slam_prep_until:
+            self.last_slam = now
+            self.slam_prep_until = 0
+            self.slam_aim_angle = self.facing_angle
+            self.slam_phase = "out"
+            self.slam_phase_t0 = now
+            self.slam_done_damage = False
+            if "chain_throw" in self.sounds: self.sounds["chain_throw"].play()
+
+        # 내려찍기 피해(애니 중 1회, toward)
+        if self.slam_phase in ("out","reel") and not self.slam_done_damage:
+            if self.slam_phase == "out":
+                prog = min(1.0, (now - self.slam_phase_t0) / max(1, self.SLAM_OUT_MS))
+            else:
+                prog = max(0.0, 1.0 - (now - self.slam_phase_t0) / max(1, self.SLAM_REEL_MS))
+            cur_len = self.SLAM_LEN * prog
+            x1, y1 = self.world_x, self.world_y
+            x2 = x1 + math.cos(self.slam_aim_angle) * cur_len
+            y2 = y1 + math.sin(self.slam_aim_angle) * cur_len
+
+            def _pt_seg(px_, py_, x1_, y1_, x2_, y2_):
+                vx, vy = x2_ - x1_, y2_ - y1_
+                wx, wy = px_ - x1_, py_ - y1_
+                c1 = vx * wx + vy * wy
+                if c1 <= 0:   return math.hypot(px_ - x1_, py_ - y1_)
+                c2 = vx * vx + vy * vy
+                if c2 <= c1:  return math.hypot(px_ - x2_, py_ - y2_)
+                b = c1 / c2
+                bx, by = x1_ + b * vx, y1_ + b * vy
+                return math.hypot(px_ - bx, py_ - by)
+
+            if _pt_seg(px, py, x1, y1, x2, y2) <= self.SLAM_LINE_W * 0.5:
+                try: self.damage_player(int(self.SLAM_DMG))
+                except Exception: pass
+                self._apply_impulse(px, py, self.world_x, self.world_y,
+                                    strength=self.SLAM_PULL_STRENGTH, direction="toward")
+                self.slam_done_damage = True
+
+        # 전방향 사슬 발사(회전 정지 각도로 생성)
+        if self.chain_prep_until and now >= self.chain_prep_until:
+            # 정지 각 계산
+            if self.chain_tel_angle_frozen is None:
+                freeze_angle = self.chain_tel_angle0 + self.CHAIN_TEL_ROT_SPEED * max(0.0, (self.chain_tel_freeze_at - self.chain_tel_start)) / 1000.0
+            else:
+                freeze_angle = self.chain_tel_angle_frozen
+            angle_step = (2 * math.pi) / float(self.CHAIN_FAN_COUNT)
+            out_spd  = self.CHAIN_SPEED_BASE * self.CHAIN_OUT_FACTOR
+            reel_spd = self.CHAIN_SPEED_BASE * self.CHAIN_REEL_FACTOR
+            for i in range(self.CHAIN_FAN_COUNT):
+                ang = freeze_angle + angle_step * i
+                self.hooks.append(Boss5.ChainHook(self.world_x, self.world_y, ang, out_spd, reel_spd))
+            self.last_chain = now
+            self.chain_prep_until = 0
+            self.chain_tel_start = 0
+            self.chain_tel_freeze_at = 0
+            self.chain_tel_angle_frozen = None
+            if "chain_throw" in self.sounds: self.sounds["chain_throw"].play()
+
+        # 포지셔닝
+        if (not self._dragging and self.slam_prep_until == 0 and self.slam_phase == "idle"
+            and not self.chain_prep_until and not self.hooks):
+            dx, dy = px - self.world_x, py - self.world_y
+            d = math.hypot(dx, dy) or 1.0
+            nx, ny = dx / d, dy / d
+            if dist < self.KEEP_MIN:
+                self.world_x -= nx * self.speed
+                self.world_y -= ny * self.speed
+            elif dist > self.KEEP_MAX:
+                self.world_x += nx * self.speed
+                self.world_y += ny * self.speed
+            else:
+                ortho = (-ny, nx) if self._strafe_dir > 0 else (ny, -nx)
+                self.world_x += ortho[0] * (self.speed * 0.6)
+                self.world_y += ortho[1] * (self.speed * 0.6)
+                if now % 1200 < 20: self._strafe_dir *= -1
+
+        # 경계
+        self.world_x = max(0, min(self.map_width,  self.world_x))
+        self.world_y = max(0, min(self.map_height, self.world_y))
+
+    # 체인 드로잉
+    def _draw_chain_segment(self, surface, x1, y1, x2, y2, width, period=28, duty=0.55):
+        dx, dy = x2 - x1, y2 - y1
+        L = math.hypot(dx, dy)
+        if L < 1: return
+        nx, ny = dx / L, dy / L
+        filled = period * duty
+        t = 0.0
+        while t < L:
+            seg_len = min(filled, L - t)
+            sx = x1 + nx * t; sy = y1 + ny * t
+            ex = x1 + nx * (t + seg_len); ey = y1 + ny * (t + seg_len)
+            pygame.draw.line(surface, self.CHAIN_COLOR_OUTER, (sx, sy), (ex, ey), width + 4)
+            pygame.draw.line(surface, self.CHAIN_COLOR_INNER, (sx, sy), (ex, ey), width)
+            pygame.draw.line(surface, self.CHAIN_COLOR_HIGHL, (sx, sy), (ex, ey), max(1, width - 6))
+            t += period
+
+    def _draw_chain_line(self, surface, x1, y1, x2, y2, width):
+        self._draw_chain_segment(surface, x1, y1, x2, y2, width=width, period=28, duty=0.55)
+
+    def _draw_spoke(self, surface, cx, cy, radius, angle, width):
+        x2 = cx + math.cos(angle) * radius
+        y2 = cy + math.sin(angle) * radius
+        self._draw_chain_line(surface, cx, cy, x2, y2, width)
+
+    # 드로우
+    def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive and self.hp <= 0:
+            return
+
+        sx = self.world_x - world_x
+        sy = self.world_y - world_y
+        now = pygame.time.get_ticks()
+
+        # 본체 회전 렌더
+        ang_deg = math.degrees(self.facing_angle) + self.ORIENT_OFFSET_DEG
+        if self.enraged:
+            glow_r = max(self.image_original.get_width(), self.image_original.get_height()) // 2 + 20
+            glow = pygame.Surface((glow_r*2, glow_r*2), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (255, 60, 40, 70), (glow_r, glow_r), glow_r)
+            surface.blit(glow, glow.get_rect(center=(sx, sy)).topleft)
+        rotated = pygame.transform.rotate(self.image_original, -ang_deg)
+        surface.blit(rotated, rotated.get_rect(center=(sx, sy)).topleft)
+
+        # 텔레그래프(반투명)
+        if self.whirl_prep_until and now < self.whirl_prep_until:
+            r = self.WHIRL_RADIUS
+            s = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (255, 40, 40, 60), (r, r), r)
+            surface.blit(s, (sx - r, sy - r))
+
+        if self.slam_prep_until and now < self.slam_prep_until:
+            tel = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            x1, y1 = sx, sy
+            x2 = x1 + math.cos(self.slam_aim_angle) * self.SLAM_LEN
+            y2 = y1 + math.sin(self.slam_aim_angle) * self.SLAM_LEN
+            pygame.draw.line(tel, (255, 60, 60, 90), (x1, y1), (x2, y2), self.SLAM_LINE_W)
+            surface.blit(tel, (0, 0))
+
+        # 전방향 사슬: 회전 텔레그래프 (종료 0.3초 전 정지)
+        if self.chain_prep_until and now < self.chain_prep_until:
+            if now < self.chain_tel_freeze_at:
+                current_angle = self.chain_tel_angle0 + self.CHAIN_TEL_ROT_SPEED * ((now - self.chain_tel_start) / 1000.0)
+            else:
+                if self.chain_tel_angle_frozen is None:
+                    self.chain_tel_angle_frozen = self.chain_tel_angle0 + self.CHAIN_TEL_ROT_SPEED * ((self.chain_tel_freeze_at - self.chain_tel_start) / 1000.0)
+                current_angle = self.chain_tel_angle_frozen
+
+            tel = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            angle_step = (2 * math.pi) / float(self.CHAIN_FAN_COUNT)
+            length = self.CHAIN_RANGE
+            for i in range(self.CHAIN_FAN_COUNT):
+                a = current_angle + angle_step * i
+                x2 = sx + math.cos(a) * length
+                y2 = sy + math.sin(a) * length
+                pygame.draw.line(tel, (255, 60, 60, 80), (sx, sy), (x2, y2), self.CHAIN_WIDTH)
+            surface.blit(tel, (0, 0))
+
+        # 휘두르기 이펙트(스포크 1바퀴)
+        if self.whirl_spin_until and now < self.whirl_spin_until:
+            t = (now - (self.whirl_spin_until - self.WHIRL_SPIN_MS)) / max(1, self.WHIRL_SPIN_MS)
+            base_angle = self._whirl_base_angle + 2 * math.pi * t
+            self._draw_spoke(surface, sx, sy, self.WHIRL_RADIUS, base_angle, self.WHIRL_CHAIN_W)
+            # 잔상
+            lag1 = base_angle - 0.20
+            lag2 = base_angle - 0.40
+            self._draw_spoke(surface, sx, sy, self.WHIRL_RADIUS, lag1, max(4, self.WHIRL_CHAIN_W-4))
+            self._draw_spoke(surface, sx, sy, self.WHIRL_RADIUS, lag2, max(3, self.WHIRL_CHAIN_W-6))
+
+        # 내려찍기(out→reel) 체인
+        if self.slam_phase in ("out","reel"):
+            if self.slam_phase == "out":
+                prog = min(1.0, (now - self.slam_phase_t0) / max(1, self.SLAM_OUT_MS))
+            else:
+                prog = max(0.0, 1.0 - (now - self.slam_phase_t0) / max(1, self.SLAM_REEL_MS))
+            cur_len = self.SLAM_LEN * prog
+            x1, y1 = sx, sy
+            x2 = x1 + math.cos(self.slam_aim_angle) * cur_len
+            y2 = y1 + math.sin(self.slam_aim_angle) * cur_len
+            self._draw_chain_line(surface, x1, y1, x2, y2, width=max(8, self.SLAM_LINE_W//4))
+
+        # 실제 사슬(멀티 훅)
+        if self.hooks:
+            for h in self.hooks:
+                if not h.alive: continue
+                hx = h.x - world_x
+                hy = h.y - world_y
+                self._draw_chain_line(surface, sx, sy, hx, hy, width=max(6, self.CHAIN_WIDTH//3))
+                pygame.draw.circle(surface, self.CHAIN_COLOR_OUTER, (int(hx), int(hy)), 10)
+                pygame.draw.circle(surface, self.CHAIN_COLOR_INNER, (int(hx), int(hy)), 8)
+
+class Boss6(AIBase):
+    """
+    Abyssal Acolyte — 심연의 수행자
+    - 지속 소환 + 바닥 레이저(필드 제어)
+    - 평상시: rank 1~4 소환 / 분노: rank 3~5 소환
+    - 패턴: Sweep, Crossfire, Rotating Grid, Sigil Rotors,
+            Zigzag Runner, Converging V, Arc Waves, Shifted Lattice, Chain Ignite
+    - 텔레그래프: 전부 '정지' 표시(레이저가 생길 곳만 반투명 안내)
+    - 실탄 레이저: 3중 레이어(Outer/Glow/Core) + 세그먼트 꺾임 + 미세 흔들림
+    - 사운드 미사용, 스프라이트 키 "boss6"
+    """
+    rank = 10
+
+    # ====== 기본 스펙 ======
+    HP_MAX   = 3600
+    SPEED    = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.72
+    RADIUS   = int(48 * PLAYER_VIEW_SCALE)
+    KEEP_MIN = int(260 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(420 * PLAYER_VIEW_SCALE)
+    ORIENT_OFFSET_DEG = 270  # 스프라이트 정면 보정(왼쪽이 기본일 때)
+
+    # ====== 소환 ======
+    MINION_CAP_BASE   = 6
+    MINION_CAP_ENRAGE = 9
+    SUMMON_BURST      = 2
+    SUMMON_CD_BASE    = 4500  # ms
+    SUMMON_CD_ENRAGE  = 3200  # ms
+    SUMMON_RING_MIN   = int(260 * PLAYER_VIEW_SCALE)
+    SUMMON_RING_MAX   = int(520 * PLAYER_VIEW_SCALE)
+
+    # ====== 공용 피해/틱 ======
+    LASER_TICK_MS  = 250  # 지속 패턴 피해 주기
+    SWEEP_DOT      = 8
+    GRID_DOT       = 7
+    ROTOR_DOT      = 9
+    CROSSFIRE_DMG  = 35
+
+    # ====== Sweep(평행 잔류 레이저) ======
+    SWEEP_TELE_MS      = 900
+    SWEEP_LANES        = 5
+    SWEEP_SPACING      = int(120 * PLAYER_VIEW_SCALE)
+    SWEEP_WIDTH        = int(40  * PLAYER_VIEW_SCALE)
+    SWEEP_RESIDUAL_MS  = 1800
+    SWEEP_DIRS         = ("H", "V")  # 가로/세로
+
+    # ====== Crossfire(십자 순간타) ======
+    CF_TELE_MS   = 650
+    CF_WIDTH     = int(56 * PLAYER_VIEW_SCALE)
+
+    # ====== Rotating Grid(회전 격자 → 고정각 발사) ======
+    GRID_TELE_MS   = 1000
+    GRID_CELL      = int(180 * PLAYER_VIEW_SCALE)
+    GRID_WIDTH     = int(32  * PLAYER_VIEW_SCALE)
+    GRID_PERSIST   = 2200
+    GRID_ROT_SPD   = 1.2 * math.pi  # (랜덤 각도 생성용)
+
+    # ====== Sigil Rotors(원형 로터: 발사 중 회전) ======
+    ROTOR_TELE_MS   = 900
+    ROTOR_SPOKES    = 6
+    ROTOR_RADIUS    = int(280 * PLAYER_VIEW_SCALE)
+    ROTOR_WIDTH     = int(28  * PLAYER_VIEW_SCALE)
+    ROTOR_SPIN_MS   = 900
+    ROTOR_ANG_SPD   = 2.0 * math.pi
+
+    # ====== Zigzag Runner(지그재그 폴리라인 레이저) ======
+    ZZ_TELE_MS      = 850
+    ZZ_SEGS         = 6                                # 코너 수+1(선분 수)
+    ZZ_SEG_LEN      = int(240 * PLAYER_VIEW_SCALE)     # 각 선분 길이
+    ZZ_WIDTH        = int(38  * PLAYER_VIEW_SCALE)
+    ZZ_RESIDUAL_MS  = 1700
+    ZZ_DOT          = 8
+
+    # ====== Converging V(수렴 V 두 줄) ======
+    V_TELE_MS       = 800
+    V_WIDTH         = int(44 * PLAYER_VIEW_SCALE)
+    V_RESIDUAL_MS   = 1600
+    V_DOT           = 10
+    V_SPREAD_DEG    = 60  # 두 팔 벌어진 각도
+
+    # ====== Arc Waves(부분 원호 다중) ======
+    ARC_TELE_MS     = 900
+    ARC_COUNT       = 3
+    ARC_RADIUS_BASE = int(220 * PLAYER_VIEW_SCALE)
+    ARC_RADIUS_STEP = int(120 * PLAYER_VIEW_SCALE)
+    ARC_SPAN_DEG    = 120                   # 각 원호 길이(도)
+    ARC_WIDTH       = int(36  * PLAYER_VIEW_SCALE)
+    ARC_RESIDUAL_MS = 1700
+    ARC_DOT         = 8
+
+    # ====== Shifted Lattice(계단식 격자) ======
+    LAT_TELE_MS     = 900
+    LAT_CELL        = int(180 * PLAYER_VIEW_SCALE)
+    LAT_WIDTH       = int(30  * PLAYER_VIEW_SCALE)
+    LAT_OFFSET      = int(80  * PLAYER_VIEW_SCALE)     # 한 축으로 밀린 오프셋
+    LAT_PERSIST     = 2000
+    LAT_DOT         = 7
+
+    # ====== Chain Ignite(점선 연쇄 점화) ======
+    IGN_TELE_MS     = 800
+    IGN_WIDTH       = int(40 * PLAYER_VIEW_SCALE)
+    IGN_IGNITE_MS   = 500                                 # 전부 점화까지 시간
+    IGN_RESIDUAL_MS = 1500
+    IGN_DOT         = 9
+
+    # ====== 분노 ======
+    ENRAGE_AT_FRAC  = 0.5  # 50% 이하
+
+    # ====== 레이저 비주얼 ======
+    BEAM_JITTER_MAX = 10
+    BEAM_SEG_LEN    = int(240 * PLAYER_VIEW_SCALE)
+    BEAM_PULSE_MS   = 420
+    COL_OUTER = (255, 40, 40, 70)
+    COL_GLOW  = (255, 90, 90, 110)
+    COL_CORE  = (255, 240, 240, 220)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(world_x, world_y, images, sounds, map_width, map_height,
+                         speed=self.SPEED, near_threshold=0, far_threshold=0,
+                         radius=self.RADIUS, push_strength=0.10, alert_duration=0,
+                         damage_player_fn=damage_player_fn, rank=rank)
+        self.image_original = images["boss6"]
+        self.image = self.image_original
+
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.enraged = False
+
+        self._my_minions = []
+        self._next_summon = pygame.time.get_ticks() + 1200
+
+        self._state = "IDLE"      # IDLE / TELE / RECOVER
+        self._pattern = None
+        self._state_t0 = pygame.time.get_ticks()
+        self._tele_data = None
+        self._hazards  = []       # 활성 레이저/영역
+        self._last_tick_damage = 0
+
+        self.facing_angle = 0.0
+        self._strafe_dir = 1
+        self.kill_callback = kill_callback
+
+        self._seed = random.random() * 1000.0
+        self._images_dict = images
+        self._sounds_dict = sounds
+
+    # ---------- 유틸 ----------
+    def _player_center(self, player_rect, world_x, world_y):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _alive_minions(self):
+        alive = 0
+        for m in list(self._my_minions):
+            if getattr(m, "alive", False) and m.hp > 0:
+                alive += 1
+            else:
+                try: self._my_minions.remove(m)
+                except Exception: pass
+        return alive
+
+    def _choose_minion_class(self, low_rank, high_rank):
+        candidates = []
+        for cls in ENEMY_CLASSES:
+            name = getattr(cls, "__name__", "")
+            if name.startswith("Boss"): continue
+            r = getattr(cls, "rank", 1)
+            if low_rank <= r <= high_rank:
+                candidates.append(cls)
+        return random.choice(candidates) if candidates else None
+
+    def _spawn_minions(self, count, low_r, high_r):
+        px, py = self.world_x, self.world_y
+        for _ in range(count):
+            cls = self._choose_minion_class(low_r, high_r)
+            if not cls: break
+            r = random.randint(self.SUMMON_RING_MIN, self.SUMMON_RING_MAX)
+            ang = random.uniform(0, 2*math.pi)
+            sx = min(max(0, px + math.cos(ang)*r), self.map_width)
+            sy = min(max(0, py + math.sin(ang)*r), self.map_height)
+            try:
+                m = cls(sx, sy, self._images_dict, self._sounds_dict,
+                        self.map_width, self.map_height,
+                        damage_player_fn=self.damage_player)
+                setattr(m, "summoned_by", self)
+                if not hasattr(config, "all_enemies"): config.all_enemies = []
+                config.all_enemies.append(m)
+                self._my_minions.append(m)
+            except Exception:
+                pass
+
+    # ---------- 기하/거리 유틸 ----------
+    @staticmethod
+    def _dist_point_to_segment(px, py, x1, y1, x2, y2):
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = px - x1, py - y1
+        c1 = vx * wx + vy * wy
+        if c1 <= 0:   return math.hypot(px - x1, py - y1)
+        c2 = vx * vx + vy * vy
+        if c2 <= c1:  return math.hypot(px - x2, py - y2)
+        b = c1 / c2
+        bx, by = x1 + b * vx, y1 + b * vy
+        return math.hypot(px - bx, py - by)
+
+    @staticmethod
+    def _dist_point_to_polyline(px, py, pts):
+        dmin = 1e9
+        for i in range(len(pts)-1):
+            x1,y1 = pts[i]; x2,y2 = pts[i+1]
+            d = Boss6._dist_point_to_segment(px,py,x1,y1,x2,y2)
+            if d < dmin: dmin = d
+        return dmin
+
+    @staticmethod
+    def _clamp_angle(a):
+        while a < -math.pi: a += 2*math.pi
+        while a >  math.pi: a -= 2*math.pi
+        return a
+
+    @staticmethod
+    def _dist_point_to_arc(px, py, cx, cy, r, a0, a1):
+        # 최근접 각도(호 내부로 클램프), 그 점과의 거리
+        ang = math.atan2(py - cy, px - cx)
+        a0n = Boss6._clamp_angle(a0); a1n = Boss6._clamp_angle(a1)
+        # 호가 시계/반시계 어느 쪽이든 대비하여 정규화
+        def ang_in(ang, a, b):
+            ang = Boss6._clamp_angle(ang)
+            a = Boss6._clamp_angle(a); b = Boss6._clamp_angle(b)
+            if a <= b: return a <= ang <= b
+            return ang >= a or ang <= b
+        if ang_in(ang, a0n, a1n):
+            nearest_ang = ang
+        else:
+            # 가장 가까운 끝각 선택
+            d0 = abs(Boss6._clamp_angle(ang - a0n))
+            d1 = abs(Boss6._clamp_angle(ang - a1n))
+            nearest_ang = a0n if d0 < d1 else a1n
+        qx = cx + math.cos(nearest_ang)*r
+        qy = cy + math.sin(nearest_ang)*r
+        return math.hypot(px - qx, py - qy)
+
+    # ---------- FSM ----------
+    def _enter(self, state, pattern=None, tele_data=None):
+        self._state = state
+        self._state_t0 = pygame.time.get_ticks()
+        self._pattern = pattern
+        self._tele_data = tele_data
+
+    def _ready_new_pattern(self):
+        now = pygame.time.get_ticks()
+        return self._state == "IDLE" and (now - self._state_t0) >= 600
+
+    # ---------- 텔레 데이터 ----------
+    def _build_sweep(self):
+        orientation = random.choice(self.SWEEP_DIRS)
+        lanes = self.SWEEP_LANES
+        spacing = self.SWEEP_SPACING
+        width = self.SWEEP_WIDTH
+        if orientation == "H":
+            base = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_height - int(120*PLAYER_VIEW_SCALE))
+            lanes_vals = [base + (i - lanes//2)*spacing for i in range(lanes)]
+        else:
+            base = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_width - int(120*PLAYER_VIEW_SCALE))
+            lanes_vals = [base + (i - lanes//2)*spacing for i in range(lanes)]
+        return {"type":"SWEEP","ori":orientation,"lanes":lanes_vals,"width":width,"tele_ms":self.SWEEP_TELE_MS}
+
+    def _build_crossfire(self, cx, cy):
+        return {"type":"CF","cx":cx,"cy":cy,"width":self.CF_WIDTH,"tele_ms":self.CF_TELE_MS}
+
+    def _build_grid(self):
+        ang0 = random.uniform(0, 2*math.pi)   # 고정각
+        return {"type":"GRID","ang":ang0,"cell":self.GRID_CELL,"width":self.GRID_WIDTH,
+                "tele_ms":self.GRID_TELE_MS,"persist":self.GRID_PERSIST}
+
+    def _build_rotors(self, cx, cy):
+        return {"type":"ROTOR","cx":cx,"cy":cy,"spokes":self.ROTOR_SPOKES,"radius":self.ROTOR_RADIUS,
+                "width":self.ROTOR_WIDTH,"tele_ms":self.ROTOR_TELE_MS,
+                "spin_ms":self.ROTOR_SPIN_MS,"ang_spd":self.ROTOR_ANG_SPD,
+                "ang0":random.uniform(0, 2*math.pi)}
+
+    def _build_zigzag(self):
+        # 화면 가로를 가로지르는 폴리라인(지그재그)
+        orient = random.choice(("H","V"))
+        pts = []
+        if orient == "H":
+            y = random.randint(int(150*PLAYER_VIEW_SCALE), self.map_height - int(150*PLAYER_VIEW_SCALE))
+            x = 0
+            dir_y = 1
+            pts.append((x, y))
+            for _ in range(self.ZZ_SEGS):
+                x = min(self.map_width, x + self.ZZ_SEG_LEN)
+                y = max(int(80*PLAYER_VIEW_SCALE),
+                        min(self.map_height - int(80*PLAYER_VIEW_SCALE), y + dir_y*self.ZZ_SEG_LEN//2))
+                pts.append((x, y))
+                dir_y *= -1
+        else:
+            x = random.randint(int(150*PLAYER_VIEW_SCALE), self.map_width - int(150*PLAYER_VIEW_SCALE))
+            y = 0
+            dir_x = 1
+            pts.append((x, y))
+            for _ in range(self.ZZ_SEGS):
+                y = min(self.map_height, y + self.ZZ_SEG_LEN)
+                x = max(int(80*PLAYER_VIEW_SCALE),
+                        min(self.map_width - int(80*PLAYER_VIEW_SCALE), x + dir_x*self.ZZ_SEG_LEN//2))
+                pts.append((x, y))
+                dir_x *= -1
+        return {"type":"ZZ","pts":pts,"width":self.ZZ_WIDTH,"tele_ms":self.ZZ_TELE_MS}
+
+    def _build_vshape(self):
+        # 보스 기준 수렴 V : 중심에서 두 팔이 퍼져나가며 '잔류' 빔으로 고정
+        spread = math.radians(self.V_SPREAD_DEG)
+        base_ang = random.uniform(0, 2*math.pi)
+        a0 = base_ang - spread*0.5
+        a1 = base_ang + spread*0.5
+        # 화면 경계까지 연장
+        L = max(self.map_width, self.map_height) * 1.5
+        cx, cy = self.world_x, self.world_y
+        x0, y0 = cx + math.cos(a0)*L, cy + math.sin(a0)*L
+        x1, y1 = cx + math.cos(a1)*L, cy + math.sin(a1)*L
+        return {"type":"V","cx":cx,"cy":cy,"x0":x0,"y0":y0,"x1":x1,"y1":y1,
+                "width":self.V_WIDTH,"tele_ms":self.V_TELE_MS}
+
+    def _build_arcs(self):
+        base_ang = random.uniform(0, 2*math.pi)
+        span = math.radians(self.ARC_SPAN_DEG)
+        arcs = []
+        for i in range(self.ARC_COUNT):
+            r = self.ARC_RADIUS_BASE + i*self.ARC_RADIUS_STEP
+            a0 = base_ang - span*0.5
+            a1 = base_ang + span*0.5
+            arcs.append((r, a0, a1))
+        return {"type":"ARC","cx":self.world_x,"cy":self.world_y,
+                "arcs":arcs,"width":self.ARC_WIDTH,"tele_ms":self.ARC_TELE_MS}
+
+    def _build_lattice(self):
+        ang = random.choice((0, math.pi/2))  # 수평/수직 격자
+        return {"type":"LAT","ang":ang,"cell":self.LAT_CELL,"offset":self.LAT_OFFSET,
+                "width":self.LAT_WIDTH,"tele_ms":self.LAT_TELE_MS,"persist":self.LAT_PERSIST}
+
+    def _build_ignite(self):
+        # 한 줄 점선 → 점화 진행형 레이저
+        ori = random.choice(("H","V"))
+        if ori == "H":
+            y = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_height - int(120*PLAYER_VIEW_SCALE))
+            return {"type":"IGN","ori":"H","x1":0,"y1":y,"x2":self.map_width,"y2":y,
+                    "width":self.IGN_WIDTH,"tele_ms":self.IGN_TELE_MS}
+        else:
+            x = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_width - int(120*PLAYER_VIEW_SCALE))
+            return {"type":"IGN","ori":"V","x1":x,"y1":0,"x2":x,"y2":self.map_height,
+                    "width":self.IGN_WIDTH,"tele_ms":self.IGN_TELE_MS}
+
+    # ---------- 발동 ----------
+    def _fire_pattern(self):
+        now = pygame.time.get_ticks()
+        t = self._tele_data
+        if not t: return
+
+        if t["type"] == "SWEEP":
+            hazards = []
+            w = t["width"]
+            if t["ori"] == "H":
+                for y in t["lanes"]:
+                    hazards.append({"kind":"line_static","x1":0,"y1":y,"x2":self.map_width,"y2":y,
+                                    "w":w,"expire":now + self.SWEEP_RESIDUAL_MS,"dps":self.SWEEP_DOT,"t0":now})
+            else:
+                for x in t["lanes"]:
+                    hazards.append({"kind":"line_static","x1":x,"y1":0,"x2":x,"y2":self.map_height,
+                                    "w":w,"expire":now + self.SWEEP_RESIDUAL_MS,"dps":self.SWEEP_DOT,"t0":now})
+            self._hazards.extend(hazards)
+
+        elif t["type"] == "CF":
+            px, py = self._player_center(config.player_rect, config.world_x, config.world_y)
+            w = t["width"]
+            if abs(py - t["cy"]) <= w*0.5 or abs(px - t["cx"]) <= w*0.5:
+                try: self.damage_player(int(self.CROSSFIRE_DMG))
+                except Exception: pass
+
+        elif t["type"] == "GRID":
+            ang = t["ang"]
+            cell = t["cell"]; w = t["width"]; expire = now + t["persist"]
+            lines = []
+            L = max(self.map_width, self.map_height) * 1.5
+            for axis in (ang, ang + math.pi/2):
+                step = cell
+                for offset in range(-max(self.map_width, self.map_height),
+                                    max(self.map_width, self.map_height)+1, step):
+                    cx, cy = self.world_x, self.world_y
+                    nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
+                    ox, oy = cx + nx*offset, cy + ny*offset
+                    dx, dy = math.cos(axis), math.sin(axis)
+                    x1, y1 = ox - dx*L, oy - dy*L
+                    x2, y2 = ox + dx*L, oy + dy*L
+                    lines.append({"kind":"line_static","x1":x1,"y1":y1,"x2":x2,"y2":y2,
+                                  "w":w,"expire":expire,"dps":self.GRID_DOT,"t0":now})
+            self._hazards.extend(lines)
+
+        elif t["type"] == "ROTOR":
+            self._hazards.append({
+                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":t["radius"],
+                "w":t["width"],"spokes":t["spokes"],"ang0":t["ang0"],"ang_spd":t["ang_spd"],
+                "t0":now,"duration":t["spin_ms"],"dps":self.ROTOR_DOT
+            })
+
+        elif t["type"] == "ZZ":
+            self._hazards.append({
+                "kind":"polyline_static","pts":t["pts"],"w":t["width"],
+                "expire":now + self.ZZ_RESIDUAL_MS,"dps":self.ZZ_DOT,"t0":now
+            })
+
+        elif t["type"] == "V":
+            self._hazards.append({
+                "kind":"line_static","x1":t["cx"],"y1":t["cy"],"x2":t["x0"],"y2":t["y0"],
+                "w":t["width"],"expire":now + self.V_RESIDUAL_MS,"dps":self.V_DOT,"t0":now
+            })
+            self._hazards.append({
+                "kind":"line_static","x1":t["cx"],"y1":t["cy"],"x2":t["x1"],"y2":t["y1"],
+                "w":t["width"],"expire":now + self.V_RESIDUAL_MS,"dps":self.V_DOT,"t0":now
+            })
+
+        elif t["type"] == "ARC":
+            for (r, a0, a1) in t["arcs"]:
+                self._hazards.append({
+                    "kind":"arc_static","cx":t["cx"],"cy":t["cy"],"r":r,
+                    "a0":a0,"a1":a1,"w":t["width"],
+                    "expire":now + self.ARC_RESIDUAL_MS,"dps":self.ARC_DOT,"t0":now
+                })
+
+        elif t["type"] == "LAT":
+            # 계단식 오프셋: 한 축은 셀 간격으로, 다른 축은 +-offset 교차
+            ang = t["ang"]; cell = t["cell"]; off = t["offset"]; w = t["width"]
+            expire = now + self.LAT_PERSIST
+            lines = []
+            L = max(self.map_width, self.map_height) * 1.5
+            # 기본 축(ang)과 수직축(ang+90)
+            for idx, axis in enumerate((ang, ang + math.pi/2)):
+                step = cell
+                sign = 1
+                for k, offset in enumerate(range(-max(self.map_width, self.map_height),
+                                                 max(self.map_width, self.map_height)+1, step)):
+                    cx, cy = self.world_x, self.world_y
+                    nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
+                    ox, oy = cx + nx*offset, cy + ny*offset
+                    dx, dy = math.cos(axis), math.sin(axis)
+                    # 보조축으로 오프셋 교차 적용
+                    ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
+                    oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
+                    x1, y1 = ox - dx*L, oy - dy*L
+                    x2, y2 = ox + dx*L, oy + dy*L
+                    lines.append({"kind":"line_static","x1":x1,"y1":y1,"x2":x2,"y2":y2,
+                                  "w":w,"expire":expire,"dps":self.LAT_DOT,"t0":now})
+            self._hazards.extend(lines)
+
+        elif t["type"] == "IGN":
+            self._hazards.append({
+                "kind":"ignite_line","x1":t["x1"],"y1":t["y1"],"x2":t["x2"],"y2":t["y2"],
+                "w":t["width"],"ignite_ms":self.IGN_IGNITE_MS,
+                "expire": now + self.IGN_IGNITE_MS + self.IGN_RESIDUAL_MS,
+                "dps": self.IGN_DOT, "t0": now
+            })
+
+        self._enter("RECOVER")
+
+    # ---------- 업데이트 ----------
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        if not self.alive: return
+
+        px, py = self._player_center(player_rect, world_x, world_y)
+        self.facing_angle = math.atan2(py - self.world_y, px - self.world_x)
+
+        if not self.enraged and self.hp <= self.HP_MAX * self.ENRAGE_AT_FRAC:
+            self.enraged = True
+
+        now = pygame.time.get_ticks()
+
+        # 소환
+        cap = self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE
+        if self._alive_minions() < cap and now >= self._next_summon:
+            low, high = (3,5) if self.enraged else (1,4)
+            self._spawn_minions(self.SUMMON_BURST, low, high)
+            cd = self.SUMMON_CD_ENRAGE if self.enraged else self.SUMMON_CD_BASE
+            self._next_summon = now + cd
+
+        # 해저드 갱신/피해
+        do_tick = (now - self._last_tick_damage) >= self.LASER_TICK_MS
+        if do_tick: self._last_tick_damage = now
+
+        new_haz = []
+        for hz in self._hazards:
+            kind = hz["kind"]
+            alive = True
+            deal = 0
+
+            if kind == "line_static":
+                if now <= hz["expire"]:
+                    d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"], hz["x2"], hz["y2"])
+                    if d <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "polyline_static":
+                if now <= hz["expire"]:
+                    d = self._dist_point_to_polyline(px, py, hz["pts"])
+                    if d <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "arc_static":
+                if now <= hz["expire"]:
+                    d = self._dist_point_to_arc(px, py, hz["cx"], hz["cy"], hz["r"], hz["a0"], hz["a1"])
+                    if d <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "ignite_line":
+                if now <= hz["expire"]:
+                    # 점화 진행 비율
+                    Lx = hz["x2"] - hz["x1"]; Ly = hz["y2"] - hz["y1"]
+                    L = max(1.0, math.hypot(Lx, Ly))
+                    frac = min(1.0, max(0.0, (now - hz["t0"]) / max(1, hz["ignite_ms"])))
+                    # 플레이어가 '점화된 구간' 내에 접해있는가?
+                    # 투영 길이 t <= L*frac 이어야 함
+                    vx, vy = Lx / L, Ly / L
+                    wx, wy = px - hz["x1"], py - hz["y1"]
+                    tproj = max(0.0, min(L, vx*wx + vy*wy))
+                    d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"],
+                                                    hz["x1"] + vx*(L*frac),
+                                                    hz["y1"] + vy*(L*frac))
+                    if tproj <= L*frac and d <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "rotor":
+                tfrac = (now - hz["t0"]) / max(1, hz["duration"])
+                if tfrac <= 1.0:
+                    cur_ang = hz["ang0"] + hz["ang_spd"] * ((now - hz["t0"])/1000.0)
+                    for i in range(hz["spokes"]):
+                        ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
+                        x2 = hz["cx"] + math.cos(ang)*hz["r"]
+                        y2 = hz["cy"] + math.sin(ang)*hz["r"]
+                        d = self._dist_point_to_segment(px, py, hz["cx"], hz["cy"], x2, y2)
+                        if d <= hz["w"] * 0.5:
+                            if do_tick: deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                            break
+                else:
+                    alive = False
+
+            if deal > 0:
+                try: self.damage_player(int(deal))
+                except Exception: pass
+
+            if alive:
+                new_haz.append(hz)
+        self._hazards = new_haz
+
+        # 패턴 스케줄
+        if self._ready_new_pattern():
+            choices = ["SWEEP","CF","GRID","ROTOR","ZZ","V","ARC","LAT","IGN"]
+            weights = [3, 2, 2, 2, 2, 2, 2, 2, 2]  # 필요시 조정
+            pat = random.choices(choices, weights=weights, k=1)[0]
+            if pat == "SWEEP":   tele = self._build_sweep()
+            elif pat == "CF":    tele = self._build_crossfire(self.world_x, self.world_y)
+            elif pat == "GRID":  tele = self._build_grid()
+            elif pat == "ROTOR": tele = self._build_rotors(self.world_x, self.world_y)
+            elif pat == "ZZ":    tele = self._build_zigzag()
+            elif pat == "V":     tele = self._build_vshape()
+            elif pat == "ARC":   tele = self._build_arcs()
+            elif pat == "LAT":   tele = self._build_lattice()
+            else:                 tele = self._build_ignite()
+            self._enter("TELE", pattern=pat, tele_data=tele)
+
+        # 텔레 → 발동
+        if self._state == "TELE":
+            t = self._tele_data
+            if t and (now - self._state_t0) >= t["tele_ms"]:
+                self._fire_pattern()
+        elif self._state == "RECOVER":
+            if (now - self._state_t0) >= 400:
+                self._enter("IDLE")
+
+        # 포지셔닝
+        dist = math.hypot(px - self.world_x, py - self.world_y)
+        dx, dy = px - self.world_x, py - self.world_y
+        d = dist or 1.0; nx, ny = dx/d, dy/d
+        if dist < self.KEEP_MIN:
+            self.world_x -= nx * self.speed
+            self.world_y -= ny * self.speed
+        elif dist > self.KEEP_MAX:
+            self.world_x += nx * self.speed
+            self.world_y += ny * self.speed
+        else:
+            ortho = (-ny, nx) if self._strafe_dir > 0 else (ny, -nx)
+            self.world_x += ortho[0] * (self.speed * 0.55)
+            self.world_y += ortho[1] * (self.speed * 0.55)
+            if now % 1200 < 20: self._strafe_dir *= -1
+
+        self.world_x = max(0, min(self.map_width,  self.world_x))
+        self.world_y = max(0, min(self.map_height, self.world_y))
+
+    # ---------- 레이저 도형(시각효과) ----------
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
+        dx, dy = x2 - x1, y2 - y1
+        L = max(1.0, math.hypot(dx, dy))
+        nx, ny = dx / L, dy / L
+        px, py = -ny, nx  # 법선
+        nseg = max(3, int(L / max(60.0, seg_len)))
+        pts = [(x1, y1)]
+        for i in range(1, nseg):
+            u = i / float(nseg)
+            bx = x1 + dx * u
+            by = y1 + dy * u
+            w = (math.sin((u + seed) * 7.5 + tsec * 5.0) +
+                 math.cos((u*1.7 + seed*0.7) * 9.0 - tsec * 3.5)) * 0.5
+            off = w * jitter_amp
+            pts.append((bx + px * off, by + py * off))
+        pts.append((x2, y2))
+        return pts
+
+    def _draw_polyline(self, surf, pts, color, width):
+        if len(pts) < 2: return
+        for i in range(len(pts)-1):
+            pygame.draw.line(surf, color, pts[i], pts[i+1], max(1, int(width)))
+
+    def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms):
+        now = pygame.time.get_ticks()
+        tsec = now * 0.001
+        jitter = min(self.BEAM_JITTER_MAX, base_w * 0.45)
+        pts = self._beam_points(x1, y1, x2, y2, jitter_amp=jitter,
+                                seg_len=self.BEAM_SEG_LEN, tsec=tsec,
+                                seed=(born_ms % 997) * 0.001)
+        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2*math.pi / max(60, self.BEAM_PULSE_MS)))
+        core_w = max(1, int(base_w * (0.55 + 0.15*pulse)))
+        glow_w = max(core_w+2, int(base_w * 1.15))
+        outer_w = max(glow_w+2, int(base_w * 1.7))
+        self._draw_polyline(lay, pts, self.COL_OUTER, outer_w)
+        self._draw_polyline(lay, pts, self.COL_GLOW,  glow_w)
+        self._draw_polyline(lay, pts, self.COL_CORE,  core_w)
+
+    def _draw_arc_beam(self, lay, cx, cy, r, a0, a1, base_w, born_ms, seg_ang=0.12):
+        # 호를 작은 선분들로 나누어 빔 레이어로 그림
+        ang = a0
+        while True:
+            anext = min(a1, ang + seg_ang)
+            x1 = cx + math.cos(ang)*r
+            y1 = cy + math.sin(ang)*r
+            x2 = cx + math.cos(anext)*r
+            y2 = cy + math.sin(anext)*r
+            self._draw_beam_layered(lay, x1, y1, x2, y2, base_w, born_ms)
+            if anext >= a1 - 1e-6: break
+            ang = anext
+
+    # ---------- 드로우 ----------
+    def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive and self.hp <= 0: return
+
+        sx = self.world_x - world_x
+        sy = self.world_y - world_y
+        now = pygame.time.get_ticks()
+
+        # 본체
+        ang_deg = math.degrees(self.facing_angle) + self.ORIENT_OFFSET_DEG
+        rotated = pygame.transform.rotate(self.image_original, -ang_deg)
+        surface.blit(rotated, rotated.get_rect(center=(sx, sy)).topleft)
+
+        # --- 텔레그래프(정지 표시) ---
+        if self._state == "TELE" and self._tele_data:
+            t = self._tele_data
+            tel = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            if t["type"] == "SWEEP":
+                if t["ori"] == "H":
+                    for y in t["lanes"]:
+                        pygame.draw.line(tel, (255, 60, 60, 70),
+                                         (0, y - world_y), (SCREEN_WIDTH, y - world_y),
+                                         max(4, t["width"]//2))
+                else:
+                    for x in t["lanes"]:
+                        pygame.draw.line(tel, (255, 60, 60, 70),
+                                         (x - world_x, 0), (x - world_x, SCREEN_HEIGHT),
+                                         max(4, t["width"]//2))
+            elif t["type"] == "CF":
+                w = t["width"]
+                pygame.draw.rect(tel, (255, 60, 60, 75),
+                                 pygame.Rect(0, t["cy"] - w*0.5 - world_y, SCREEN_WIDTH, w))
+                pygame.draw.rect(tel, (255, 60, 60, 75),
+                                 pygame.Rect(t["cx"] - w*0.5 - world_x, 0, w, SCREEN_HEIGHT))
+            elif t["type"] == "GRID":
+                a = t["ang"]
+                for axis in (a, a + math.pi/2):
+                    for offset in range(-self.map_width, self.map_width+1, t["cell"]):
+                        L = max(self.map_width, self.map_height) * 1.5
+                        cx, cy = sx, sy
+                        nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
+                        ox, oy = cx + nx*offset, cy + ny*offset
+                        dx, dy = math.cos(axis), math.sin(axis)
+                        x1, y1 = ox - dx*L, oy - dy*L
+                        x2, y2 = ox + dx*L, oy + dy*L
+                        pygame.draw.line(tel, (255, 60, 60, 70), (x1, y1), (x2, y2), 8)
+            elif t["type"] == "ROTOR":
+                pygame.draw.circle(tel, (255, 60, 60, 60), (int(sx), int(sy)), t["radius"], width=4)
+                a = t["ang0"]
+                for i in range(t["spokes"]):
+                    ang = a + (2*math.pi/float(t["spokes"])) * i
+                    x2 = sx + math.cos(ang)*t["radius"]
+                    y2 = sy + math.sin(ang)*t["radius"]
+                    pygame.draw.line(tel, (255, 60, 60, 70), (sx, sy), (x2, y2), 6)
+            elif t["type"] == "ZZ":
+                for i in range(len(t["pts"]) - 1):
+                    x1,y1 = t["pts"][i]
+                    x2,y2 = t["pts"][i+1]
+                    pygame.draw.line(tel, (255, 60, 60, 70),
+                                     (x1 - world_x, y1 - world_y),
+                                     (x2 - world_x, y2 - world_y),
+                                     max(4, t["width"]//2))
+            elif t["type"] == "V":
+                pygame.draw.line(tel, (255,60,60,70), (t["cx"]-world_x, t["cy"]-world_y),
+                                 (t["x0"]-world_x, t["y0"]-world_y), max(4, t["width"]//2))
+                pygame.draw.line(tel, (255,60,60,70), (t["cx"]-world_x, t["cy"]-world_y),
+                                 (t["x1"]-world_x, t["y1"]-world_y), max(4, t["width"]//2))
+            elif t["type"] == "ARC":
+                for (r,a0,a1) in t["arcs"]:
+                    # 얇은 호 가이드
+                    ang = a0
+                    while True:
+                        anext = min(a1, ang + 0.18)
+                        x1 = self.world_x - world_x + math.cos(ang)*r
+                        y1 = self.world_y - world_y + math.sin(ang)*r
+                        x2 = self.world_x - world_x + math.cos(anext)*r
+                        y2 = self.world_y - world_y + math.sin(anext)*r
+                        pygame.draw.line(tel, (255,60,60,70), (x1,y1), (x2,y2), max(4, t["width"]//2))
+                        if anext >= a1 - 1e-6: break
+                        ang = anext
+            elif t["type"] == "LAT":
+                a = t["ang"]; cell = t["cell"]; off = t["offset"]
+                L = max(self.map_width, self.map_height) * 1.5
+                for axis in (a, a + math.pi/2):
+                    step = cell
+                    for k, offset in enumerate(range(-max(self.map_width, self.map_height),
+                                                     max(self.map_width, self.map_height)+1, step)):
+                        cx, cy = sx, sy
+                        nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
+                        ox, oy = cx + nx*offset, cy + ny*offset
+                        dx, dy = math.cos(axis), math.sin(axis)
+                        ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
+                        oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
+                        x1, y1 = ox - dx*L, oy - dy*L
+                        x2, y2 = ox + dx*L, oy + dy*L
+                        pygame.draw.line(tel, (255,60,60,70), (x1,y1), (x2,y2), max(4, t["width"]//2))
+            elif t["type"] == "IGN":
+                # 점선 텔레그래프
+                x1,y1,x2,y2 = t["x1"]-world_x, t["y1"]-world_y, t["x2"]-world_x, t["y2"]-world_y
+                L = max(1.0, math.hypot(x2-x1, y2-y1))
+                seg = 40; gap = 30
+                vx, vy = (x2-x1)/L, (y2-y1)/L
+                s = 0.0
+                while s < L:
+                    e = min(L, s + seg)
+                    sx1, sy1 = x1 + vx*s, y1 + vy*s
+                    sx2, sy2 = x1 + vx*e, y1 + vy*e
+                    pygame.draw.line(tel, (255,60,60,70), (sx1,sy1), (sx2,sy2), max(4, t["width"]//2))
+                    s = e + gap
+            surface.blit(tel, (0, 0))
+
+        # --- 실제 레이저(3중 레이어 + 꺾임) ---
+        if self._hazards:
+            lay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            for hz in self._hazards:
+                k = hz["kind"]
+                if k == "line_static":
+                    x1 = hz["x1"] - world_x; y1 = hz["y1"] - world_y
+                    x2 = hz["x2"] - world_x; y2 = hz["y2"] - world_y
+                    self._draw_beam_layered(lay, x1, y1, x2, y2, base_w=hz["w"], born_ms=hz.get("t0", now))
+
+                elif k == "polyline_static":
+                    pts = [(x-world_x, y-world_y) for (x,y) in hz["pts"]]
+                    for i in range(len(pts)-1):
+                        x1,y1 = pts[i]; x2,y2 = pts[i+1]
+                        self._draw_beam_layered(lay, x1, y1, x2, y2, base_w=hz["w"], born_ms=hz.get("t0", now))
+
+                elif k == "arc_static":
+                    cx = hz["cx"] - world_x; cy = hz["cy"] - world_y
+                    self._draw_arc_beam(lay, cx, cy, hz["r"], hz["a0"], hz["a1"], hz["w"], hz.get("t0", now))
+
+                elif k == "ignite_line":
+                    x1 = hz["x1"] - world_x; y1 = hz["y1"] - world_y
+                    x2 = hz["x2"] - world_x; y2 = hz["y2"] - world_y
+                    Lx = x2 - x1; Ly = y2 - y1
+                    L = max(1.0, math.hypot(Lx, Ly))
+                    frac = min(1.0, max(0.0, (now - hz["t0"]) / max(1, hz["ignite_ms"])))
+                    vx, vy = Lx / L, Ly / L
+                    tx = x1 + vx * (L * frac)
+                    ty = y1 + vy * (L * frac)
+                    self._draw_beam_layered(lay, x1, y1, tx, ty, base_w=hz["w"], born_ms=hz["t0"])
+
+                elif k == "rotor":
+                    cur_ang = hz["ang0"] + hz["ang_spd"] * ((now - hz["t0"])/1000.0)
+                    cx = hz["cx"] - world_x; cy = hz["cy"] - world_y
+                    for i in range(hz["spokes"]):
+                        ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
+                        x2 = cx + math.cos(ang)*hz["r"]
+                        y2 = cy + math.sin(ang)*hz["r"]
+                        self._draw_beam_layered(lay, cx, cy, x2, y2, base_w=hz["w"], born_ms=hz["t0"])
+            surface.blit(lay, (0, 0))
+
+    # ---------- 사망 ----------
+    def die(self, blood_effects):
+        self._hazards.clear()
+        super().die(blood_effects)

@@ -49,6 +49,12 @@ BOSS_MAP_5 = {
     "crop_rect": {"x_ratio": 2, "y_ratio": 2}
 }
 
+BOSS_MAP_6 = {
+    "obstacles": [],
+    "enemy_infos": [{"x": 1080, "y": 810, "enemy_type": "boss6"}],
+    "crop_rect": {"x_ratio": 2, "y_ratio": 2}
+}
+
 ACQUIRE_MAP_1 = {
     "obstacles": [],
     "enemy_infos": [],
@@ -2576,5 +2582,5 @@ S3_FIGHT_MAPS = [
 ]
 
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
-BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3, BOSS_MAP_4, BOSS_MAP_5]
+BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3, BOSS_MAP_4, BOSS_MAP_5, BOSS_MAP_6]
 FIGHT_MAPS = S1_FIGHT_MAPS

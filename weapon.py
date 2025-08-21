@@ -3244,8 +3244,8 @@ class Gun26(WeaponBase):
 class Gun27(WeaponBase):
     TIER = 5
     CHARGE_TIME_MS = 800
-    LEFT_DAMAGE = 180
-    RIGHT_DAMAGE = int(180 * 0.6)
+    LEFT_DAMAGE = 150
+    RIGHT_DAMAGE = 90
 
     LEFT_AMMO_COST = 35
     RIGHT_AMMO_COST = 18

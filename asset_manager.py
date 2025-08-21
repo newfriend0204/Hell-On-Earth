@@ -409,6 +409,9 @@ def load_images():
     boss5_img = pygame.image.load(path_image("Image", "character", "Boss5.png")).convert_alpha()
     boss5_img = pygame.transform.smoothscale(boss5_img, (120, 120))
 
+    boss6_img = pygame.image.load(path_image("Image", "character", "Boss6.png")).convert_alpha()
+    boss6_img = pygame.transform.smoothscale(boss6_img, (120, 120))
+
     drone_img = pygame.image.load(path_image("Image", "entity", "Drone.png")).convert_alpha()
     drone_img = pygame.transform.smoothscale(drone_img, (60, 60))
 
@@ -533,6 +536,7 @@ def load_images():
         "boss3": boss3_img,
         "boss4": boss4_img,
         "boss5": boss5_img,
+        "boss6": boss6_img,
         "drone": drone_img,
         "fireball": fireball_img,
         "flame_pillar": flame_pillar_img,
