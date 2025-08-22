@@ -9137,113 +9137,92 @@ class Boss5(AIBase):
                 pygame.draw.circle(surface, self.CHAIN_COLOR_INNER, (int(hx), int(hy)), 8)
 
 class Boss6(AIBase):
-    """
-    Abyssal Acolyte — 심연의 수행자
-    - 지속 소환 + 바닥 레이저(필드 제어)
-    - 평상시: rank 1~4 소환 / 분노: rank 3~5 소환
-    - 패턴: Sweep, Crossfire, Rotating Grid, Sigil Rotors,
-            Zigzag Runner, Converging V, Arc Waves, Shifted Lattice, Chain Ignite
-    - 텔레그래프: 전부 '정지' 표시(레이저가 생길 곳만 반투명 안내)
-    - 실탄 레이저: 3중 레이어(Outer/Glow/Core) + 세그먼트 꺾임 + 미세 흔들림
-    - 사운드 미사용, 스프라이트 키 "boss6"
-    """
     rank = 10
 
-    # ====== 기본 스펙 ======
     HP_MAX   = 3600
     SPEED    = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.72
     RADIUS   = int(48 * PLAYER_VIEW_SCALE)
     KEEP_MIN = int(260 * PLAYER_VIEW_SCALE)
     KEEP_MAX = int(420 * PLAYER_VIEW_SCALE)
-    ORIENT_OFFSET_DEG = 270  # 스프라이트 정면 보정(왼쪽이 기본일 때)
+    ORIENT_OFFSET_DEG = 270
 
-    # ====== 소환 ======
-    MINION_CAP_BASE   = 6
-    MINION_CAP_ENRAGE = 9
+    MINION_CAP_BASE   = 4
+    MINION_CAP_ENRAGE = 5
     SUMMON_BURST      = 2
-    SUMMON_CD_BASE    = 4500  # ms
-    SUMMON_CD_ENRAGE  = 3200  # ms
+    SUMMON_CD_BASE    = 8000
+    SUMMON_CD_ENRAGE  = 6000
+    SUMMON_CAST_MS    = 1500
     SUMMON_RING_MIN   = int(260 * PLAYER_VIEW_SCALE)
     SUMMON_RING_MAX   = int(520 * PLAYER_VIEW_SCALE)
 
-    # ====== 공용 피해/틱 ======
-    LASER_TICK_MS  = 250  # 지속 패턴 피해 주기
+    LASER_TICK_MS  = 200
     SWEEP_DOT      = 8
     GRID_DOT       = 7
     ROTOR_DOT      = 9
-    CROSSFIRE_DMG  = 35
+    CF_DOT         = 12
+    ARC_DOT        = 8
+    ZZ_DOT         = 8
+    LAT_DOT        = 9
+    IGN_DOT        = 9
+    FAN_DOT        = 11
 
-    # ====== Sweep(평행 잔류 레이저) ======
-    SWEEP_TELE_MS      = 900
+    SWEEP_TELE_MS      = 1000
     SWEEP_LANES        = 5
-    SWEEP_SPACING      = int(120 * PLAYER_VIEW_SCALE)
+    SWEEP_SPACING      = int(230 * PLAYER_VIEW_SCALE)
     SWEEP_WIDTH        = int(40  * PLAYER_VIEW_SCALE)
     SWEEP_RESIDUAL_MS  = 1800
-    SWEEP_DIRS         = ("H", "V")  # 가로/세로
+    SWEEP_DIRS         = ("H", "V")
 
-    # ====== Crossfire(십자 순간타) ======
     CF_TELE_MS   = 650
     CF_WIDTH     = int(56 * PLAYER_VIEW_SCALE)
+    CF_PERSIST   = 800
 
-    # ====== Rotating Grid(회전 격자 → 고정각 발사) ======
     GRID_TELE_MS   = 1000
-    GRID_CELL      = int(180 * PLAYER_VIEW_SCALE)
-    GRID_WIDTH     = int(32  * PLAYER_VIEW_SCALE)
+    GRID_CELL      = int(350 * PLAYER_VIEW_SCALE)
+    GRID_WIDTH     = int(30  * PLAYER_VIEW_SCALE)
     GRID_PERSIST   = 2200
-    GRID_ROT_SPD   = 1.2 * math.pi  # (랜덤 각도 생성용)
 
-    # ====== Sigil Rotors(원형 로터: 발사 중 회전) ======
     ROTOR_TELE_MS   = 900
     ROTOR_SPOKES    = 6
-    ROTOR_RADIUS    = int(280 * PLAYER_VIEW_SCALE)
     ROTOR_WIDTH     = int(28  * PLAYER_VIEW_SCALE)
-    ROTOR_SPIN_MS   = 900
-    ROTOR_ANG_SPD   = 2.0 * math.pi
+    ROTOR_SPIN_MS   = 5400
+    ROTOR_ANG_SPD   = 0.2 * math.pi
 
-    # ====== Zigzag Runner(지그재그 폴리라인 레이저) ======
     ZZ_TELE_MS      = 850
-    ZZ_SEGS         = 6                                # 코너 수+1(선분 수)
-    ZZ_SEG_LEN      = int(240 * PLAYER_VIEW_SCALE)     # 각 선분 길이
+    ZZ_SEGS         = 6
+    ZZ_SEG_LEN      = int(240 * PLAYER_VIEW_SCALE)
     ZZ_WIDTH        = int(38  * PLAYER_VIEW_SCALE)
     ZZ_RESIDUAL_MS  = 1700
-    ZZ_DOT          = 8
 
-    # ====== Converging V(수렴 V 두 줄) ======
-    V_TELE_MS       = 800
-    V_WIDTH         = int(44 * PLAYER_VIEW_SCALE)
-    V_RESIDUAL_MS   = 1600
-    V_DOT           = 10
-    V_SPREAD_DEG    = 60  # 두 팔 벌어진 각도
+    FAN_TELE_MS     = 800
+    FAN_COUNT       = 5
+    FAN_SPREAD_DEG  = 60
+    FAN_WIDTH       = int(44 * PLAYER_VIEW_SCALE)
+    FAN_RESIDUAL_MS = 1700
 
-    # ====== Arc Waves(부분 원호 다중) ======
     ARC_TELE_MS     = 900
     ARC_COUNT       = 3
     ARC_RADIUS_BASE = int(220 * PLAYER_VIEW_SCALE)
     ARC_RADIUS_STEP = int(120 * PLAYER_VIEW_SCALE)
-    ARC_SPAN_DEG    = 120                   # 각 원호 길이(도)
+    ARC_SPAN_DEG    = 60
     ARC_WIDTH       = int(36  * PLAYER_VIEW_SCALE)
     ARC_RESIDUAL_MS = 1700
-    ARC_DOT         = 8
 
-    # ====== Shifted Lattice(계단식 격자) ======
     LAT_TELE_MS     = 900
     LAT_CELL        = int(180 * PLAYER_VIEW_SCALE)
     LAT_WIDTH       = int(30  * PLAYER_VIEW_SCALE)
-    LAT_OFFSET      = int(80  * PLAYER_VIEW_SCALE)     # 한 축으로 밀린 오프셋
+    LAT_OFFSET      = int(80  * PLAYER_VIEW_SCALE)
     LAT_PERSIST     = 2000
-    LAT_DOT         = 7
 
-    # ====== Chain Ignite(점선 연쇄 점화) ======
     IGN_TELE_MS     = 800
     IGN_WIDTH       = int(40 * PLAYER_VIEW_SCALE)
-    IGN_IGNITE_MS   = 500                                 # 전부 점화까지 시간
+    IGN_IGNITE_MS   = 500
     IGN_RESIDUAL_MS = 1500
-    IGN_DOT         = 9
 
-    # ====== 분노 ======
-    ENRAGE_AT_FRAC  = 0.5  # 50% 이하
+    ENRAGE_AT_FRAC  = 0.5
+    DROP_2_3_THRESH = 2/3
+    DROP_1_3_THRESH = 1/3
 
-    # ====== 레이저 비주얼 ======
     BEAM_JITTER_MAX = 10
     BEAM_SEG_LEN    = int(240 * PLAYER_VIEW_SCALE)
     BEAM_PULSE_MS   = 420
@@ -9251,12 +9230,28 @@ class Boss6(AIBase):
     COL_GLOW  = (255, 90, 90, 110)
     COL_CORE  = (255, 240, 240, 220)
 
+    BASE_IDLE_GAP_MS = 1100
+    PATTERN_COOLDOWN_MS = {
+        "SWEEP": 500,
+        "CF":    250,
+        "GRID":  350,
+        "ROTOR": 500,
+        "ZZ":    300,
+        "FAN":   250,
+        "ARC":   300,
+        "LAT":   350,
+        "IGN":   250,
+    }
+    ENRAGE_CD_SCALE = 1.0
+
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
                  damage_player_fn=None, kill_callback=None, rank=rank):
+        import pygame
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
                          radius=self.RADIUS, push_strength=0.10, alert_duration=0,
                          damage_player_fn=damage_player_fn, rank=rank)
+
         self.image_original = images["boss6"]
         self.image = self.image_original
 
@@ -9266,12 +9261,13 @@ class Boss6(AIBase):
 
         self._my_minions = []
         self._next_summon = pygame.time.get_ticks() + 1200
+        self._pending_summons = []
 
         self._state = "IDLE"      # IDLE / TELE / RECOVER
         self._pattern = None
         self._state_t0 = pygame.time.get_ticks()
         self._tele_data = None
-        self._hazards  = []       # 활성 레이저/영역
+        self._hazards  = []
         self._last_tick_damage = 0
 
         self.facing_angle = 0.0
@@ -9282,51 +9278,142 @@ class Boss6(AIBase):
         self._images_dict = images
         self._sounds_dict = sounds
 
-    # ---------- 유틸 ----------
+        self._drop_2_3_done = False
+        self._drop_1_3_done = False
+
+        self._fx_rings = []
+
+        self._next_pattern_ready_at = 0
+
+        self._last_summon_ms = pygame.time.get_ticks() + 2000
+
+    # 사운드
+    def _play_sound(self, key, volume=1.0):
+        s = self._sounds_dict.get(key) if hasattr(self, "_sounds_dict") else None
+        if not s: return
+        try: s.set_volume(volume)
+        except Exception: pass
+        try: s.play()
+        except Exception: pass
+
+    # 유틸
     def _player_center(self, player_rect, world_x, world_y):
         return (world_x + player_rect.centerx, world_y + player_rect.centery)
 
     def _alive_minions(self):
         alive = 0
         for m in list(self._my_minions):
-            if getattr(m, "alive", False) and m.hp > 0:
+            if getattr(m, "alive", False) and getattr(m, "hp", 1) > 0:
                 alive += 1
             else:
                 try: self._my_minions.remove(m)
                 except Exception: pass
         return alive
 
+    def _iter_enemy_classes(self):
+        # ENEMY_CLASSES가 dict/list/tuple로 존재하는 경우 우선 사용
+        try:
+            from ai import ENEMY_CLASSES
+        except Exception:
+            ENEMY_CLASSES = None
+        cand = []
+        if ENEMY_CLASSES:
+            if isinstance(ENEMY_CLASSES, dict):
+                cand.extend([v for v in ENEMY_CLASSES.values() if v])
+            elif isinstance(ENEMY_CLASSES, (list, tuple)):
+                cand.extend([v for v in ENEMY_CLASSES if v])
+        # 백업: 전역 네임스페이스에서 Enemy* 수집
+        g = globals()
+        for k, v in g.items():
+            if isinstance(v, type) and k.startswith("Enemy"):
+                cand.append(v)
+        return cand
+
     def _choose_minion_class(self, low_rank, high_rank):
         candidates = []
-        for cls in ENEMY_CLASSES:
-            name = getattr(cls, "__name__", "")
-            if name.startswith("Boss"): continue
-            r = getattr(cls, "rank", 1)
-            if low_rank <= r <= high_rank:
-                candidates.append(cls)
+        for cls in self._iter_enemy_classes():
+            try:
+                r = getattr(cls, "rank", 1)
+                if getattr(cls, "__name__", "").startswith("Boss"): 
+                    continue
+                if low_rank <= r <= high_rank:
+                    candidates.append(cls)
+            except Exception:
+                continue
         return random.choice(candidates) if candidates else None
 
-    def _spawn_minions(self, count, low_r, high_r):
+    def _spawn_minion_at(self, x, y, low_r, high_r):
+        cls = self._choose_minion_class(low_r, high_r)
+        if not cls: return None
+        m = None
+        # 다양한 생성자 시그니처 대응
+        try:
+            m = cls(x, y, self._images_dict, self._sounds_dict,
+                    self.map_width, self.map_height,
+                    damage_player_fn=self.damage_player)
+        except Exception:
+            try:
+                m = cls(x, y, self._images_dict, self._sounds_dict,
+                        self.map_width, self.map_height)
+            except Exception:
+                try:
+                    m = cls(x, y, self._images_dict, self._sounds_dict)
+                except Exception:
+                    return None
+        try: setattr(m, "summoned_by", self)
+        except Exception: pass
+        try:
+            if not hasattr(config, "all_enemies"): config.all_enemies = []
+            config.all_enemies.append(m)
+        except Exception:
+            pass
+        self._my_minions.append(m)
+        return m
+
+    def _schedule_summons(self, count, low_r, high_r):
+        import pygame
+        slots = max(0, (self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE)
+                       - (self._alive_minions() + len(self._pending_summons)))
+        if slots <= 0: return
+        n = min(count, slots)
         px, py = self.world_x, self.world_y
-        for _ in range(count):
-            cls = self._choose_minion_class(low_r, high_r)
-            if not cls: break
+        now = pygame.time.get_ticks()
+        for _ in range(n):
             r = random.randint(self.SUMMON_RING_MIN, self.SUMMON_RING_MAX)
             ang = random.uniform(0, 2*math.pi)
             sx = min(max(0, px + math.cos(ang)*r), self.map_width)
             sy = min(max(0, py + math.sin(ang)*r), self.map_height)
-            try:
-                m = cls(sx, sy, self._images_dict, self._sounds_dict,
-                        self.map_width, self.map_height,
-                        damage_player_fn=self.damage_player)
-                setattr(m, "summoned_by", self)
-                if not hasattr(config, "all_enemies"): config.all_enemies = []
-                config.all_enemies.append(m)
-                self._my_minions.append(m)
-            except Exception:
-                pass
+            self._pending_summons.append({"x":sx, "y":sy, "t0": now, "low":low_r, "high":high_r})
+            # 텔레 이펙트 시작(화려한 링)
+            self._fx_rings.append((sx, sy, now, self.SUMMON_CAST_MS))
 
-    # ---------- 기하/거리 유틸 ----------
+    def _process_pending_summons(self):
+        import pygame
+        now = pygame.time.get_ticks()
+        rest = []
+        for s in self._pending_summons:
+            if now - s["t0"] >= self.SUMMON_CAST_MS:
+                self._spawn_minion_at(s["x"], s["y"], s["low"], s["high"])
+                self._play_sound("spawn_enemy", 0.9)
+                # 여운 링
+                self._fx_rings.append((s["x"], s["y"], now, 600))
+            else:
+                rest.append(s)
+        self._pending_summons = rest
+
+    # 드랍
+    def _heavy_drop(self, scale=1):
+        try:
+            if hasattr(self, "spawn_dropped_items"):
+                self.spawn_dropped_items(8*scale, 10*scale)
+            elif hasattr(config, "spawn_heavy_orbs"):
+                config.spawn_heavy_orbs(self.world_x, self.world_y, count=max(1, scale))
+            elif hasattr(config, "spawn_orbs"):
+                config.spawn_orbs(self.world_x, self.world_y, amount=15*max(1,scale))
+        except Exception:
+            pass
+
+    # 기하 유틸
     @staticmethod
     def _dist_point_to_segment(px, py, x1, y1, x2, y2):
         vx, vy = x2 - x1, y2 - y1
@@ -9356,10 +9443,8 @@ class Boss6(AIBase):
 
     @staticmethod
     def _dist_point_to_arc(px, py, cx, cy, r, a0, a1):
-        # 최근접 각도(호 내부로 클램프), 그 점과의 거리
         ang = math.atan2(py - cy, px - cx)
         a0n = Boss6._clamp_angle(a0); a1n = Boss6._clamp_angle(a1)
-        # 호가 시계/반시계 어느 쪽이든 대비하여 정규화
         def ang_in(ang, a, b):
             ang = Boss6._clamp_angle(ang)
             a = Boss6._clamp_angle(a); b = Boss6._clamp_angle(b)
@@ -9368,7 +9453,6 @@ class Boss6(AIBase):
         if ang_in(ang, a0n, a1n):
             nearest_ang = ang
         else:
-            # 가장 가까운 끝각 선택
             d0 = abs(Boss6._clamp_angle(ang - a0n))
             d1 = abs(Boss6._clamp_angle(ang - a1n))
             nearest_ang = a0n if d0 < d1 else a1n
@@ -9376,18 +9460,10 @@ class Boss6(AIBase):
         qy = cy + math.sin(nearest_ang)*r
         return math.hypot(px - qx, py - qy)
 
-    # ---------- FSM ----------
-    def _enter(self, state, pattern=None, tele_data=None):
-        self._state = state
-        self._state_t0 = pygame.time.get_ticks()
-        self._pattern = pattern
-        self._tele_data = tele_data
+    def _max_ray_len(self):
+        return math.hypot(self.map_width, self.map_height) + 200
 
-    def _ready_new_pattern(self):
-        now = pygame.time.get_ticks()
-        return self._state == "IDLE" and (now - self._state_t0) >= 600
-
-    # ---------- 텔레 데이터 ----------
+    # 패턴 빌더
     def _build_sweep(self):
         orientation = random.choice(self.SWEEP_DIRS)
         lanes = self.SWEEP_LANES
@@ -9405,18 +9481,18 @@ class Boss6(AIBase):
         return {"type":"CF","cx":cx,"cy":cy,"width":self.CF_WIDTH,"tele_ms":self.CF_TELE_MS}
 
     def _build_grid(self):
-        ang0 = random.uniform(0, 2*math.pi)   # 고정각
-        return {"type":"GRID","ang":ang0,"cell":self.GRID_CELL,"width":self.GRID_WIDTH,
+        ang0 = random.uniform(0, 2*math.pi)
+        return {"type":"GRID","cx":self.world_x,"cy":self.world_y,"ang":ang0,
+                "cell":self.GRID_CELL,"width":self.GRID_WIDTH,
                 "tele_ms":self.GRID_TELE_MS,"persist":self.GRID_PERSIST}
 
     def _build_rotors(self, cx, cy):
-        return {"type":"ROTOR","cx":cx,"cy":cy,"spokes":self.ROTOR_SPOKES,"radius":self.ROTOR_RADIUS,
-                "width":self.ROTOR_WIDTH,"tele_ms":self.ROTOR_TELE_MS,
-                "spin_ms":self.ROTOR_SPIN_MS,"ang_spd":self.ROTOR_ANG_SPD,
-                "ang0":random.uniform(0, 2*math.pi)}
+        return {"type":"ROTOR","cx":cx,"cy":cy,"r":self._max_ray_len(),
+                "spokes":self.ROTOR_SPOKES,"width":self.ROTOR_WIDTH,
+                "tele_ms":self.ROTOR_TELE_MS,"spin_ms":self.ROTOR_SPIN_MS,
+                "ang_spd":self.ROTOR_ANG_SPD,"ang0":random.uniform(0, 2*math.pi)}
 
     def _build_zigzag(self):
-        # 화면 가로를 가로지르는 폴리라인(지그재그)
         orient = random.choice(("H","V"))
         pts = []
         if orient == "H":
@@ -9443,19 +9519,17 @@ class Boss6(AIBase):
                 dir_x *= -1
         return {"type":"ZZ","pts":pts,"width":self.ZZ_WIDTH,"tele_ms":self.ZZ_TELE_MS}
 
-    def _build_vshape(self):
-        # 보스 기준 수렴 V : 중심에서 두 팔이 퍼져나가며 '잔류' 빔으로 고정
-        spread = math.radians(self.V_SPREAD_DEG)
+    def _build_fan(self):
+        count = self.FAN_COUNT
+        spread = math.radians(self.FAN_SPREAD_DEG)
         base_ang = random.uniform(0, 2*math.pi)
-        a0 = base_ang - spread*0.5
-        a1 = base_ang + spread*0.5
-        # 화면 경계까지 연장
-        L = max(self.map_width, self.map_height) * 1.5
-        cx, cy = self.world_x, self.world_y
-        x0, y0 = cx + math.cos(a0)*L, cy + math.sin(a0)*L
-        x1, y1 = cx + math.cos(a1)*L, cy + math.sin(a1)*L
-        return {"type":"V","cx":cx,"cy":cy,"x0":x0,"y0":y0,"x1":x1,"y1":y1,
-                "width":self.V_WIDTH,"tele_ms":self.V_TELE_MS}
+        if count <= 1:
+            angs = [base_ang]
+        else:
+            step = spread / (count - 1)
+            angs = [base_ang - spread*0.5 + i*step for i in range(count)]
+        return {"type":"FAN","cx":self.world_x,"cy":self.world_y,"angs":angs,
+                "width":self.FAN_WIDTH,"tele_ms":self.FAN_TELE_MS}
 
     def _build_arcs(self):
         base_ang = random.uniform(0, 2*math.pi)
@@ -9470,27 +9544,55 @@ class Boss6(AIBase):
                 "arcs":arcs,"width":self.ARC_WIDTH,"tele_ms":self.ARC_TELE_MS}
 
     def _build_lattice(self):
-        ang = random.choice((0, math.pi/2))  # 수평/수직 격자
-        return {"type":"LAT","ang":ang,"cell":self.LAT_CELL,"offset":self.LAT_OFFSET,
+        ang = random.choice((0, math.pi/2))
+        return {"type":"LAT","cx":self.world_x,"cy":self.world_y,"ang":ang,
+                "cell":self.LAT_CELL,"offset":self.LAT_OFFSET,
                 "width":self.LAT_WIDTH,"tele_ms":self.LAT_TELE_MS,"persist":self.LAT_PERSIST}
 
     def _build_ignite(self):
-        # 한 줄 점선 → 점화 진행형 레이저
         ori = random.choice(("H","V"))
         if ori == "H":
             y = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_height - int(120*PLAYER_VIEW_SCALE))
-            return {"type":"IGN","ori":"H","x1":0,"y1":y,"x2":self.map_width,"y2":y,
+            return {"type":"IGN","x1":0,"y1":y,"x2":self.map_width,"y2":y,
                     "width":self.IGN_WIDTH,"tele_ms":self.IGN_TELE_MS}
         else:
             x = random.randint(int(120*PLAYER_VIEW_SCALE), self.map_width - int(120*PLAYER_VIEW_SCALE))
-            return {"type":"IGN","ori":"V","x1":x,"y1":0,"x2":x,"y2":self.map_height,
+            return {"type":"IGN","x1":x,"y1":0,"x2":x,"y2":self.map_height,
                     "width":self.IGN_WIDTH,"tele_ms":self.IGN_TELE_MS}
 
-    # ---------- 발동 ----------
+    # 상태 전이
+    def _enter(self, state, pattern=None, tele_data=None):
+        import pygame
+        self._state = state
+        if pattern is not None:
+            self._pattern = pattern
+        now = pygame.time.get_ticks()
+        self._state_t0 = now
+        if tele_data is not None:
+            self._tele_data = tele_data
+        # RECOVER로 진입하는 시점에 다음 패턴 허용 시간을 산출
+        if state == "RECOVER":
+            base = self.BASE_IDLE_GAP_MS
+            extra = self.PATTERN_COOLDOWN_MS.get(self._pattern or "", 0)
+            scale = (self.ENRAGE_CD_SCALE if self.enraged else 1.0)
+            self._next_pattern_ready_at = now + int((base + extra) * scale)
+
+    def _ready_new_pattern(self):
+        import pygame
+        # IDLE 상태이면서, 계산된 '다음 패턴 허용 시각'에 도달해야 시작
+        return (self._state == "IDLE") and (pygame.time.get_ticks() >= self._next_pattern_ready_at)
+
+    # 발동
     def _fire_pattern(self):
+        import pygame
         now = pygame.time.get_ticks()
         t = self._tele_data
-        if not t: return
+        if not t:
+            self._enter("RECOVER")
+            return
+
+        # 발사 사운드(패턴당 1회)
+        self._play_sound("shock_burst", 0.9)
 
         if t["type"] == "SWEEP":
             hazards = []
@@ -9506,22 +9608,21 @@ class Boss6(AIBase):
             self._hazards.extend(hazards)
 
         elif t["type"] == "CF":
-            px, py = self._player_center(config.player_rect, config.world_x, config.world_y)
-            w = t["width"]
-            if abs(py - t["cy"]) <= w*0.5 or abs(px - t["cx"]) <= w*0.5:
-                try: self.damage_player(int(self.CROSSFIRE_DMG))
-                except Exception: pass
+            w = t["width"]; cx, cy = t["cx"], t["cy"]
+            self._hazards.append({"kind":"line_static","x1":0,"y1":cy,"x2":self.map_width,"y2":cy,
+                                  "w":w,"expire":now + self.CF_PERSIST,"dps":self.CF_DOT,"t0":now})
+            self._hazards.append({"kind":"line_static","x1":cx,"y1":0,"x2":cx,"y2":self.map_height,
+                                  "w":w,"expire":now + self.CF_PERSIST,"dps":self.CF_DOT,"t0":now})
 
         elif t["type"] == "GRID":
-            ang = t["ang"]
-            cell = t["cell"]; w = t["width"]; expire = now + t["persist"]
+            ang = t["ang"]; cell = t["cell"]; w = t["width"]; expire = now + t["persist"]
             lines = []
-            L = max(self.map_width, self.map_height) * 1.5
+            L = self._max_ray_len()
             for axis in (ang, ang + math.pi/2):
                 step = cell
                 for offset in range(-max(self.map_width, self.map_height),
                                     max(self.map_width, self.map_height)+1, step):
-                    cx, cy = self.world_x, self.world_y
+                    cx, cy = t["cx"], t["cy"]
                     nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
                     ox, oy = cx + nx*offset, cy + ny*offset
                     dx, dy = math.cos(axis), math.sin(axis)
@@ -9533,7 +9634,7 @@ class Boss6(AIBase):
 
         elif t["type"] == "ROTOR":
             self._hazards.append({
-                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":t["radius"],
+                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":t["r"],
                 "w":t["width"],"spokes":t["spokes"],"ang0":t["ang0"],"ang_spd":t["ang_spd"],
                 "t0":now,"duration":t["spin_ms"],"dps":self.ROTOR_DOT
             })
@@ -9544,15 +9645,15 @@ class Boss6(AIBase):
                 "expire":now + self.ZZ_RESIDUAL_MS,"dps":self.ZZ_DOT,"t0":now
             })
 
-        elif t["type"] == "V":
-            self._hazards.append({
-                "kind":"line_static","x1":t["cx"],"y1":t["cy"],"x2":t["x0"],"y2":t["y0"],
-                "w":t["width"],"expire":now + self.V_RESIDUAL_MS,"dps":self.V_DOT,"t0":now
-            })
-            self._hazards.append({
-                "kind":"line_static","x1":t["cx"],"y1":t["cy"],"x2":t["x1"],"y2":t["y1"],
-                "w":t["width"],"expire":now + self.V_RESIDUAL_MS,"dps":self.V_DOT,"t0":now
-            })
+        elif t["type"] == "FAN":
+            L = self._max_ray_len()
+            for ang in t["angs"]:
+                x2 = t["cx"] + math.cos(ang)*L
+                y2 = t["cy"] + math.sin(ang)*L
+                self._hazards.append({
+                    "kind":"line_static","x1":t["cx"],"y1":t["cy"],"x2":x2,"y2":y2,
+                    "w":t["width"],"expire":now + self.FAN_RESIDUAL_MS,"dps":self.FAN_DOT,"t0":now
+                })
 
         elif t["type"] == "ARC":
             for (r, a0, a1) in t["arcs"]:
@@ -9563,24 +9664,21 @@ class Boss6(AIBase):
                 })
 
         elif t["type"] == "LAT":
-            # 계단식 오프셋: 한 축은 셀 간격으로, 다른 축은 +-offset 교차
             ang = t["ang"]; cell = t["cell"]; off = t["offset"]; w = t["width"]
             expire = now + self.LAT_PERSIST
             lines = []
-            L = max(self.map_width, self.map_height) * 1.5
-            # 기본 축(ang)과 수직축(ang+90)
-            for idx, axis in enumerate((ang, ang + math.pi/2)):
-                step = cell
-                sign = 1
+            L = self._max_ray_len()
+            step = cell
+            for axis in (ang, ang + math.pi/2):
                 for k, offset in enumerate(range(-max(self.map_width, self.map_height),
                                                  max(self.map_width, self.map_height)+1, step)):
-                    cx, cy = self.world_x, self.world_y
+                    cx, cy = t["cx"], t["cy"]
                     nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
                     ox, oy = cx + nx*offset, cy + ny*offset
                     dx, dy = math.cos(axis), math.sin(axis)
-                    # 보조축으로 오프셋 교차 적용
-                    ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
-                    oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
+                    if axis != ang:
+                        ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
+                        oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
                     x1, y1 = ox - dx*L, oy - dy*L
                     x2, y2 = ox + dx*L, oy + dy*L
                     lines.append({"kind":"line_static","x1":x1,"y1":y1,"x2":x2,"y2":y2,
@@ -9597,34 +9695,41 @@ class Boss6(AIBase):
 
         self._enter("RECOVER")
 
-    # ---------- 업데이트 ----------
+    # 업데이트
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        import pygame
         if not self.alive: return
 
         px, py = self._player_center(player_rect, world_x, world_y)
         self.facing_angle = math.atan2(py - self.world_y, px - self.world_x)
+
+        # 중간 드랍
+        if not self._drop_2_3_done and self.hp <= int(self.HP_MAX * self.DROP_2_3_THRESH):
+            self._heavy_drop(scale=1); self._drop_2_3_done = True
+        if not self._drop_1_3_done and self.hp <= int(self.HP_MAX * self.DROP_1_3_THRESH):
+            self._heavy_drop(scale=1); self._drop_1_3_done = True
 
         if not self.enraged and self.hp <= self.HP_MAX * self.ENRAGE_AT_FRAC:
             self.enraged = True
 
         now = pygame.time.get_ticks()
 
-        # 소환
+        # 소환: 쿨타임 도달 시 예약
         cap = self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE
-        if self._alive_minions() < cap and now >= self._next_summon:
+        if (self._alive_minions() + len(self._pending_summons)) < cap and now >= self._next_summon:
             low, high = (3,5) if self.enraged else (1,4)
-            self._spawn_minions(self.SUMMON_BURST, low, high)
+            self._schedule_summons(self.SUMMON_BURST, low, high)
             cd = self.SUMMON_CD_ENRAGE if self.enraged else self.SUMMON_CD_BASE
             self._next_summon = now + cd
+        self._process_pending_summons()
 
-        # 해저드 갱신/피해
+        # 해저드 피해 처리
         do_tick = (now - self._last_tick_damage) >= self.LASER_TICK_MS
         if do_tick: self._last_tick_damage = now
-
         new_haz = []
         for hz in self._hazards:
-            kind = hz["kind"]
             alive = True
+            kind = hz["kind"]
             deal = 0
 
             if kind == "line_static":
@@ -9645,7 +9750,7 @@ class Boss6(AIBase):
 
             elif kind == "arc_static":
                 if now <= hz["expire"]:
-                    d = self._dist_point_to_arc(px, py, hz["cx"], hz["cy"], hz["r"], hz["a0"], hz["a1"])
+                    d = Boss6._dist_point_to_arc(px, py, hz["cx"], hz["cy"], hz["r"], hz["a0"], hz["a1"])
                     if d <= hz["w"] * 0.5 and do_tick:
                         deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
                 else:
@@ -9653,19 +9758,14 @@ class Boss6(AIBase):
 
             elif kind == "ignite_line":
                 if now <= hz["expire"]:
-                    # 점화 진행 비율
                     Lx = hz["x2"] - hz["x1"]; Ly = hz["y2"] - hz["y1"]
                     L = max(1.0, math.hypot(Lx, Ly))
                     frac = min(1.0, max(0.0, (now - hz["t0"]) / max(1, hz["ignite_ms"])))
-                    # 플레이어가 '점화된 구간' 내에 접해있는가?
-                    # 투영 길이 t <= L*frac 이어야 함
                     vx, vy = Lx / L, Ly / L
-                    wx, wy = px - hz["x1"], py - hz["y1"]
-                    tproj = max(0.0, min(L, vx*wx + vy*wy))
                     d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"],
                                                     hz["x1"] + vx*(L*frac),
                                                     hz["y1"] + vy*(L*frac))
-                    if tproj <= L*frac and d <= hz["w"] * 0.5 and do_tick:
+                    if d <= hz["w"] * 0.5 and do_tick:
                         deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
                 else:
                     alive = False
@@ -9695,24 +9795,24 @@ class Boss6(AIBase):
 
         # 패턴 스케줄
         if self._ready_new_pattern():
-            choices = ["SWEEP","CF","GRID","ROTOR","ZZ","V","ARC","LAT","IGN"]
-            weights = [3, 2, 2, 2, 2, 2, 2, 2, 2]  # 필요시 조정
+            choices = ["SWEEP","CF","GRID","ROTOR","ZZ","FAN","ARC","LAT","IGN"]
+            weights = [2, 3, 3, 2, 2, 3, 3, 3, 3]
             pat = random.choices(choices, weights=weights, k=1)[0]
-            if pat == "SWEEP":   tele = self._build_sweep()
-            elif pat == "CF":    tele = self._build_crossfire(self.world_x, self.world_y)
-            elif pat == "GRID":  tele = self._build_grid()
-            elif pat == "ROTOR": tele = self._build_rotors(self.world_x, self.world_y)
-            elif pat == "ZZ":    tele = self._build_zigzag()
-            elif pat == "V":     tele = self._build_vshape()
-            elif pat == "ARC":   tele = self._build_arcs()
-            elif pat == "LAT":   tele = self._build_lattice()
-            else:                 tele = self._build_ignite()
+            if     pat == "SWEEP": tele = self._build_sweep()
+            elif   pat == "CF":    tele = self._build_crossfire(self.world_x, self.world_y)
+            elif   pat == "GRID":  tele = self._build_grid()
+            elif   pat == "ROTOR": tele = self._build_rotors(self.world_x, self.world_y)
+            elif   pat == "ZZ":    tele = self._build_zigzag()
+            elif   pat == "FAN":   tele = self._build_fan()
+            elif   pat == "ARC":   tele = self._build_arcs()
+            elif   pat == "LAT":   tele = self._build_lattice()
+            else:                   tele = self._build_ignite()
             self._enter("TELE", pattern=pat, tele_data=tele)
 
-        # 텔레 → 발동
+        # 텔레 → 발동 (tele_ms 누락 대비 기본값 800ms)
         if self._state == "TELE":
             t = self._tele_data
-            if t and (now - self._state_t0) >= t["tele_ms"]:
+            if t and (now - self._state_t0) >= t.get("tele_ms", 800):
                 self._fire_pattern()
         elif self._state == "RECOVER":
             if (now - self._state_t0) >= 400:
@@ -9737,7 +9837,7 @@ class Boss6(AIBase):
         self.world_x = max(0, min(self.map_width,  self.world_x))
         self.world_y = max(0, min(self.map_height, self.world_y))
 
-    # ---------- 레이저 도형(시각효과) ----------
+    # 레이저 도형(시각효과)
     def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
         dx, dy = x2 - x1, y2 - y1
         L = max(1.0, math.hypot(dx, dy))
@@ -9757,11 +9857,13 @@ class Boss6(AIBase):
         return pts
 
     def _draw_polyline(self, surf, pts, color, width):
+        import pygame
         if len(pts) < 2: return
         for i in range(len(pts)-1):
             pygame.draw.line(surf, color, pts[i], pts[i+1], max(1, int(width)))
 
     def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms):
+        import pygame
         now = pygame.time.get_ticks()
         tsec = now * 0.001
         jitter = min(self.BEAM_JITTER_MAX, base_w * 0.45)
@@ -9769,15 +9871,14 @@ class Boss6(AIBase):
                                 seg_len=self.BEAM_SEG_LEN, tsec=tsec,
                                 seed=(born_ms % 997) * 0.001)
         pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2*math.pi / max(60, self.BEAM_PULSE_MS)))
-        core_w = max(1, int(base_w * (0.55 + 0.15*pulse)))
-        glow_w = max(core_w+2, int(base_w * 1.15))
+        core_w  = max(1, int(base_w * (0.55 + 0.15*pulse)))
+        glow_w  = max(core_w+2, int(base_w * 1.15))
         outer_w = max(glow_w+2, int(base_w * 1.7))
         self._draw_polyline(lay, pts, self.COL_OUTER, outer_w)
         self._draw_polyline(lay, pts, self.COL_GLOW,  glow_w)
         self._draw_polyline(lay, pts, self.COL_CORE,  core_w)
 
     def _draw_arc_beam(self, lay, cx, cy, r, a0, a1, base_w, born_ms, seg_ang=0.12):
-        # 호를 작은 선분들로 나누어 빔 레이어로 그림
         ang = a0
         while True:
             anext = min(a1, ang + seg_ang)
@@ -9789,10 +9890,12 @@ class Boss6(AIBase):
             if anext >= a1 - 1e-6: break
             ang = anext
 
-    # ---------- 드로우 ----------
+    # 드로우
     def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        import pygame
         if not self.alive and self.hp <= 0: return
 
+        W, H = surface.get_width(), surface.get_height()
         sx = self.world_x - world_x
         sy = self.world_y - world_y
         now = pygame.time.get_ticks()
@@ -9802,47 +9905,68 @@ class Boss6(AIBase):
         rotated = pygame.transform.rotate(self.image_original, -ang_deg)
         surface.blit(rotated, rotated.get_rect(center=(sx, sy)).topleft)
 
-        # --- 텔레그래프(정지 표시) ---
+        # 소환 텔레 이펙트(화려한 링/펄스)
+        if self._fx_rings:
+            fx = pygame.Surface((W, H), pygame.SRCALPHA)
+            keep = []
+            for (x,y,t0,dur) in self._fx_rings:
+                life = (now - t0) / max(1, dur)
+                if life <= 1.0:
+                    r = int(20 + 80 * life)
+                    alpha = int(200 * (1.0 - life))
+                    pygame.draw.circle(fx, (80,120,255, max(40,alpha//2)), (int(x - world_x), int(y - world_y)), r, width=3)
+                    pygame.draw.circle(fx, (180,220,255, max(30,alpha//3)), (int(x - world_x), int(y - world_y)), max(1,r//2), width=2)
+                    keep.append((x,y,t0,dur))
+            self._fx_rings = keep
+            surface.blit(fx, (0,0))
+
+        # 텔레그래프(정지 표시)
         if self._state == "TELE" and self._tele_data:
             t = self._tele_data
-            tel = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            tel = pygame.Surface((W, H), pygame.SRCALPHA)
             if t["type"] == "SWEEP":
                 if t["ori"] == "H":
                     for y in t["lanes"]:
                         pygame.draw.line(tel, (255, 60, 60, 70),
-                                         (0, y - world_y), (SCREEN_WIDTH, y - world_y),
+                                         (0, y - world_y), (W, y - world_y),
                                          max(4, t["width"]//2))
                 else:
                     for x in t["lanes"]:
                         pygame.draw.line(tel, (255, 60, 60, 70),
-                                         (x - world_x, 0), (x - world_x, SCREEN_HEIGHT),
+                                         (x - world_x, 0), (x - world_x, H),
                                          max(4, t["width"]//2))
+
             elif t["type"] == "CF":
                 w = t["width"]
                 pygame.draw.rect(tel, (255, 60, 60, 75),
-                                 pygame.Rect(0, t["cy"] - w*0.5 - world_y, SCREEN_WIDTH, w))
+                                 pygame.Rect(0, t["cy"] - w*0.5 - world_y, W, w))
                 pygame.draw.rect(tel, (255, 60, 60, 75),
-                                 pygame.Rect(t["cx"] - w*0.5 - world_x, 0, w, SCREEN_HEIGHT))
+                                 pygame.Rect(t["cx"] - w*0.5 - world_x, 0, w, H))
+
             elif t["type"] == "GRID":
-                a = t["ang"]
+                a = t["ang"]; cx = t["cx"] - world_x; cy = t["cy"] - world_y
+                L = self._max_ray_len()
                 for axis in (a, a + math.pi/2):
-                    for offset in range(-self.map_width, self.map_width+1, t["cell"]):
-                        L = max(self.map_width, self.map_height) * 1.5
-                        cx, cy = sx, sy
+                    step = t["cell"]
+                    for offset in range(-max(self.map_width, self.map_height),
+                                        max(self.map_width, self.map_height)+1, step):
                         nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
                         ox, oy = cx + nx*offset, cy + ny*offset
                         dx, dy = math.cos(axis), math.sin(axis)
                         x1, y1 = ox - dx*L, oy - dy*L
                         x2, y2 = ox + dx*L, oy + dy*L
-                        pygame.draw.line(tel, (255, 60, 60, 70), (x1, y1), (x2, y2), 8)
+                        pygame.draw.line(tel, (255, 60, 60, 70), (x1,y1), (x2,y2), max(4, t["width"]//2))
+
             elif t["type"] == "ROTOR":
-                pygame.draw.circle(tel, (255, 60, 60, 60), (int(sx), int(sy)), t["radius"], width=4)
+                cx = t["cx"] - world_x; cy = t["cy"] - world_y
                 a = t["ang0"]
+                L = t["r"]
                 for i in range(t["spokes"]):
                     ang = a + (2*math.pi/float(t["spokes"])) * i
-                    x2 = sx + math.cos(ang)*t["radius"]
-                    y2 = sy + math.sin(ang)*t["radius"]
-                    pygame.draw.line(tel, (255, 60, 60, 70), (sx, sy), (x2, y2), 6)
+                    x2 = cx + math.cos(ang)*L
+                    y2 = cy + math.sin(ang)*L
+                    pygame.draw.line(tel, (255, 60, 60, 70), (cx, cy), (x2, y2), max(4, t["width"]//2))
+
             elif t["type"] == "ZZ":
                 for i in range(len(t["pts"]) - 1):
                     x1,y1 = t["pts"][i]
@@ -9851,42 +9975,47 @@ class Boss6(AIBase):
                                      (x1 - world_x, y1 - world_y),
                                      (x2 - world_x, y2 - world_y),
                                      max(4, t["width"]//2))
-            elif t["type"] == "V":
-                pygame.draw.line(tel, (255,60,60,70), (t["cx"]-world_x, t["cy"]-world_y),
-                                 (t["x0"]-world_x, t["y0"]-world_y), max(4, t["width"]//2))
-                pygame.draw.line(tel, (255,60,60,70), (t["cx"]-world_x, t["cy"]-world_y),
-                                 (t["x1"]-world_x, t["y1"]-world_y), max(4, t["width"]//2))
+
+            elif t["type"] == "FAN":
+                cx = t["cx"] - world_x; cy = t["cy"] - world_y
+                L = self._max_ray_len()
+                for ang in t["angs"]:
+                    x2 = cx + math.cos(ang)*L
+                    y2 = cy + math.sin(ang)*L
+                    pygame.draw.line(tel, (255,60,60,70), (cx,cy), (x2,y2), max(4, t["width"]//2))
+
             elif t["type"] == "ARC":
+                cx = t["cx"] - world_x; cy = t["cy"] - world_y
                 for (r,a0,a1) in t["arcs"]:
-                    # 얇은 호 가이드
                     ang = a0
                     while True:
                         anext = min(a1, ang + 0.18)
-                        x1 = self.world_x - world_x + math.cos(ang)*r
-                        y1 = self.world_y - world_y + math.sin(ang)*r
-                        x2 = self.world_x - world_x + math.cos(anext)*r
-                        y2 = self.world_y - world_y + math.sin(anext)*r
+                        x1 = cx + math.cos(ang)*r
+                        y1 = cy + math.sin(ang)*r
+                        x2 = cx + math.cos(anext)*r
+                        y2 = cy + math.sin(anext)*r
                         pygame.draw.line(tel, (255,60,60,70), (x1,y1), (x2,y2), max(4, t["width"]//2))
                         if anext >= a1 - 1e-6: break
                         ang = anext
+
             elif t["type"] == "LAT":
-                a = t["ang"]; cell = t["cell"]; off = t["offset"]
-                L = max(self.map_width, self.map_height) * 1.5
+                a = t["ang"]; cx = t["cx"] - world_x; cy = t["cy"] - world_y
+                L = self._max_ray_len()
+                step = t["cell"]; off = t["offset"]
                 for axis in (a, a + math.pi/2):
-                    step = cell
                     for k, offset in enumerate(range(-max(self.map_width, self.map_height),
                                                      max(self.map_width, self.map_height)+1, step)):
-                        cx, cy = sx, sy
                         nx, ny = math.cos(axis + math.pi/2), math.sin(axis + math.pi/2)
                         ox, oy = cx + nx*offset, cy + ny*offset
                         dx, dy = math.cos(axis), math.sin(axis)
-                        ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
-                        oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
+                        if axis != a:
+                            ox += (-dy) * off * (1 if (k % 2 == 0) else -1)
+                            oy += ( dx) * off * (1 if (k % 2 == 0) else -1)
                         x1, y1 = ox - dx*L, oy - dy*L
                         x2, y2 = ox + dx*L, oy + dy*L
                         pygame.draw.line(tel, (255,60,60,70), (x1,y1), (x2,y2), max(4, t["width"]//2))
+
             elif t["type"] == "IGN":
-                # 점선 텔레그래프
                 x1,y1,x2,y2 = t["x1"]-world_x, t["y1"]-world_y, t["x2"]-world_x, t["y2"]-world_y
                 L = max(1.0, math.hypot(x2-x1, y2-y1))
                 seg = 40; gap = 30
@@ -9896,13 +10025,14 @@ class Boss6(AIBase):
                     e = min(L, s + seg)
                     sx1, sy1 = x1 + vx*s, y1 + vy*s
                     sx2, sy2 = x1 + vx*e, y1 + vy*e
-                    pygame.draw.line(tel, (255,60,60,70), (sx1,sy1), (sx2,sy2), max(4, t["width"]//2))
+                    pygame.draw.line(tel, (255,60,60,70), (sx1,sy1), (sx2,sy2), max(4,  self.IGN_WIDTH//2))
                     s = e + gap
+
             surface.blit(tel, (0, 0))
 
-        # --- 실제 레이저(3중 레이어 + 꺾임) ---
+        # 실제 레이저(3중 레이어 + 지그재그 궤적)
         if self._hazards:
-            lay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            lay = pygame.Surface((W, H), pygame.SRCALPHA)
             for hz in self._hazards:
                 k = hz["kind"]
                 if k == "line_static":
@@ -9939,9 +10069,24 @@ class Boss6(AIBase):
                         x2 = cx + math.cos(ang)*hz["r"]
                         y2 = cy + math.sin(ang)*hz["r"]
                         self._draw_beam_layered(lay, cx, cy, x2, y2, base_w=hz["w"], born_ms=hz["t0"])
+
             surface.blit(lay, (0, 0))
 
-    # ---------- 사망 ----------
+    # 피격/드랍/사망
+    def hit(self, damage, blood_effects, force=False):
+        prev_hp = self.hp
+        thr66 = self.max_hp * (2.0/3.0)
+        thr33 = self.max_hp * (1.0/3.0)
+        super().hit(damage, blood_effects, force)
+        if self.alive:
+            if (not self._drop_2_3_done) and prev_hp > thr66 and self.hp <= thr66:
+                self._drop_2_3_done = True
+                self._heavy_drop(scale=1)
+            if (not self._drop_1_3_done) and prev_hp > thr33 and self.hp <= thr33:
+                self._drop_1_3_done = True
+                self._heavy_drop(scale=1)
+
     def die(self, blood_effects):
         self._hazards.clear()
+        self._heavy_drop(scale=2)
         super().die(blood_effects)
