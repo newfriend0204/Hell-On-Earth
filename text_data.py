@@ -449,7 +449,7 @@ BOSS_DESC = {
     "2-3": "무리 이름: 지옥 경비병 무리\n\"이 문턱은 네게 허락되지 않는다. 넌 여기서 피를 흘리며 끝나리라.\"",
     "3-1": "보스 이름: 심연의 수행자\n\"심연은 끝없는 질문이다. 그 해답을 네 몸으로 알게 될 것이다.\"",
     "3-2": "보스 이름: 사슬의 감시자\n\"사슬에 붙잡히는 순간, 네 육신은 심히 부서지고 영혼은 묶인다. 도망칠 수 없다.\"",
-    "3-3": "보스 이름: 절대악\n\"나는 혼돈, 파괴, 망각의 화신이다. 모든 것은 무로 돌아갈지어니… 네 존재부터 소멸하리라.\"",
+    "3-3": "보스 이름: 절대악\n\"너는 예정된 운명을 바꿀 수 없다. 모든 것은 무로 돌아갈지어니… 네 존재부터 소멸하리라.\"",
 }
 
 merchant_dialogue = [
@@ -544,6 +544,41 @@ drone_dialogue = [
         },
         "next": 0
     }
+]
+
+intro_dialogue = [
+    {"speaker": "나", "text": "NF 코퍼레이션.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 1},
+    {"speaker": "나", "text": "나의 이야기는 그곳에서부터 시작된다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 2},
+    {"speaker": "나", "text": "대외적으로는 그저 그런 평범한 기업으로 알려지지만, 실체는 다르다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 3},
+    {"speaker": "나", "text": "우리는 비밀리에 전세계적으로 기지를 세워서, \"포탈\"과 그 차원에 대해서 연구하는 조직이다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 4},
+    {"speaker": "나", "text": "뭐… 나는 그 복잡한 포탈을 연구하는 사람은 아니다. 그냥 그곳을 지키고 있는 여러 경비원들중 하나지.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 5},
+    {"speaker": "나", "text": "도시전설에 비유하자면, SCP재단이 있다. 다른게 있다면, 우리는 실존한다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 6},
+    {"speaker": "나", "text": "그렇게 그저 그런 하루들이 지나가면 좋았겠지만, 사건은 결국 터지고 말았다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 7},
+    {"speaker": "나", "text": "우리는 깊은 숲속에 있는 \"폭스트롯 기지\"에서 근무한다. 다만, 성과가 별로 없었던건지, 지부장은 계획 하나를 실행했다.", "image": "Story1.png", "choices": None, "effect": None, "next": 8},
+    {"speaker": "나", "text": "계획 이름은 \"포탈 규격화 실험 3배\".", "image": "Story2.png", "choices": None, "effect": None, "next": 9},
+    {"speaker": "나", "text": "안전하지도 않은 이 실험은 지부장과 상급 과학자 한명만 알고 있었고, 비밀리에 실험이 진행되었다.", "image": "Story2.png", "choices": None, "effect": None, "next": 10},
+    {"speaker": "나", "text": "결국 그 계획을 눈치채고 결사 반대한 연구원도 있었지만, 결국 묵살당한채 강제진행되었다.", "image": "Story2.png", "choices": None, "effect": None, "next": 11},
+    {"speaker": "나", "text": "뭐, 결과는 뻔했지. 포탈에너지가 급격히 불규칙해지면서, 그 건너 차원의 존재들이 건너오기 시작했다.", "image": "Story3.png", "choices": None, "effect": None, "next": 12},
+    {"speaker": "나", "text": "실험을 진행한 상급 과학자는 즉사. 결사 반대한 연구원은 미리 눈치채고, 눈 앞에 보이는 어떤 \"한 경비원\"을 부르고 시설을 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 13},
+    {"speaker": "나", "text": "연구원은 그 경비원에게 본인이 특수 제작한 역작 슈트를 건내주고, 기지가 차원의 존재들에게 혼란스러울때, 조용히 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 14},
+    {"speaker": "나", "text": "그렇다. 한 경비원은 나다. 그리고 결사 반대한 연구원의 이름은 \"새친 연구원\".", "image": "Story5.png", "choices": None, "effect": None, "next": 15},
+    {"speaker": "나", "text": "그렇게, 우리의 이야기가 시작되었다.", "image": "Story5.png", "choices": None, "effect": None, "next": None},
+]
+
+ending_dialogue = [
+    {"speaker": "나",   "text": "그리하여, 이 짧고도 긴 여정이자, 모험이 마무리되었다.", "image": "Story6.png",  "choices": None, "effect": None, "next": 1},
+    {"speaker": "나",   "text": "새친 연구원의 말대로, 절대악이 쓰러지자, 지옥이 본래의 모습을 되찾았다.", "image": "Story6.png",  "choices": None, "effect": None, "next": 2},
+    {"speaker": "나",   "text": "그것은... 마치 또 하나의 지구처럼 보이고 있었다.", "image": "Story7.png",  "choices": None, "effect": None, "next": 3},
+    {"speaker": "나",   "text": "그리고, 지구에 있던 홀린 군인들은 다시 정신을 되찾았다.", "image": "Story7.png",  "choices": None, "effect": None, "next": 4},
+    {"speaker": "나",   "text": "그들과 군인, 그리고 과학자들은 지구에서 남은 악마들을 처리하고 있다.", "image": "Story8.png",  "choices": None, "effect": None, "next": 5},
+    {"speaker": "나",   "text": "그러나, 우리는 다르다.", "image": "Story8.png",  "choices": None, "effect": None, "next": 6},
+    {"speaker": "나",   "text": "나, 새친 과학자, 소수의 NF 과학자들은 조직을 꾸려서, 이 새로워진 지옥 차원에 대해서 연구를 시작했다.", "image": "Story9.png",  "choices": None, "effect": None, "next": 7},
+    {"speaker": "나",   "text": "이 차원과 함께라면, 지구는 본래의 모습을 되찾고, 더 발전할 수 있겠지.", "image": "Story9.png",  "choices": None, "effect": None, "next": 8},
+    {"speaker": "새친 연구원", "text": "이봐! 여기 와서 이것 좀 함께 보자고!", "image": "Story9.png",  "choices": None, "effect": None, "next": 9},
+    {"speaker": "나",   "text": "아직 아무래도 나의 여정은 끝나지 않은 듯 하다.", "image": "Story10.png", "choices": None, "effect": None, "next": 10},
+    {"speaker": "나",   "text": "적어도 그때처럼 악마들을 죽이는 것 보단 훨씬 재밌겠지.", "image": "Story10.png", "choices": None, "effect": None, "next": 11},
+    {"speaker": "나",   "text": "나는 천천히, 한걸음 한걸음 나아간다.", "image": "Story10.png", "choices": None, "effect": None, "next": 12},
+    {"speaker": "나",   "text": "더 밝은 미래를 향하여, 더 나은 세상을 위하여.", "image": "Story10.png", "choices": None, "effect": None, "next": 13},
 ]
 
 doctorNF_dialogue = [
@@ -1859,17 +1894,24 @@ drone33_before_dialogue = [
     },
     {
         "speaker": "드론(새친 연구원)",
-        "text": "저것은 느린 시전 시간을 가질거야. 단, 맞으면 느린 시전 시간만큼의 큰 피해를 입을 수 있으니, 주의해.",
+        "text": "3-1에서 만난 심연의 수행자 기억나나? 그 존재는 절대악을 받들고 있는 걸로 확인되었어.",
         "choices": None,
         "effect": None,
         "next": 6
     },
     {
         "speaker": "드론(새친 연구원)",
-        "text": "…내가 전할 말은 여기까지. 더 도와줄 수 없어서 미안하군.",
+        "text": "즉, 패턴은 아마 3-1에서 만난 존재와 비슷할 것이다.",
         "choices": None,
         "effect": None,
         "next": 7
+    },
+    {
+        "speaker": "드론(새친 연구원)",
+        "text": "…내가 전할 말은 여기까지. 더 도와줄 수 없어서 미안하군.",
+        "choices": None,
+        "effect": None,
+        "next": 8
     },
     {
         "speaker": "드론(새친 연구원)",
@@ -1904,7 +1946,7 @@ drone33_after_dialogue = [
     },
     {
         "speaker": "나",
-        "text": "(그 주변의 과학자들과 써로 껴안으면고 서류 더미들을 던지면서 서로 고생했다고 말하고 있다.)",
+        "text": "(그 주변의 과학자들과 서로 껴안고 서류 더미들을 던지면서 서로 고생했다고 말하고 있다.)",
         "choices": None,
         "effect": None,
         "next": 4

@@ -234,8 +234,26 @@ class WeaponBase:
         self._prev_left_down, self._prev_right_down = left_down, right_down
         return allow_left, allow_right
 
+    OVERLAY_VISIBLE_WHEN_INACTIVE = False
+    overlay_force_visible = False
+
+    def should_draw_overlay(self, active_weapon):
+        # 바(HEAT/CHARGE 등) 표시 여부만 판단하는 함수.
+        import config
+        if getattr(config, "player_dead", False):
+            return False
+        if getattr(config, "is_switching_weapon", False):
+            return False
+        if getattr(self, "overlay_force_visible", False) or getattr(self, "OVERLAY_VISIBLE_WHEN_INACTIVE", False):
+            return True
+        return (self is active_weapon)
+
     def draw_overlay(self, screen):
         # 무기 전용 HUD를 그릴 때 오버라이드
+        return
+
+    def draw_world(self, screen):
+        # 월드 비주얼 훅(탄/필드/파편 등). 기본적으로 아무것도 하지 않음.
         return
     
     def on_left_click(self):
@@ -3244,8 +3262,8 @@ class Gun26(WeaponBase):
 class Gun27(WeaponBase):
     TIER = 5
     CHARGE_TIME_MS = 800
-    LEFT_DAMAGE = 150
-    RIGHT_DAMAGE = 90
+    LEFT_DAMAGE = 120
+    RIGHT_DAMAGE = 50
 
     LEFT_AMMO_COST = 35
     RIGHT_AMMO_COST = 18
@@ -3604,7 +3622,7 @@ class Gun28(WeaponBase):
     FIELD_RADIUS = 180
     FIELD_DURATION_MS = 1600
     FIELD_TICKS = 8
-    FIELD_TICK_DAMAGE = 35
+    FIELD_TICK_DAMAGE = 20
     FIELD_TICK_INTERVAL_MS = FIELD_DURATION_MS // FIELD_TICKS
 
     FIELD_PULL_SPEED_MAX = 220.0
@@ -3938,11 +3956,11 @@ class Gun28(WeaponBase):
         self._apply_shake(self.shake_strength + 1, timer=8)
 
     # 렌더/HUD
-    def draw_overlay(self, screen):
+    def draw_world(self, screen):
         sw, sh = screen.get_size()
 
-        # 1) 구체 표시(글로우)
-        if self._orbs:
+        # 구체 표시(글로우)
+        if getattr(self, "_orbs", None):
             orb_surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
             for o in self._orbs:
                 sx, sy = self._world_to_screen(o["x"], o["y"])
@@ -3951,44 +3969,38 @@ class Gun28(WeaponBase):
                 pygame.draw.circle(orb_surf, (255, 255, 255, 200), (int(sx), int(sy)), 6)
             screen.blit(orb_surf, (0, 0))
 
-        # 2) 특이점 표시(이중 링 + 약한 채움 + 파티클 + 펄스 링)
-        if self._fields:
+        # 특이점 표시(이중 링 + 채움 + 파티클 + 펄스)
+        if getattr(self, "_fields", None):
             f_surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
             for f in self._fields:
                 sx, sy = self._world_to_screen(f["x"], f["y"])
                 r = int(f["radius"])
-
-                # 링 & 채움
                 pygame.draw.circle(f_surf, self.FIELD_COLOR_OUT, (int(sx), int(sy)), int(r * 1.02), width=3)
                 pygame.draw.circle(f_surf, self.FIELD_COLOR_IN,  (int(sx), int(sy)), int(r * 0.82), width=2)
-                pygame.draw.circle(f_surf, (60, 80, 160, 35), (int(sx), int(sy)), int(r * 0.78))
-
-                # 파티클 (소용돌이)
-                now = pygame.time.get_ticks()
+                pygame.draw.circle(f_surf, (60, 80, 160, 35),    (int(sx), int(sy)), int(r * 0.78))
+                # 파티클
                 for p in f["particles"]:
-                    pr = max(0, p["r"])
-                    px = sx + math.cos(p["ang"]) * pr
-                    py = sy + math.sin(p["ang"]) * pr
-                    sz = p["size"]
-                    # 살짝 깜빡이는 느낌
-                    alpha = 140 + int(80 * (0.5 + 0.5 * math.sin((now - p["born_ms"]) * 0.02)))
-                    color = (180, 220, 255, max(40, min(220, alpha)))
-                    pygame.draw.circle(f_surf, color, (int(px), int(py)), sz)
-
+                    px = sx + math.cos(p["ang"]) * p["r"]
+                    py = sy + math.sin(p["ang"]) * p["r"]
+                    pygame.draw.circle(f_surf, (180, 220, 255, 120), (int(px), int(py)), p["size"])
                 # 펄스 링
                 for ring in f["pulses"]:
-                    alpha = int(ring["alpha"])
-                    if alpha > 0:
-                        col = (120, 200, 255, alpha)
-                        pygame.draw.circle(f_surf, col, (int(sx), int(sy)), int(ring["r"]), width=2)
-
+                    a  = int(max(0, ring.get("alpha", 0)))
+                    rr = ring.get("r", 0)
+                    if a > 0 and rr > 0:
+                        pygame.draw.circle(
+                            f_surf, (150, 200, 255, a),
+                            (int(sx), int(sy)), int(rr), width=2)
             screen.blit(f_surf, (0, 0))
+
+    def draw_overlay(self, screen):
+        return
 
 class Gun29(WeaponBase):
     TIER = 5
 
-    PRIMARY_DAMAGE = 120
-    CHAIN_DAMAGE   = 70
+    PRIMARY_DAMAGE = 90
+    CHAIN_DAMAGE   = 40
 
     LEFT_AMMO_COST  = 20
     RIGHT_AMMO_COST = 28
@@ -4372,7 +4384,7 @@ class Gun30(WeaponBase):
     TIER = 5
 
     TICK_MS = 80
-    DAMAGE_PER_TICK = 32
+    DAMAGE_PER_TICK = 20
     AMMO_PER_SEC = 25.0
     AMMO_PER_TICK = AMMO_PER_SEC * (TICK_MS / 1000.0)
     HEAT_PER_TICK = 2.0
@@ -4496,11 +4508,34 @@ class Gun30(WeaponBase):
             self._loop_ch = ch
 
     def _stop_loop(self):
-        if not self._loop_ch:
-            return
-        try: self._loop_ch.fadeout(120)
-        except Exception: pass
-        self._loop_ch = None
+        if self._loop_ch:
+            try: self._loop_ch.fadeout(120)
+            except Exception: pass
+            self._loop_ch = None
+        self._force_kill_loop_channels()
+ 
+    def _force_kill_loop_channels(self):
+        # gun30_fire가 재생 중인 채널이 있으면 모두 정지(유령 루프 방지).
+        try:
+            s = self.sounds.get("fire")
+            if not s:
+                return
+            # 캐싱된 채널이 있어도 한 번 더 안전하게 정지
+            if self._loop_ch:
+                try: self._loop_ch.stop()
+                except Exception: pass
+                self._loop_ch = None
+            # mixer 전체 채널을 스윕하며 동일 Sound 인스턴스면 정지
+            num = pygame.mixer.get_num_channels()
+            for i in range(num):
+                ch = pygame.mixer.Channel(i)
+                try:
+                    if ch.get_sound() is s:
+                        ch.stop()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _cool_heat(self, now_ms, dt_ms, firing: bool):
         if now_ms < self._overheated_until:
@@ -4700,6 +4735,7 @@ class Gun30(WeaponBase):
 
     def on_weapon_switch(self):
         self._stop_loop()
+        self._force_kill_loop_channels()
         self._beam_active = False
         self._last_dirs = []
         self._spectrum_until = 0
@@ -5628,8 +5664,8 @@ class Gun32(WeaponBase):
 class Gun33(WeaponBase):
     TIER = 4
 
-    LEFT_DAMAGE = 65
-    RIGHT_DAMAGE = 80
+    LEFT_DAMAGE = 55
+    RIGHT_DAMAGE = 70
     LEFT_COOLDOWN_MS = 190
     RIGHT_COOLDOWN_MS = 350
     LEFT_AMMO_COST = 10
@@ -6960,7 +6996,7 @@ class Gun36(WeaponBase):
     MINE_STUCK_NUDGE    = 2.0
 
     EXPLOSION_RADIUS    = 90
-    EXPLOSION_DAMAGE    = 90
+    EXPLOSION_DAMAGE    = 75
 
     EXPLOSION_RING_MS   = 520
     EXPLOSION_RAYS      = 12

@@ -126,6 +126,11 @@ def load_sounds():
         "chain_drag":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ChainDrag.mp3")),
         "chain_throw":  pygame.mixer.Sound(path_sound("Sound", "Entity", "ChainThrow.mp3")),
         "whirl":  pygame.mixer.Sound(path_sound("Sound", "Entity", "Whirl.mp3")),
+        "boss7_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockCharge.mp3")),
+        "boss7_fire": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockBurst.mp3")),
+        "spawn_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnCharge.mp3")),
+        "spawn_enemy": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnEnemy.mp3")),
+        "spawn_burst": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)
@@ -179,6 +184,12 @@ def load_sounds():
         **entity_sounds
     }
 
+_BGM_IDLE_VOL = 0.7
+_BGM_COMBAT_VOL = 0.3
+_bgm_target_vol = None
+_bgm_fade_from = None
+_bgm_fade_duration_ms = 0
+_bgm_last_update_ms = 0
 _BGM_FILES = None
 _bgm_current_key = None
 
@@ -191,6 +202,9 @@ def _ensure_bgm_files():
             2: path("Sound", "Background", "Map2.mp3"),
             3: path("Sound", "Background", "Map3.mp3"),
             "main": path("Sound", "Background", "Main.mp3"),
+            "dialogue": path("Sound", "Background", "Dialogue.mp3"),
+            "credit":   path("Sound", "Background", "EndingCredit.mp3"),
+            "boss":     path("Sound", "Background", "Boss.mp3"),
         }
 
 def _stage_to_key(stage_like):
@@ -233,7 +247,7 @@ def play_bgm_for_stage(stage_like, fade_ms: int = 600):
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.fadeout(250)
         pygame.mixer.music.load(_BGM_FILES.get(key, _BGM_FILES[1]))
-        set_bgm_volume(0.3)
+        set_bgm_volume(_BGM_IDLE_VOL)
         pygame.mixer.music.play(-1, fade_ms=max(0, int(fade_ms)))  # 무한 반복
         _bgm_current_key = key
     except Exception:
@@ -249,8 +263,90 @@ def play_bgm_main(fade_ms: int = 600, restart: bool = False):
         if pygame.mixer.music.get_busy():
             pygame.mixer.music.fadeout(250)
         pygame.mixer.music.load(_BGM_FILES["main"])
-        set_bgm_volume(0.3)
+        set_bgm_volume(_BGM_IDLE_VOL)
         pygame.mixer.music.play(-1, fade_ms=max(0, int(fade_ms)))
         _bgm_current_key = "main"
     except Exception:
         _bgm_current_key = None
+
+def bgm_set_combat(is_combat: bool, fade_ms: int = 600):
+    # 전투 여부에 따라 BGM 목표 볼륨을 설정하고 부드럽게 페이드
+    global _bgm_target_vol, _bgm_fade_from, _bgm_fade_duration_ms, _bgm_last_update_ms
+    try:
+        cur = pygame.mixer.music.get_volume()
+    except Exception:
+        cur = _BGM_COMBAT_VOL if is_combat else _BGM_IDLE_VOL
+
+    target = _BGM_COMBAT_VOL if is_combat else _BGM_IDLE_VOL
+    _bgm_target_vol = target
+    _bgm_fade_from = cur
+    _bgm_fade_duration_ms = max(0, int(fade_ms))
+    _bgm_last_update_ms = pygame.time.get_ticks()
+
+    # 페이드 시간 0이면 즉시 적용
+    if _bgm_fade_duration_ms == 0:
+        set_bgm_volume(target)
+
+def bgm_update():
+    # 매 프레임 호출해서 BGM 볼륨 페이드를 진행
+    global _bgm_target_vol, _bgm_fade_from, _bgm_fade_duration_ms, _bgm_last_update_ms
+    if _bgm_target_vol is None or _bgm_fade_from is None or _bgm_fade_duration_ms <= 0:
+        return
+    now = pygame.time.get_ticks()
+    elapsed = now - _bgm_last_update_ms
+
+    if elapsed >= _bgm_fade_duration_ms:
+        # 페이드 완료
+        set_bgm_volume(_bgm_target_vol)
+        _bgm_target_vol = None
+        _bgm_fade_from = None
+        _bgm_fade_duration_ms = 0
+        return
+
+    # 선형 보간(lerp)으로 볼륨 계산
+    t = elapsed / _bgm_fade_duration_ms
+    vol = _bgm_fade_from + (_bgm_target_vol - _bgm_fade_from) * t
+    set_bgm_volume(vol)
+
+def bgm_fade_to_volume(target_vol: float, fade_ms: int = 1000):
+    # 현재 재생 중인 BGM 볼륨을 target_vol까지 fade_ms 동안 선형 페이드.
+    global _bgm_target_vol, _bgm_fade_from, _bgm_fade_duration_ms, _bgm_last_update_ms
+    try:
+        cur = pygame.mixer.music.get_volume()
+    except Exception:
+        cur = 0.0
+    _bgm_target_vol = max(0.0, min(1.0, float(target_vol)))
+    _bgm_fade_from = max(0.0, min(1.0, float(cur)))
+    _bgm_fade_duration_ms = max(0, int(fade_ms))
+    _bgm_last_update_ms = pygame.time.get_ticks()
+    if _bgm_fade_duration_ms == 0:
+        set_bgm_volume(_bgm_target_vol)
+
+def _play_bgm_key(key: str, fade_ms: int = 1200, target_vol: float = 0.7, restart: bool = True):
+    # 내부용: key로 등록된 BGM을 루프로 재생하고 0→target_vol로 페이드 인.
+    global _bgm_current_key
+    _ensure_bgm_files()
+    if (not restart) and _bgm_current_key == key:
+        return
+    try:
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.fadeout(250)
+        pygame.mixer.music.load(_BGM_FILES[key])
+        set_bgm_volume(0.0)
+        pygame.mixer.music.play(-1, fade_ms=max(0, int(fade_ms)))
+        _bgm_current_key = key
+        bgm_fade_to_volume(target_vol, fade_ms)
+    except Exception:
+        _bgm_current_key = None
+
+def play_bgm_dialogue(fade_ms: int = 1200):
+    # 인트로/엔딩 대사용 BGM
+    _play_bgm_key("dialogue", fade_ms=fade_ms, target_vol=_BGM_IDLE_VOL, restart=True)
+
+def play_bgm_ending_credit(fade_ms: int = 1200):
+    # 엔딩 크레딧용 BGM
+    _play_bgm_key("credit", fade_ms=fade_ms, target_vol=_BGM_IDLE_VOL, restart=True)
+
+def play_bgm_boss(fade_ms: int = 1200):
+    # 보스 연출/전투 시작 BGM
+    _play_bgm_key("boss", fade_ms=fade_ms, target_vol=max(_BGM_IDLE_VOL, 0.7), restart=True)

@@ -3,7 +3,7 @@ import math
 import random
 from config import *
 import config
-from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile, AcidPool
 
 ENEMY_CLASSES = []
 
@@ -707,7 +707,7 @@ class Enemy3(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=39,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -914,7 +914,7 @@ class Enemy4(AIBase):
             near_threshold=0,
             far_threshold=self.FAR_THRESHOLD,
             radius=30 * 1.2,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=self.MIN_ATTACK_PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1161,8 +1161,8 @@ class Enemy5(AIBase):
             speed=self.BASE_SPEED,
             near_threshold=150,
             far_threshold=500,
-            radius=30 * PLAYER_VIEW_SCALE,
-            push_strength=0.0,
+            radius=30,
+            push_strength=0.18,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1350,7 +1350,7 @@ class Enemy6(AIBase):
             near_threshold=200,
             far_threshold=900,
             radius=55,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=800,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1516,7 +1516,7 @@ class Enemy7(AIBase):
             near_threshold=0,
             far_threshold=9999,
             radius=40,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=500,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1643,7 +1643,7 @@ class Enemy8(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=30 * PLAYER_VIEW_SCALE,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1772,7 +1772,7 @@ class Enemy9(AIBase):
             near_threshold=0,
             far_threshold=self.RANGED_RANGE,
             radius=30 * PLAYER_VIEW_SCALE,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=500,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2175,7 +2175,7 @@ class Enemy11(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=int(30 * PLAYER_VIEW_SCALE),
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=self.PREPARE_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2379,7 +2379,7 @@ class Enemy12(AIBase):
             near_threshold=self.SHOT_DISTANCE,
             far_threshold=800,
             radius=32,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2599,7 +2599,7 @@ class Enemy13(AIBase):
     SUMMON_MAX_RADIUS = int(800 * PLAYER_VIEW_SCALE)
     MAX_MINIONS = 4
 
-    NEAR_DISTANCE = int(350 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(500 * PLAYER_VIEW_SCALE)
     FAR_DISTANCE  = int(900 * PLAYER_VIEW_SCALE)
 
     TURN_SPEED_DEG = 80
@@ -2618,7 +2618,7 @@ class Enemy13(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=36,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2910,7 +2910,7 @@ class Enemy14(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=34,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -3195,7 +3195,7 @@ class Enemy15(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=int(28 * PLAYER_VIEW_SCALE),
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -3441,7 +3441,7 @@ class Enemy16(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank
@@ -3968,7 +3968,7 @@ class Enemy18(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank
@@ -7033,7 +7033,7 @@ class Boss1(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=60,
-            push_strength=0.0,
+            push_strength=0.18,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -7359,7 +7359,7 @@ class Boss2(AIBase):
                  damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=300, far_threshold=700,
-                         radius=50, push_strength=0.0, alert_duration=0,
+                         radius=50, push_strength=0.18, alert_duration=0,
                          damage_player_fn=damage_player_fn,rank=rank,)
 
         self.hp = self.HP_MAX
@@ -9269,6 +9269,7 @@ class Boss6(AIBase):
         self._tele_data = None
         self._hazards  = []
         self._last_tick_damage = 0
+        self._laser_damage_accum = 0.0
 
         self.facing_angle = 0.0
         self._strafe_dir = 1
@@ -9723,75 +9724,78 @@ class Boss6(AIBase):
             self._next_summon = now + cd
         self._process_pending_summons()
 
-        # 해저드 피해 처리
-        do_tick = (now - self._last_tick_damage) >= self.LASER_TICK_MS
-        if do_tick: self._last_tick_damage = now
+        # 해저드 피해 처리 (프레임 단위로 부드럽게 적용)
+        dt_ms = max(1, now - self._last_tick_damage)
+        self._last_tick_damage = now
+        frame_accum = 0.0
+
         new_haz = []
         for hz in self._hazards:
             alive = True
-            kind = hz["kind"]
-            deal = 0
+            kind = hz['kind']
 
-            if kind == "line_static":
-                if now <= hz["expire"]:
-                    d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"], hz["x2"], hz["y2"])
-                    if d <= hz["w"] * 0.5 and do_tick:
-                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+            if kind == 'line_static':
+                if now <= hz['expire']:
+                    d = self._dist_point_to_segment(px, py, hz['x1'], hz['y1'], hz['x2'], hz['y2'])
+                    if d <= hz['w'] * 0.5:
+                        frame_accum += hz['dps'] * (dt_ms / 1000.0)
                 else:
                     alive = False
 
-            elif kind == "polyline_static":
-                if now <= hz["expire"]:
-                    d = self._dist_point_to_polyline(px, py, hz["pts"])
-                    if d <= hz["w"] * 0.5 and do_tick:
-                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+            elif kind == 'polyline_static':
+                if now <= hz['expire']:
+                    d = self._dist_point_to_polyline(px, py, hz['pts'])
+                    if d <= hz['w'] * 0.5:
+                        frame_accum += hz['dps'] * (dt_ms / 1000.0)
                 else:
                     alive = False
 
-            elif kind == "arc_static":
-                if now <= hz["expire"]:
-                    d = Boss6._dist_point_to_arc(px, py, hz["cx"], hz["cy"], hz["r"], hz["a0"], hz["a1"])
-                    if d <= hz["w"] * 0.5 and do_tick:
-                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+            elif kind == 'arc_static':
+                if now <= hz['expire']:
+                    d = self._dist_point_to_arc(px, py, hz['cx'], hz['cy'], hz['r'], hz['a0'], hz['a1'])
+                    if d <= hz['w'] * 0.5:
+                        frame_accum += hz['dps'] * (dt_ms / 1000.0)
                 else:
                     alive = False
 
-            elif kind == "ignite_line":
-                if now <= hz["expire"]:
-                    Lx = hz["x2"] - hz["x1"]; Ly = hz["y2"] - hz["y1"]
-                    L = max(1.0, math.hypot(Lx, Ly))
-                    frac = min(1.0, max(0.0, (now - hz["t0"]) / max(1, hz["ignite_ms"])))
-                    vx, vy = Lx / L, Ly / L
-                    d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"],
-                                                    hz["x1"] + vx*(L*frac),
-                                                    hz["y1"] + vy*(L*frac))
-                    if d <= hz["w"] * 0.5 and do_tick:
-                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+            elif kind == 'ignite_line':
+                if now <= hz['expire']:
+                    # 점화 전에는 피해 없음
+                    if (now - hz['t0']) >= hz.get('ignite_ms', 0):
+                        d = self._dist_point_to_segment(px, py, hz['x1'], hz['y1'], hz['x2'], hz['y2'])
+                        if d <= hz['w'] * 0.5:
+                            frame_accum += hz['dps'] * (dt_ms / 1000.0)
                 else:
                     alive = False
 
-            elif kind == "rotor":
-                tfrac = (now - hz["t0"]) / max(1, hz["duration"])
+            elif kind == 'rotor':
+                tfrac = (now - hz['t0']) / max(1, hz['duration'])
                 if tfrac <= 1.0:
-                    cur_ang = hz["ang0"] + hz["ang_spd"] * ((now - hz["t0"])/1000.0)
-                    for i in range(hz["spokes"]):
-                        ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
-                        x2 = hz["cx"] + math.cos(ang)*hz["r"]
-                        y2 = hz["cy"] + math.sin(ang)*hz["r"]
-                        d = self._dist_point_to_segment(px, py, hz["cx"], hz["cy"], x2, y2)
-                        if d <= hz["w"] * 0.5:
-                            if do_tick: deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                    cur_ang = hz['ang0'] + hz['ang_spd'] * ((now - hz['t0'])/1000.0)
+                    for i in range(hz['spokes']):
+                        ang = cur_ang + (2*math.pi/float(hz['spokes'])) * i
+                        x2 = hz['cx'] + math.cos(ang)*hz['r']
+                        y2 = hz['cy'] + math.sin(ang)*hz['r']
+                        d = self._dist_point_to_segment(px, py, hz['cx'], hz['cy'], x2, y2)
+                        if d <= hz['w'] * 0.5:
+                            frame_accum += hz['dps'] * (dt_ms / 1000.0)
                             break
                 else:
                     alive = False
 
-            if deal > 0:
-                try: self.damage_player(int(deal))
-                except Exception: pass
-
             if alive:
                 new_haz.append(hz)
         self._hazards = new_haz
+
+        # 누적된 소수 피해를 정수로 적용 (조금만 스쳐도 데미지 들어가도록)
+        self._laser_damage_accum += frame_accum
+        apply_int = int(self._laser_damage_accum)
+        if apply_int > 0:
+            try:
+                self.damage_player(apply_int)
+            except Exception:
+                pass
+            self._laser_damage_accum -= apply_int
 
         # 패턴 스케줄
         if self._ready_new_pattern():
@@ -10090,3 +10094,1177 @@ class Boss6(AIBase):
         self._hazards.clear()
         self._heavy_drop(scale=2)
         super().die(blood_effects)
+
+class Boss7(AIBase):
+
+    rank   = 10
+    HP_MAX = 4800
+    RADIUS = int(52 * PLAYER_VIEW_SCALE)
+    SPEED  = 0.0
+    ORIENT_OFFSET_DEG = 270
+
+    MINION_CAP_BASE   = 5
+    MINION_CAP_ENRAGE = 7
+    SUMMON_BURST      = 2
+    SUMMON_CD_BASE    = 8000 + 5000
+    SUMMON_CD_ENRAGE  = 6000 + 5000
+    SUMMON_CAST_MS    = 1200
+    SUMMON_RING_MIN   = int(300 * PLAYER_VIEW_SCALE)
+    SUMMON_RING_MAX   = int(520 * PLAYER_VIEW_SCALE)
+
+    PHASE2_AT_FRAC = 0.70
+    PHASE3_AT_FRAC = 0.35
+    ENRAGE_AT_FRAC = PHASE3_AT_FRAC
+
+    BASE_IDLE_GAP_MS = 900
+    PATTERN_COOLDOWN_MS = {
+        "X_SWEEP": 300, "CHECKER": 350, "RING1": 300,
+        "SWEEP8": 350, "CHECKER2": 350, "RING2": 350,
+        "CUTS": 400,   "WEDGE": 400,   "CATA": 500,
+        "TRIDENT_S": 400, "TRIDENT": 450,
+        "RIPPLE": 350, "CROSS": 320, "TRIDENT5_S": 420, "TRIDENT5": 460,
+        "ZZ_ROTOR": 380, "BARS": 380, "WAVE_RECT": 360, "SNIPER": 420,
+    }
+    ENRAGE_CD_SCALE = 1.0
+
+    LASER_TICK_MS = 200
+    DOT_WEAK = 7
+    DOT_MED  = 11
+    DOT_STR  = 14
+    DOT_SNIPER = 22
+
+    BEAM_WIDTH_S  = int(34 * PLAYER_VIEW_SCALE)
+    BEAM_WIDTH_M  = int(44 * PLAYER_VIEW_SCALE)
+    BEAM_WIDTH_L  = int(56 * PLAYER_VIEW_SCALE)
+    BEAM_WIDTH_XL = int(72 * PLAYER_VIEW_SCALE)
+    RING_WIDTH_S  = int(24 * PLAYER_VIEW_SCALE)
+    RING_WIDTH_M  = int(32 * PLAYER_VIEW_SCALE)
+    RING_WIDTH_L  = int(40 * PLAYER_VIEW_SCALE)
+
+    CHECKER_ROWS = 4
+    CHECKER_COLS = 6
+    CHECKER_TEL_MS = 4600
+    CHECKER_BLAST_ONETIME = 35
+    CHECKER_RESIDUAL_DOT  = 5
+
+    RING_TEL_MS = 500
+    RING1_MS    = 2500
+    RING2_MS    = 2800
+    RING3_MS    = 3200
+    RING_SPEED_SCALE = 1.6667
+
+    COL_OUTER = (255, 60, 60, 70)
+    COL_GLOW  = (140, 190, 255, 110)
+    COL_CORE  = (10, 10, 10, 220)
+
+    BEAM_PULSE_MS   = 2600
+    BEAM_JITTER_MAX = int(20 * PLAYER_VIEW_SCALE)
+    BEAM_SEG_LEN    = int(180 * PLAYER_VIEW_SCALE)
+
+    LASER_FADE_IN_MS  = 180
+    LASER_FADE_OUT_MS = 240
+
+    SAFE_TINT_ACTIVE = (100, 210, 255, 26)
+    SAFE_TINT_TELE   = (100, 210, 255, 18)
+
+    MAX_ACTIVE_BEAMS = 48
+    EXCLUSIVE_KINDS  = {"line_static", "rotor", "ring_expand"}
+    HEAVY_PATTERNS   = {
+        "ROTOR","RING","CUTS","WEDGE","CATA","SWEEP8","X_SWEEP","TRIDENT","TRIDENT_S",
+        "CROSS","TRIDENT5","TRIDENT5_S","ZZ_ROTOR","BARS","RIPPLE"
+    }
+
+    SPAWN_TELE_MS   = 900
+    SPAWN_RING_MS   = 700
+    MAX_FX          = 64
+    SPAWN_TELE_GLOW = (120, 200, 255, 120)
+    SPAWN_TELE_RING = (255, 80, 60, 160)
+
+    DROP_2_3_THRESH = 2/3
+    DROP_1_3_THRESH = 1/3
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        import pygame
+        super().__init__(world_x, world_y, images, sounds, map_width, map_height,
+                         speed=self.SPEED, near_threshold=0, far_threshold=0,
+                         radius=self.RADIUS, push_strength=0.0, alert_duration=0,
+                         damage_player_fn=damage_player_fn, rank=rank)
+        self.world_x = map_width  * 0.5
+        self.world_y = map_height * 0.5
+
+        self.image_original = images.get("boss7")
+        if self.image_original is None:
+            self.image_original = pygame.Surface((120, 120), pygame.SRCALPHA)
+            pygame.draw.circle(self.image_original, (180, 0, 0, 180), (60, 60), 58, width=6)
+            pygame.draw.circle(self.image_original, (30, 30, 30, 220), (60, 60), 42)
+        self.image = self.image_original
+
+        self._images_dict = images
+        self._sounds_dict = sounds
+
+        self.hp = self.HP_MAX
+        self.max_hp = self.HP_MAX
+        self.enraged = False
+
+        self._state = "IDLE"
+        self._pattern = None
+        self._state_t0 = pygame.time.get_ticks()
+        self._next_pattern_ready_at = self._state_t0 + self.BASE_IDLE_GAP_MS
+        self._tele_data = None
+
+        self._hazards = []
+        self._last_tick_damage = 0
+        self._fx_rings = []
+
+        self._my_minions = []
+        self._pending_summons = []
+        self._next_summon = pygame.time.get_ticks() + 2000
+
+        self.facing_angle = 0.0
+
+        self._drop_2_3_done = False
+        self._drop_1_3_done = False
+
+        self.kill_callback = kill_callback
+
+    # 사운드
+    def _play_sound(self, key, volume=1.0):
+        s = self._sounds_dict.get(key) if hasattr(self, "_sounds_dict") else None
+        if not s: return
+        try: s.set_volume(volume)
+        except Exception: pass
+        try: s.play()
+        except Exception: pass
+
+    # 유틸
+    def _deal(self, amount):
+        try: dmg = int(round(amount))
+        except Exception: return
+        if dmg <= 0: return
+        try:
+            if self.damage_player:
+                self.damage_player(dmg); return
+        except Exception: pass
+        try:
+            if hasattr(config, "damage_player"):
+                config.damage_player(dmg)
+        except Exception: pass
+
+    def _player_center(self, player_rect, world_x, world_y):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    def _max_ray_len(self):
+        import math
+        return math.hypot(self.map_width, self.map_height) + 200
+
+    @staticmethod
+    def _dist_point_to_segment(px, py, x1, y1, x2, y2):
+        import math
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = px - x1, py - y1
+        c1 = vx * wx + vy * wy
+        if c1 <= 0:   return math.hypot(px - x1, py - y1)
+        c2 = vx * vx + vy * vy
+        if c2 <= c1:  return math.hypot(px - x2, py - y2)
+        b = c1 / c2
+        bx, by = x1 + b * vx, y1 + b * vy
+        return math.hypot(px - bx, py - by)
+
+    # 해저드 GC/정리
+    def _gc_hazards(self, now=None):
+        import pygame
+        now = now or pygame.time.get_ticks()
+        new = []
+        for hz in self._hazards:
+            start = hz.get("start", hz.get("t0", now))
+            if now < start: new.append(hz); continue
+            k = hz["kind"]
+            if k == "line_static" and now <= hz.get("expire", now):
+                new.append(hz)
+            elif k == "rotor" and (now - hz["t0"]) <= hz["duration"]:
+                new.append(hz)
+            elif k == "ring_expand" and (now - hz["t0"]) <= hz["duration"]:
+                new.append(hz)
+            elif k == "rect_pulse" and now <= hz["expire"]:
+                new.append(hz)
+        if len(new) > self.MAX_ACTIVE_BEAMS:
+            new = new[-self.MAX_ACTIVE_BEAMS:]
+        self._hazards = new
+
+        # FX 정리
+        fx_new = []
+        for fx in getattr(self, "_fx_rings", []):
+            if now - fx.get("t0", now) <= fx.get("dur", self.SPAWN_RING_MS):
+                fx_new.append(fx)
+        self._fx_rings = fx_new[-self.MAX_FX:]
+
+    def _clear_heavy_hazards(self):
+        # 새 무거운 패턴 전: 기존 레이저/링/대형 직사각형을 페이드아웃.
+        import pygame
+        now = pygame.time.get_ticks()
+        for hz in self._hazards:
+            k = hz["kind"]
+            if k in ("line_static","rotor","ring_expand"):
+                if k == "line_static":
+                    hz["expire"] = now + self.LASER_FADE_OUT_MS
+                else:
+                    elapsed = max(0, now - hz.get("t0", now))
+                    hz["duration"] = min(hz.get("duration", elapsed + self.LASER_FADE_OUT_MS),
+                                         elapsed + self.LASER_FADE_OUT_MS)
+            elif k == "rect_pulse":
+                # 화면의 대부분을 덮는 큰 장판이면 빠르게 정리
+                big_w = hz.get("w",0) >= 0.8 * self.map_width
+                big_h = hz.get("h",0) >= 0.8 * self.map_height
+                if big_w or big_h:
+                    hz["expire"] = now + self.LASER_FADE_OUT_MS
+
+    # 빔/장판 렌더 유틸
+    def _mul_alpha(self, rgba, scale):
+        try:
+            return (rgba[0], rgba[1], rgba[2], max(0, min(255, int(rgba[3] * scale))))
+        except Exception:
+            return rgba
+
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
+        import math
+        dx, dy = x2 - x1, y2 - y1
+        L = max(1.0, math.hypot(dx, dy))
+        nx, ny = dx / L, dy / L
+        px, py = -ny, nx
+        nseg = max(3, int(L / max(60.0, seg_len)))
+        pts = [(x1, y1)]
+        for i in range(1, nseg):
+            u = i / float(nseg)
+            bx = x1 + dx * u
+            by = y1 + dy * u
+            w = (math.sin((u + seed) * 7.5 + tsec * 5.0) +
+                 math.cos((u*1.7 + seed*0.7) * 9.0 - tsec * 3.5)) * 0.5
+            off = w * jitter_amp
+            pts.append((bx + px*off, by + py*off))
+        pts.append((x2, y2))
+        return pts
+
+    def _draw_polyline(self, surf, pts, color, width):
+        import pygame
+        for i in range(len(pts)-1):
+            pygame.draw.line(surf, color, pts[i], pts[i+1], width)
+
+    def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms, alpha=1.0):
+        import pygame, math
+        now = pygame.time.get_ticks()
+        tsec = now * 0.001
+        jitter = min(self.BEAM_JITTER_MAX, base_w * 0.45)
+        pts = self._beam_points(x1, y1, x2, y2, jitter_amp=jitter,
+                                seg_len=self.BEAM_SEG_LEN, tsec=tsec,
+                                seed=(born_ms % 997) * 0.001)
+        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2*math.pi / max(60, self.BEAM_PULSE_MS)))
+        core_w  = max(1, int(base_w * (0.55 + 0.15*pulse)))
+        glow_w  = max(core_w+2, int(base_w * 1.15))
+        outer_w = max(glow_w+2, int(base_w * 1.7))
+        col_outer = self._mul_alpha(self.COL_OUTER, alpha)
+        col_glow  = self._mul_alpha(self.COL_GLOW,  alpha)
+        col_core  = self._mul_alpha(self.COL_CORE,  alpha)
+        self._draw_polyline(lay, pts, col_outer, outer_w)
+        self._draw_polyline(lay, pts, col_glow,  glow_w)
+        self._draw_polyline(lay, pts, col_core,  core_w)
+
+    def _draw_arc_beam(self, lay, cx, cy, r, a0, a1, base_w, born_ms, alpha=1.0):
+        import math
+        seg_ang = max(math.radians(6), 2.0 / max(1.0, r))
+        ang = a0
+        while True:
+            anext = min(a1, ang + seg_ang)
+            x1 = cx + math.cos(ang)*r
+            y1 = cy + math.sin(ang)*r
+            x2 = cx + math.cos(anext)*r
+            y2 = cy + math.sin(anext)*r
+            self._draw_beam_layered(lay, x1, y1, x2, y2, base_w, born_ms, alpha=alpha)
+            if anext >= a1 - 1e-6: break
+            ang = anext
+
+    # 장판 임팩트 & 이징
+    def _ease_out_quad(self, x):
+        x = max(0.0, min(1.0, x))
+        return 1.0 - (1.0 - x) * (1.0 - x)
+
+    def _draw_rect_impact(self, lay, rx, ry, rw, rh, start_ms, expire_ms, now):
+        import pygame, math
+        life = max(1, expire_ms - start_ms)
+        t = max(0.0, min(1.0, (now - start_ms) / float(life)))
+        # 바닥 채움 + 펄스
+        intensity = 0.5 + 0.5 * math.sin(now * 0.012)
+        base_a = int(110 + 70 * intensity)
+        base_col = (255, 60, 60, base_a)
+        pygame.draw.rect(lay, base_col, pygame.Rect(int(rx), int(ry), int(rw), int(rh)))
+        # 외곽 글로우 2중 링
+        edge_a  = int(160 * (0.8 + 0.2*math.sin(now*0.01)))
+        glow1 = (140, 190, 255, max(40, int(edge_a*0.70)))
+        glow2 = (255, 220, 180, max(30, int(edge_a*0.45)))
+        w1 = max(2, int(3 + 2*intensity))
+        w2 = max(2, int(6 + 4*intensity))
+        pygame.draw.rect(lay, glow1, pygame.Rect(int(rx), int(ry), int(rw), int(rh)), width=w1)
+        pygame.draw.rect(lay, glow2, pygame.Rect(int(rx)-2, int(ry)-2, int(rw)+4, int(rh)+4), width=w2)
+        # 대각 스캔라인 스윕
+        step = 10
+        slope = 1
+        sweep = (now // 35) % step
+        col_scan = (255, 140, 110, 90)
+        x0 = int(rx) - int(rh)
+        x1 = int(rx + rw)
+        for k in range(x0, x1, step):
+            kk = k + sweep
+            x_start = kk
+            x_end   = kk + int(rh) * slope
+            xs = max(int(rx), min(int(rx+rw), x_start))
+            xe = max(int(rx), min(int(rx+rw), x_end))
+            pygame.draw.line(lay, col_scan, (xs, int(ry)), (xe, int(ry + rh)), 1)
+        # 코너 플레어
+        flare_len = int(16 + 18 * self._ease_out_quad(t))
+        flare_a = int(180 * (1.0 - 0.6*t))
+        flare_col = (255, 220, 160, max(0, flare_a))
+        corners = [(rx, ry), (rx+rw, ry), (rx+rw, ry+rh), (rx, ry+rh)]
+        for (cx, cy) in corners:
+            pygame.draw.line(lay, flare_col, (int(cx), int(cy)), (int(cx+flare_len), int(cy)), 2)
+            pygame.draw.line(lay, flare_col, (int(cx), int(cy)), (int(cx), int(cy+flare_len)), 2)
+        # 초반 쇼크 웨이브(0~220ms)
+        shock_ms = 220
+        if now < start_ms + shock_ms:
+            u = self._ease_out_quad((now - start_ms) / float(shock_ms))
+            margin = int(6 + 22*u)
+            ring_a = int(140 * (1.0 - u))
+            ring_col = (255, 200, 160, max(0, ring_a))
+            pygame.draw.ellipse(lay, ring_col,
+                                pygame.Rect(int(rx - margin), int(ry - margin),
+                                            int(rw + 2*margin), int(rh + 2*margin)), width=2)
+        # 엣지 스파크
+        perim = 2*(rw + rh)
+        spark_n = 12
+        for i in range(spark_n):
+            u = ((now*0.0007) + i / float(spark_n)) % 1.0
+            pos = u * perim
+            if pos < rw:
+                x = rx + pos;      y = ry;         dx, dy = 0, 1
+            elif pos < rw + rh:
+                x = rx + rw;       y = ry + (pos - rw); dx, dy = -1, 0
+            elif pos < rw + rh + rw:
+                x = rx + (rw - (pos - rw - rh)); y = ry + rh; dx, dy = 0, -1
+            else:
+                x = rx; y = ry + (rh - (pos - rw - rh - rw)); dx, dy = 1, 0
+            ln = 8
+            pygame.draw.line(lay, (255, 240, 200, 150), (int(x), int(y)), (int(x+dx*ln), int(y+dy*ln)), 2)
+        # 중앙 박동
+        cx = int(rx + rw*0.5); cy = int(ry + rh*0.5)
+        r0 = int(10 + 18*(0.5 + 0.5*math.sin(now*0.012)))
+        pygame.draw.circle(lay, (255, 200, 140, 80), (cx, cy), r0, width=2)
+
+    # 상태 전환
+    def _enter(self, state, pattern=None, tele_data=None):
+        import pygame
+        self._state = state
+        if pattern is not None:
+            self._pattern = pattern
+        now = pygame.time.get_ticks()
+        self._state_t0 = now
+        if tele_data is not None:
+            self._tele_data = tele_data
+        if state == "RECOVER":
+            base = self.BASE_IDLE_GAP_MS
+            extra = self.PATTERN_COOLDOWN_MS.get(self._pattern or "", 0)
+            scale = (self.ENRAGE_CD_SCALE if self.enraged else 1.0)
+            self._next_pattern_ready_at = now + int((base + extra) * scale)
+
+    def _ready_new_pattern(self):
+        import pygame
+        ready_at = getattr(self, "_next_pattern_ready_at", 0)
+        return (self._state == "IDLE") and (pygame.time.get_ticks() >= ready_at)
+
+    # 패턴 빌더
+    def _build_x_sweep(self):
+        import math, random
+        return {"type":"ROTOR","spokes":4,"width":self.BEAM_WIDTH_M,
+                "spin_ms":5000,"ang_spd":math.radians(40),
+                "cx":self.world_x,"cy":self.world_y,"tele_ms":700,
+                "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
+
+    def _build_checker(self, layers=1):
+        return {"type":"CHECKER","rows":self.CHECKER_ROWS,"cols":self.CHECKER_COLS,
+                "layers":layers, "tele_ms":self.CHECKER_TEL_MS}
+
+    def _build_ring(self, count=1):
+        return {"type":"RING","count":count,"tele_ms":self.RING_TEL_MS}
+
+    def _build_sweep8(self):
+        import math, random
+        return {"type":"ROTOR","spokes":8,"width":self.BEAM_WIDTH_S,
+                "spin_ms":5400,"ang_spd":math.radians(55),
+                "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
+                "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
+
+    def _build_cuts(self):
+        import math, random
+        angs = []
+        base = random.uniform(0, 2*math.pi)
+        for _ in range(random.randint(3,4)):
+            angs.append(base + random.uniform(0.4, 1.9))
+        return {"type":"CUTS","angs":angs,"width":self.BEAM_WIDTH_L, "persist":2000, "tele_ms":600}
+
+    def _build_wedge(self):
+        return {"type":"WEDGE","safe_deg":35, "jumps":6, "jump_ms":700,
+                "width":self.BEAM_WIDTH_S, "persist":6000, "tele_ms":800}
+
+    def _build_cata(self):
+        import math, random
+        return {"type":"CATA","fan_deg":24, "fan_ms":1800, "tele_ms":1800,
+                "ang_spd":math.radians(18), "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
+
+    def _build_trident(self, weak=False):
+        return {"type":"TRIDENT", "weak": bool(weak), "tele_ms":700}
+
+    def _build_ripple(self, count=3, gap_ms=220, big=False):
+        return {"type":"RIPPLE","count":count,"gap":gap_ms,"big":bool(big),"tele_ms":600}
+
+    def _build_cross(self, slow_deg=25):
+        import math, random
+        return {"type":"CROSS","spokes":4,"width":self.BEAM_WIDTH_M,
+                "spin_ms":4600,"ang_spd":math.radians(slow_deg),
+                "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
+                "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
+
+    def _build_trident5(self, weak=True):
+        return {"type":"TRIDENT5","weak":bool(weak),"tele_ms":700}
+
+    def _build_zz_rotor(self, spokes=6, ang_spd_deg=65, zig_ms=500):
+        import math, random
+        return {"type":"ZZ_ROTOR","spokes":spokes,"width":self.BEAM_WIDTH_S,
+                "spin_ms":5200,"ang_spd":math.radians(ang_spd_deg),"zig_ms":int(zig_ms),
+                "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
+                "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
+
+    def _build_bars(self, lines=3, angle_deg=None, persist=1800, width=None):
+        import math, random
+        if angle_deg is None:
+            angle_deg = random.uniform(0, 180)
+        if width is None:
+            width = self.BEAM_WIDTH_S
+        return {"type":"BARS","lines":int(lines),"angle":math.radians(angle_deg),
+                "persist":int(persist),"width":width,"tele_ms":700}
+
+    def _build_wave_rect(self, axis="row", bands=5, period_ms=900, duty=0.22):
+        return {"type":"WAVE_RECT","axis":axis,"bands":int(bands),
+                "period":int(period_ms), "duty":float(duty), "tele_ms":2800}
+
+    def _build_sniper(self):
+        return {"type":"SNIPER","tele_ms":700}
+
+    # 발사
+    def _fire_pattern(self):
+        import pygame, math, random
+        now = pygame.time.get_ticks()
+        t = self._tele_data
+        if not t: self._enter("RECOVER"); return
+
+        self._play_sound("boss7_fire", 0.9)
+        if t["type"] in self.HEAVY_PATTERNS:
+            self._clear_heavy_hazards()
+
+        if t["type"] == "ROTOR":
+            self._hazards.append({
+                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":self._max_ray_len(),
+                "w":t["width"],"spokes":t["spokes"],
+                "ang0":t.get("ang0", 0.0),"ang_spd":t["ang_spd"],"lock_ms":t.get("lock_ms",0),
+                "t0":now,"duration":t["spin_ms"],"dps":self.DOT_MED
+            })
+
+        elif t["type"] == "CHECKER":
+            rows, cols = t["rows"], t["cols"]
+            cw = self.map_width  / float(cols)
+            ch = self.map_height / float(rows)
+            for layer in range(t.get("layers",1)):
+                delay = layer * 280
+                for r in range(rows):
+                    for c in range(cols):
+                        if (r*cols + c + layer) % 2 == 0:
+                            x = c*cw; y = r*ch
+                            self._hazards.append({
+                                "kind":"rect_pulse","x":x,"y":y,"w":cw,"h":ch,
+                                "start": now + delay, "expire": now + delay + 300,
+                                "once": True, "dmg": self.CHECKER_BLAST_ONETIME,
+                                "residual": {"dur": 1500, "dot": self.CHECKER_RESIDUAL_DOT}
+                            })
+
+        elif t["type"] == "RING":
+            cnt = t.get("count",1)
+            for i in range(cnt):
+                dur0 = [self.RING1_MS, self.RING2_MS, self.RING3_MS][min(i,2)]
+                wid = [self.RING_WIDTH_S, self.RING_WIDTH_M, self.RING_WIDTH_L][min(i,2)]
+                dur = int(dur0 * self.RING_SPEED_SCALE)
+                r0 = int(60*PLAYER_VIEW_SCALE); r1 = int(1200*PLAYER_VIEW_SCALE)
+                v = (r1 - r0) / float(dur) if dur > 0 else (r1 - r0)
+                self._hazards.append({
+                    "kind":"ring_expand","cx":self.world_x,"cy":self.world_y,
+                    "r0": r0, "r1": r1, "r": float(r0), "v": v, "last": now,
+                    "w": wid, "t0":now, "duration":dur, "dps": self.DOT_MED
+                })
+
+        elif t["type"] == "CUTS":
+            w = t["width"]; cx, cy = self.world_x, self.world_y
+            L = self._max_ray_len()
+            expire = now + t["persist"]
+            for ang in t["angs"]:
+                x2 = cx + math.cos(ang)*L
+                y2 = cy + math.sin(ang)*L
+                self._hazards.append({
+                    "kind":"line_static","x1":cx,"y1":cy,"x2":x2,"y2":y2,
+                    "w":w,"expire":expire,"dps":self.DOT_STR,"t0":now
+                })
+
+        elif t["type"] == "WEDGE":
+            jumps = t["jumps"]; gap = math.radians(t["safe_deg"])
+            base = random.uniform(0, 2*math.pi)
+            L = self._max_ray_len()
+            for j in range(jumps):
+                start = now + j * t["jump_ms"]
+                center = base + random.uniform(-math.pi, math.pi)
+                for k in range(0, 360, 12):
+                    ang = math.radians(k)
+                    da = (ang - center + math.pi) % (2*math.pi) - math.pi
+                    if abs(da) <= gap*0.5: continue
+                    x2 = self.world_x + math.cos(ang)*L
+                    y2 = self.world_y + math.sin(ang)*L
+                    self._hazards.append({
+                        "kind":"line_static","x1":self.world_x,"y1":self.world_y,
+                        "x2":x2,"y2":y2,"w":self.BEAM_WIDTH_S,
+                        "start":start, "expire":start + t["persist"], "dps":self.DOT_MED, "t0":start
+                    })
+
+        elif t["type"] == "CATA":
+            L = self._max_ray_len()
+            self._hazards.append({
+                "kind":"rotor","cx":self.world_x,"cy":self.world_y,"r":L,
+                "w":self.BEAM_WIDTH_S,"spokes":t["fan_deg"],
+                "ang0":t.get("ang0", 0.0),"ang_spd":t["ang_spd"],"lock_ms":t.get("lock_ms",300),
+                "t0":now,"duration":t["fan_ms"],"dps":self.DOT_WEAK
+            })
+            for i, dur0 in enumerate([self.RING1_MS, self.RING2_MS, self.RING3_MS]):
+                wid = [self.RING_WIDTH_S, self.RING_WIDTH_M, self.RING_WIDTH_L][i]
+                dur = int(dur0 * self.RING_SPEED_SCALE)
+                r0 = int(80*PLAYER_VIEW_SCALE); r1 = int(1300*PLAYER_VIEW_SCALE)
+                v = (r1 - r0) / float(dur) if dur > 0 else (r1 - r0)
+                self._hazards.append({
+                    "kind":"ring_expand","cx":self.world_x,"cy":self.world_y,
+                    "r0": r0, "r1": r1, "r": float(r0), "v": v, "last": now,
+                    "w": wid, "t0":now, "duration":dur, "dps": self.DOT_MED
+                })
+
+        elif t["type"] == "TRIDENT":
+            ang0 = self.facing_angle
+            offsets = [-math.radians(14), 0.0, math.radians(14)]
+            L = self._max_ray_len()
+            weak = t.get("weak", False)
+            wid  = self.BEAM_WIDTH_M if weak else self.BEAM_WIDTH_L
+            dps  = self.DOT_MED if weak else self.DOT_STR
+            dur  = 1300 if weak else 1800
+            for off in offsets:
+                ang = ang0 + off
+                x2 = self.world_x + math.cos(ang)*L
+                y2 = self.world_y + math.sin(ang)*L
+                self._hazards.append({
+                    "kind":"line_static","x1":self.world_x,"y1":self.world_y,"x2":x2,"y2":y2,
+                    "w":wid,"expire":now + dur,"dps":dps,"t0":now
+                })
+
+        elif t["type"] == "RIPPLE":
+            cnt = max(1, int(t.get("count",3)))
+            gap = int(t.get("gap",220))
+            for i in range(cnt):
+                delay = i * gap
+                dur0 = self.RING1_MS + 300*i
+                dur = int(dur0 * self.RING_SPEED_SCALE)
+                r0 = int((80 if t.get("big") else 60)*PLAYER_VIEW_SCALE)
+                r1 = int((1300 if t.get("big") else 1100)*PLAYER_VIEW_SCALE)
+                v = (r1 - r0) / float(dur) if dur > 0 else (r1 - r0)
+                self._hazards.append({
+                    "kind":"ring_expand","cx":self.world_x,"cy":self.world_y,
+                    "r0": r0, "r1": r1, "r": float(r0), "v": v, "last": now + delay,
+                    "w": self.RING_WIDTH_M, "t0": now + delay,
+                    "duration": dur, "dps": self.DOT_MED, "start": now + delay
+                })
+
+        elif t["type"] == "CROSS":
+            self._hazards.append({
+                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":self._max_ray_len(),
+                "w":t["width"],"spokes":4,
+                "ang0":t.get("ang0", 0.0),"ang_spd":t["ang_spd"],"lock_ms":t.get("lock_ms",300),
+                "t0":now,"duration":t["spin_ms"],"dps":self.DOT_MED
+            })
+
+        elif t["type"] == "TRIDENT5":
+            ang0 = self.facing_angle
+            offs_deg = [-24,-12,0,12,24]
+            L = self._max_ray_len()
+            weak = t.get("weak", True)
+            wid  = self.BEAM_WIDTH_M if weak else self.BEAM_WIDTH_L
+            dps  = self.DOT_MED if weak else self.DOT_STR
+            dur  = 1200 if weak else 1700
+            for od in offs_deg:
+                ang = ang0 + math.radians(od)
+                x2 = self.world_x + math.cos(ang)*L
+                y2 = self.world_y + math.sin(ang)*L
+                self._hazards.append({
+                    "kind":"line_static","x1":self.world_x,"y1":self.world_y,"x2":x2,"y2":y2,
+                    "w":wid,"expire":now + dur,"dps":dps,"t0":now
+                })
+
+        elif t["type"] == "ZZ_ROTOR":
+            self._hazards.append({
+                "kind":"rotor","cx":t["cx"],"cy":t["cy"],"r":self._max_ray_len(),
+                "w":t["width"],"spokes":t["spokes"],
+                "ang0":t.get("ang0", 0.0),"ang_spd":t["ang_spd"],"lock_ms":t.get("lock_ms",300),
+                "zig_ms":int(t.get("zig_ms",500)),
+                "t0":now,"duration":t["spin_ms"],"dps":self.DOT_MED
+            })
+
+        elif t["type"] == "BARS":
+            ang = t["angle"]; lines = max(1, int(t["lines"]))
+            w = t.get("width", self.BEAM_WIDTH_S); dur = int(t.get("persist",1600))
+            L = self._max_ray_len()
+            nx, ny = -math.sin(ang), math.cos(ang)
+            gap = max(60, int(120 * PLAYER_VIEW_SCALE))
+            start_offset = -((lines-1)//2)
+            for i in range(lines):
+                d = (start_offset + i)*gap
+                bx = self.world_x + nx*d
+                by = self.world_y + ny*d
+                dx, dy = math.cos(ang), math.sin(ang)
+                x1 = bx - dx*L; y1 = by - dy*L
+                x2 = bx + dx*L; y2 = by + dy*L
+                self._hazards.append({
+                    "kind":"line_static","x1":x1,"y1":y1,"x2":x2,"y2":y2,
+                    "w":w,"expire":now + dur,"dps":self.DOT_MED,"t0":now
+                })
+
+        elif t["type"] == "WAVE_RECT":
+            axis = t.get("axis","row")
+            bands = max(3, int(t.get("bands",5)))
+            period = max(600, int(t.get("period",900)))
+            duty = max(0.10, min(0.35, float(t.get("duty", 0.22))))
+            on_ms = int(period * duty)
+            if axis == "row":
+                band_h = self.map_height / float(bands)
+                for b in range(bands):
+                    start = now + int((b / float(bands)) * period)
+                    self._hazards.append({
+                        "kind":"rect_pulse","x":0,"y":b*band_h,"w":self.map_width,"h":band_h,
+                        "start": start, "expire": start + on_ms, "once": False
+                    })
+            else:
+                band_w = self.map_width / float(bands)
+                for b in range(bands):
+                    start = now + int((b / float(bands)) * period)
+                    self._hazards.append({
+                        "kind":"rect_pulse","x":b*band_w,"y":0,"w":band_w,"h":self.map_height,
+                        "start": start, "expire": start + on_ms, "once": False
+                    })
+
+        elif t["type"] == "SNIPER":
+            ang = self.facing_angle
+            L = self._max_ray_len()
+            x2 = self.world_x + math.cos(ang)*L
+            y2 = self.world_y + math.sin(ang)*L
+            self._hazards.append({
+                "kind":"line_static","x1":self.world_x,"y1":self.world_y,"x2":x2,"y2":y2,
+                "w":self.BEAM_WIDTH_XL,"expire":now + 420,"dps":self.DOT_SNIPER,"t0":now
+            })
+
+        self._enter("RECOVER")
+
+    # 업데이트
+    def update(self, dt, world_x, world_y, player_rect, enemies=[]):
+        import pygame, math
+        if not self.alive: return
+
+        px, py = self._player_center(player_rect, world_x, world_y)
+        self.facing_angle = math.atan2(py - self.world_y, px - self.world_x)
+
+        # 중간 드랍
+        if not self._drop_2_3_done and self.hp <= int(self.HP_MAX * self.DROP_2_3_THRESH):
+            self._drop_medium_orbs(1); self._drop_2_3_done = True
+        if not self._drop_1_3_done and self.hp <= int(self.HP_MAX * self.DROP_1_3_THRESH):
+            self._drop_medium_orbs(1); self._drop_1_3_done = True
+
+        if not self.enraged and self.hp <= self.HP_MAX * self.ENRAGE_AT_FRAC:
+            self.enraged = True
+
+        now = pygame.time.get_ticks()
+
+        # 미니언
+        cap = self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE
+        if (self._alive_minions() + len(self._pending_summons)) < cap and now >= self._next_summon:
+            low, high = (3,5) if self.enraged else (1,4)
+            self._schedule_summons(self.SUMMON_BURST, low, high)
+            cd = self.SUMMON_CD_ENRAGE if self.enraged else self.SUMMON_CD_BASE
+            self._next_summon = now + cd
+        self._process_pending_summons()
+
+        # 해저드 처리/피해
+        do_tick = (now - self._last_tick_damage) >= self.LASER_TICK_MS
+        if do_tick: self._last_tick_damage = now
+        new_haz = []
+        for hz in self._hazards:
+            alive = True
+            deal = 0
+            start = hz.get("start", hz.get("t0", now))
+            if now < start: new_haz.append(hz); continue
+            kind = hz["kind"]
+
+            if kind == "line_static":
+                if now <= hz.get("expire", now):
+                    d = self._dist_point_to_segment(px, py, hz["x1"], hz["y1"], hz["x2"], hz["y2"])
+                    if d <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "rotor":
+                t0 = hz["t0"]; dur = hz["duration"]
+                tfrac = (now - t0) / max(1, dur)
+                if tfrac <= 1.0:
+                    lock_ms = hz.get("lock_ms", 0)
+                    sign = 1
+                    if now - t0 > lock_ms and "zig_ms" in hz:
+                        zig = max(1, int(hz["zig_ms"]))
+                        phase = ((now - t0 - lock_ms) // zig) % 2
+                        sign = 1 if phase == 0 else -1
+                    if now - t0 <= lock_ms:
+                        cur_ang = hz["ang0"]
+                    else:
+                        cur_ang = hz["ang0"] + sign * hz["ang_spd"] * ((now - t0 - lock_ms)/1000.0)
+                    for i in range(hz["spokes"]):
+                        ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
+                        x2 = hz["cx"] + math.cos(ang)*hz["r"]
+                        y2 = hz["cy"] + math.sin(ang)*hz["r"]
+                        d = self._dist_point_to_segment(px, py, hz["cx"], hz["cy"], x2, y2)
+                        if d <= hz["w"] * 0.5 and do_tick:
+                            deal = max(deal, hz["dps"] * (self.LASER_TICK_MS / 1000.0))
+                else:
+                    alive = False
+
+            elif kind == "ring_expand":
+                # 적분식 확장(순간이동 방지)
+                last = hz.get("last", now); dt_ms = max(0, now - last); hz["last"] = now
+                hz["r"] = min(hz["r1"], hz["r"] + hz["v"] * dt_ms)
+                r = hz["r"]
+                if now - hz["t0"] <= hz["duration"]:
+                    dist = abs(math.hypot(px - hz["cx"], py - hz["cy"]) - r)
+                    if dist <= hz["w"] * 0.5 and do_tick:
+                        deal = hz["dps"] * (self.LASER_TICK_MS / 1000.0)
+                else:
+                    alive = False
+
+            elif kind == "rect_pulse":
+                if now <= hz["expire"]:
+                    if hz.get("hit_once", False):
+                        alive = False
+                    else:
+                        inside = (hz["x"] <= px <= hz["x"]+hz["w"]) and (hz["y"] <= py <= hz["y"]+hz["h"])
+                        if inside:
+                            if hz.get("once", False):
+                                self._deal(self.CHECKER_BLAST_ONETIME); hz["hit_once"] = True
+                                try:
+                                    from entities import AcidPool
+                                    img = self._images_dict.get("acid_pool")
+                                    pool = AcidPool(hz["x"]+hz["w"]*0.5, hz["y"]+hz["h"]*0.5,
+                                                    img, radius=int(80*PLAYER_VIEW_SCALE),
+                                                    dot_damage=self.CHECKER_RESIDUAL_DOT,
+                                                    duration=1500,
+                                                    sounds=self._sounds_dict)
+                                    if not hasattr(config, "acid_pools"): config.acid_pools = []
+                                    config.acid_pools.append(pool)
+                                except Exception: pass
+                            else:
+                                if do_tick: self._deal(self.DOT_WEAK * (self.LASER_TICK_MS/1000.0))
+                else:
+                    alive = False
+
+            if deal > 0: self._deal(deal)
+            if alive: new_haz.append(hz)
+        self._hazards = new_haz
+
+        self._gc_hazards(now)
+
+        if self._state == "RECOVER" and now >= getattr(self, "_next_pattern_ready_at", 0):
+            self._enter("IDLE")
+
+        # 패턴 스케줄링
+        if self._ready_new_pattern():
+            import random
+            phase = (3 if self.hp <= self.max_hp*self.PHASE3_AT_FRAC
+                        else 2 if self.hp <= self.max_hp*self.PHASE2_AT_FRAC
+                        else 1)
+            if phase == 1:
+                pool = ["X_SWEEP","CHECKER","RING1","RIPPLE","CROSS"]
+                w    = [3,3,2,2,2]
+            elif phase == 2:
+                pool = ["SWEEP8","CHECKER2","RING2","TRIDENT_S",
+                        "ZZ_ROTOR","TRIDENT5_S","BARS","WAVE_RECT","SNIPER"]
+                w    = [3,3,3,2,  2,2,2,2,1]
+            else:
+                pool = ["CUTS","WEDGE","CATA","TRIDENT",
+                        "TRIDENT5","RIPPLE","ZZ_ROTOR","BARS","SNIPER"]
+                w    = [3,3,2,3,  2,2,2,2,1]
+
+            pat = random.choices(pool, weights=w, k=1)[0]
+            if   pat == "X_SWEEP":    tele = self._build_x_sweep()
+            elif pat == "CHECKER":    tele = self._build_checker(layers=1)
+            elif pat == "RING1":      tele = self._build_ring(count=1)
+            elif pat == "SWEEP8":     tele = self._build_sweep8()
+            elif pat == "CHECKER2":   tele = self._build_checker(layers=2)
+            elif pat == "RING2":      tele = self._build_ring(count=2)
+            elif pat == "CUTS":       tele = self._build_cuts()
+            elif pat == "WEDGE":      tele = self._build_wedge()
+            elif pat == "TRIDENT_S":  tele = self._build_trident(weak=True)
+            elif pat == "TRIDENT":    tele = self._build_trident(weak=False)
+            elif pat == "CATA":       tele = self._build_cata()
+            elif pat == "RIPPLE":     tele = self._build_ripple(count=3 if phase==1 else (3 if phase==2 else 4),
+                                                                gap_ms=220 if phase<3 else 180,
+                                                                big=(phase==3))
+            elif pat == "CROSS":      tele = self._build_cross(slow_deg=25 if phase<3 else 30)
+            elif pat == "TRIDENT5_S": tele = self._build_trident5(weak=True)
+            elif pat == "TRIDENT5":   tele = self._build_trident5(weak=False)
+            elif pat == "ZZ_ROTOR":   tele = self._build_zz_rotor(spokes=(6 if phase<3 else 8),
+                                                                  ang_spd_deg=(55 if phase==2 else 70),
+                                                                  zig_ms=(520 if phase==2 else 420))
+            elif pat == "BARS":       tele = self._build_bars(lines=(3 if phase<3 else 4),
+                                                              angle_deg=None,
+                                                              persist=(1600 if phase<3 else 2000),
+                                                              width=self.BEAM_WIDTH_S if phase<3 else self.BEAM_WIDTH_M)
+            elif pat == "WAVE_RECT":  tele = self._build_wave_rect(axis=("row" if phase==2 else "col"),
+                                                                   bands=(5 if phase==2 else 6),
+                                                                   period_ms=(900 if phase==2 else 800),
+                                                                   duty=0.22)
+            elif pat == "SNIPER":     tele = self._build_sniper()
+            else:                     tele = self._build_x_sweep()
+
+            self._play_sound("boss7_charge", 0.6)
+            self._enter("TELE", pattern=pat, tele_data=tele)
+
+        # 텔레 만료 → 발사
+        if self._state == "TELE" and self._tele_data:
+            if now - self._state_t0 >= self._tele_data.get("tele_ms", 600):
+                self._fire_pattern()
+
+    # 드로우
+    def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        import pygame, math
+        if not self.alive and self.hp <= 0: return
+        W, H = surface.get_width(), surface.get_height()
+        sx = self.world_x - world_x
+        sy = self.world_y - world_y
+        now = pygame.time.get_ticks()
+
+        # 본체
+        ang_deg = math.degrees(self.facing_angle) + self.ORIENT_OFFSET_DEG
+        rotated = pygame.transform.rotate(self.image_original, -ang_deg)
+        surface.blit(rotated, rotated.get_rect(center=(sx, sy)).topleft)
+
+        # 텔레그래프
+        if self._state == "TELE" and self._tele_data:
+            t = self._tele_data
+            tel = pygame.Surface((W, H), pygame.SRCALPHA)
+            color = (255, 60, 60, 70)
+
+            # 안전지대 프리뷰(행/열/웨이브류)
+            if t["type"] in ("WAVE_RECT",):
+                tel.fill(self.SAFE_TINT_TELE)
+
+            if t["type"] in ("ROTOR","CATA","CROSS","ZZ_ROTOR"):
+                cx = int(self.world_x - world_x); cy = int(self.world_y - world_y)
+                L = self._max_ray_len()
+                ang0 = t.get("ang0", 0.0)
+                spokes = t.get("spokes", t.get("fan_deg", 4))
+                width  = t.get("width", self.BEAM_WIDTH_S)
+                for i in range(spokes):
+                    ang = ang0 + (2*math.pi/spokes) * i
+                    x2 = cx + math.cos(ang)*L
+                    y2 = cy + math.sin(ang)*L
+                    pygame.draw.line(tel, color, (cx,cy), (x2,y2), max(4, width//2))
+
+            elif t["type"] == "CHECKER":
+                rows, cols = t["rows"], t["cols"]
+                cw = self.map_width  / float(cols)
+                ch = self.map_height / float(rows)
+                for r in range(rows):
+                    for c in range(cols):
+                        if (r*cols + c) % 2 == 0:
+                            rx = c*cw - world_x; ry = r*ch - world_y
+                            pygame.draw.rect(tel, (255,60,60,60),
+                                             pygame.Rect(int(rx), int(ry), int(cw), int(ch)))
+
+            elif t["type"] == "RING":
+                cx = int(self.world_x - world_x); cy = int(self.world_y - world_y)
+                pygame.draw.circle(tel, (255,60,60,70), (cx,cy), int(90*PLAYER_VIEW_SCALE), width=3)
+
+            elif t["type"] == "RIPPLE":
+                cx = int(self.world_x - world_x); cy = int(self.world_y - world_y)
+                for r in (80, 140, 210):
+                    pygame.draw.circle(tel, (255,60,60,60), (cx,cy), int(r*PLAYER_VIEW_SCALE), width=2)
+
+            elif t["type"] == "BARS":
+                cx = self.world_x - world_x; cy = self.world_y - world_y
+                L = self._max_ray_len()
+                ang = t["angle"]; nx, ny = -math.sin(ang), math.cos(ang)
+                gap = max(60, int(120 * PLAYER_VIEW_SCALE))
+                start_offset = -((t["lines"]-1)//2)
+                for i in range(t["lines"]):
+                    d = (start_offset + i)*gap
+                    bx = cx + nx*d; by = cy + ny*d
+                    dx, dy = math.cos(ang), math.sin(ang)
+                    x1 = bx - dx*L; y1 = by - dy*L
+                    x2 = bx + dx*L; y2 = by + dy*L
+                    pygame.draw.line(tel, color, (x1,y1), (x2,y2), max(4, t.get("width", self.BEAM_WIDTH_S)//2))
+
+            elif t["type"] == "WAVE_RECT":
+                axis = t.get("axis","row"); bands = t.get("bands",5)
+                if axis == "row":
+                    band_h = self.map_height / float(bands)
+                    for b in range(bands):
+                        ry = b*band_h - world_y
+                        pygame.draw.rect(tel, (255,60,60,70), pygame.Rect(0, int(ry), W, int(band_h)))
+                else:
+                    band_w = self.map_width / float(bands)
+                    for b in range(bands):
+                        rx = b*band_w - world_x
+                        pygame.draw.rect(tel, (255,60,60,70), pygame.Rect(int(rx), 0, int(band_w), H))
+
+            elif t["type"] in ("TRIDENT","TRIDENT5","TRIDENT5_S","SNIPER"):
+                cx = int(self.world_x - world_x); cy = int(self.world_y - world_y)
+                L = self._max_ray_len(); ang0 = self.facing_angle
+                offs = (-math.radians(14), 0.0, math.radians(14)) if t["type"]=="TRIDENT" else \
+                       [math.radians(a) for a in (-24,-12,0,12,24)] if "TRIDENT5" in t["type"] else (0.0,)
+                if t["type"] == "SNIPER": offs = (0.0,)
+                for off in offs:
+                    ang = ang0 + off
+                    x2 = cx + math.cos(ang)*L; y2 = cy + math.sin(ang)*L
+                    pygame.draw.line(tel, (255,60,60,70), (cx,cy), (x2,y2), 6)
+            surface.blit(tel, (0, 0))
+
+        # 해저드/스폰 VFX 레이어
+        lay = pygame.Surface((W, H), pygame.SRCALPHA)
+
+        # 소환 예정 텔레그래프
+        for s in getattr(self, "_pending_summons", []):
+            p = max(0.0, min(1.0, (now - s["t0"]) / float(self.SUMMON_CAST_MS)))
+            cx = int(s["x"] - world_x); cy = int(s["y"] - world_y)
+            r1 = int(28 * PLAYER_VIEW_SCALE + 64 * PLAYER_VIEW_SCALE * p)
+            r2 = int(12 * PLAYER_VIEW_SCALE + 42 * PLAYER_VIEW_SCALE * (0.5 + 0.5*math.sin(now*0.01)))
+            try:
+                pygame.draw.circle(lay, self.SPAWN_TELE_GLOW, (cx, cy), r1, width=3)
+                pygame.draw.circle(lay, self.SPAWN_TELE_RING, (cx, cy), r2, width=2)
+                arm = int(20 * PLAYER_VIEW_SCALE + 55 * PLAYER_VIEW_SCALE * p)
+                for k in range(6):
+                    ang = p*6.0 + k * (math.pi/3.0)
+                    x2 = cx + int(math.cos(ang) * arm)
+                    y2 = cy + int(math.sin(ang) * arm)
+                    pygame.draw.line(lay, self.SPAWN_TELE_RING, (cx, cy), (x2, y2), 2)
+            except Exception: pass
+
+        # 활성 rect가 하나라도 있으면, 안전지대 하늘색 틴트를 먼저 깔기
+        active_rect_exists = False
+        for hz in self._hazards:
+            if hz["kind"] == "rect_pulse":
+                start = hz.get("start", hz.get("t0", now))
+                if start <= now <= hz.get("expire", now-1):
+                    active_rect_exists = True; break
+        if active_rect_exists:
+            safe = pygame.Surface((W, H), pygame.SRCALPHA)
+            safe.fill(self.SAFE_TINT_ACTIVE)
+            lay.blit(safe, (0,0))
+
+        # 해저드 렌더(페이드 인/아웃)
+        def fade_alpha(start_ms, end_ms, now_ms):
+            a_in = 1.0
+            if now_ms >= start_ms:
+                a_in = min(1.0, (now_ms - start_ms) / float(self.LASER_FADE_IN_MS))
+            a_out = 1.0
+            remain = end_ms - now_ms
+            if remain <= self.LASER_FADE_OUT_MS:
+                a_out = max(0.0, remain / float(self.LASER_FADE_OUT_MS))
+            return max(0.0, min(1.0, a_in * a_out))
+
+        for hz in self._hazards:
+            start = hz.get("start", hz.get("t0", now))
+            if now < start: continue
+            k = hz["kind"]
+            if k == "line_static":
+                end = hz.get("expire", now)
+                alpha = fade_alpha(start, end, now)
+                x1 = hz["x1"] - world_x; y1 = hz["y1"] - world_y
+                x2 = hz["x2"] - world_x; y2 = hz["y2"] - world_y
+                self._draw_beam_layered(lay, x1, y1, x2, y2, hz["w"], hz.get("t0", now), alpha)
+
+            elif k == "rotor":
+                end = hz["t0"] + hz["duration"]; alpha = fade_alpha(hz["t0"], end, now)
+                t0 = hz["t0"]; lock_ms = hz.get("lock_ms", 0)
+                sign = 1
+                if now - t0 > lock_ms and "zig_ms" in hz:
+                    zig = max(1, int(hz["zig_ms"]))
+                    phase = ((now - t0 - lock_ms) // zig) % 2
+                    sign = 1 if phase == 0 else -1
+                if now - t0 <= lock_ms:
+                    cur_ang = hz["ang0"]
+                else:
+                    cur_ang = hz["ang0"] + sign * hz["ang_spd"] * ((now - t0 - lock_ms)/1000.0)
+                cx = hz["cx"] - world_x; cy = hz["cy"] - world_y
+                for i in range(hz["spokes"]):
+                    import math
+                    ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
+                    x2 = cx + math.cos(ang)*hz["r"]
+                    y2 = cy + math.sin(ang)*hz["r"]
+                    self._draw_beam_layered(lay, cx, cy, x2, y2, hz["w"], hz["t0"], alpha)
+
+            elif k == "ring_expand":
+                end = hz["t0"] + hz["duration"]; alpha = fade_alpha(hz["t0"], end, now)
+                r = hz.get("r", hz["r0"])
+                cx = hz["cx"] - world_x; cy = hz["cy"] - world_y
+                self._draw_arc_beam(lay, cx, cy, r, 0.0, 2*math.pi, hz["w"], hz["t0"], alpha)
+
+            elif k == "rect_pulse":
+                if now <= hz["expire"]:
+                    rx = hz["x"] - world_x; ry = hz["y"] - world_y
+                    rw = int(hz["w"]); rh = int(hz["h"])
+                    self._draw_rect_impact(lay, rx, ry, rw, rh, start, hz["expire"], now)
+
+        surface.blit(lay, (0, 0))
+
+    # 피격/드랍/사망
+    def hit(self, damage, blood_effects, force=False):
+        prev = self.hp
+        thr66 = self.max_hp * (2.0/3.0)
+        thr33 = self.max_hp * (1.0/3.0)
+        super().hit(damage, blood_effects, force)
+        if self.alive:
+            if (not self._drop_2_3_done) and prev > thr66 and self.hp <= thr66:
+                self._drop_medium_orbs(1); self._drop_2_3_done = True
+            if (not self._drop_1_3_done) and prev > thr33 and self.hp <= thr33:
+                self._drop_medium_orbs(1); self._drop_1_3_done = True
+
+    def die(self, blood_effects):
+        self._hazards.clear()
+        self._drop_massive_orbs()
+        super().die(blood_effects)
+
+    # 드랍 유틸
+    def _drop_medium_orbs(self, times=1):
+        try:
+            if hasattr(config, "spawn_heavy_orbs"):
+                config.spawn_heavy_orbs(self.world_x, self.world_y, count=max(1, 2*times)); return
+        except Exception: pass
+        try:
+            if hasattr(config, "spawn_orbs"):
+                config.spawn_orbs(self.world_x, self.world_y, amount=55*max(1,times))
+        except Exception: pass
+
+    def _drop_massive_orbs(self):
+        ok = False
+        try:
+            if hasattr(config, "spawn_heavy_orbs"):
+                config.spawn_heavy_orbs(self.world_x, self.world_y, count=6); ok = True
+        except Exception: pass
+        try:
+            if hasattr(config, "spawn_orbs"):
+                config.spawn_orbs(self.world_x, self.world_y, amount=220 if ok else 300)
+        except Exception: pass
+
+    # 미니언
+    def _alive_minions(self):
+        alive = 0
+        for m in list(self._my_minions):
+            if getattr(m, "alive", False) and getattr(m, "hp", 1) > 0:
+                alive += 1
+            else:
+                try: self._my_minions.remove(m)
+                except Exception: pass
+        return alive
+
+    def _iter_enemy_classes(self):
+        try:
+            cand = []
+            if isinstance(ENEMY_CLASSES, (list, tuple)):
+                cand.extend([v for v in ENEMY_CLASSES if v])
+            g = globals()
+            for k, v in g.items():
+                if isinstance(v, type) and k.startswith("Enemy"):
+                    cand.append(v)
+            return cand
+        except Exception:
+            return []
+
+    def _choose_minion_class(self, low_rank, high_rank):
+        import random
+        candidates = []
+        for cls in self._iter_enemy_classes():
+            try:
+                r = getattr(cls, "rank", 1)
+                if getattr(cls, "__name__", "").startswith("Boss"): continue
+                if low_rank <= r <= high_rank:
+                    candidates.append(cls)
+            except Exception: pass
+        if not candidates: return None
+        return random.choice(candidates)
+
+    def _spawn_minion_at(self, x, y, low_r, high_r):
+        cls = self._choose_minion_class(low_r, high_r)
+        if not cls: return None
+        m = None
+        try:
+            m = cls(x, y, self._images_dict, self._sounds_dict,
+                    self.map_width, self.map_height,
+                    damage_player_fn=self.damage_player)
+        except Exception:
+            try:
+                m = cls(x, y, self._images_dict, self._sounds_dict,
+                        self.map_width, self.map_height)
+            except Exception:
+                try:
+                    m = cls(x, y, self._images_dict, self._sounds_dict)
+                except Exception:
+                    return None
+        try: setattr(m, "summoned_by", self)
+        except Exception: pass
+        try:
+            if not hasattr(config, "all_enemies"): config.all_enemies = []
+            config.all_enemies.append(m)
+        except Exception: pass
+        self._my_minions.append(m)
+        return m
+
+    def _schedule_summons(self, count, low_r, high_r):
+        import pygame, random, math
+        slots = max(0, (self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE)
+                       - (self._alive_minions() + len(self._pending_summons)))
+        if slots <= 0: return
+        n = min(count, slots)
+        px, py = self.world_x, self.world_y
+        now = pygame.time.get_ticks()
+        for _ in range(n):
+            r = random.randint(self.SUMMON_RING_MIN, self.SUMMON_RING_MAX)
+            ang = random.uniform(0, 2*math.pi)
+            sx = min(max(0, px + math.cos(ang)*r), self.map_width)
+            sy = min(max(0, py + math.sin(ang)*r), self.map_height)
+            self._pending_summons.append({"x":sx, "y":sy, "t0": now, "low":low_r, "high":high_r})
+            self._play_sound("spawn_charge", 0.5)
+
+    def _process_pending_summons(self):
+        import pygame
+        now = pygame.time.get_ticks()
+        rest = []
+        for s in self._pending_summons:
+            if now - s["t0"] >= self.SUMMON_CAST_MS:
+                self._spawn_minion_at(s["x"], s["y"], s["low"], s["high"])
+                self._play_sound("spawn_enemy", 0.9)
+                self._play_sound("spawn_burst", 0.9)
+                self._fx_rings.append({"x": s["x"], "y": s["y"], "t0": now, "dur": self.SPAWN_RING_MS})
+            else:
+                rest.append(s)
+        self._pending_summons = rest

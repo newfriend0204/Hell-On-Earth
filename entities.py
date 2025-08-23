@@ -267,8 +267,12 @@ class Portal:
         screen.blit(rotated, rect)
 
         if player_near:
-            # 안내 텍스트: "다음 스테이지 이동\n(Space)"
-            line1 = KOREAN_FONT_28.render("다음 스테이지 이동", True, (255, 255, 255))
+            # 안내 텍스트
+            import config
+            stage_order = list(config.STAGE_DATA.keys())
+            is_last = (config.CURRENT_STAGE == stage_order[-1])
+            label = "엔딩 보기" if is_last else "다음 스테이지 이동"
+            line1 = KOREAN_FONT_28.render(label, True, (255, 255, 255))
             line2 = KOREAN_FONT_28.render("(Space)", True, (200, 200, 255))
             padding_x, padding_y = 8, 6
             width = max(line1.get_width(), line2.get_width()) + padding_x * 2

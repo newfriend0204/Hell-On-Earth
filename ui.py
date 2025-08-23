@@ -2,6 +2,9 @@ import pygame
 import config
 import os
 import re
+import os
+import pygame
+from config import ASSET_DIR
 from text_data import weapon_stats
 from text_data import (
     STATUS_EVAL_TEMPLATES, HP_BUCKET_LABELS, AMMO_BUCKET_LABELS, STAGE_ORDER,
@@ -32,7 +35,15 @@ TAB_SIZE = (140, 140)
 TAB_SPACING = -15
 NUM_TABS = len(TAB_NAMES)
 
+_story_img_cache = {}
+_story_img_scaled_cache = {}
+
 gun_ids = ["gun1", "gun2", "gun3", "gun4"]
+
+DIALOGUE_TEXT_Y_RATIO = 0.28
+STORY_IMG_MAX_W_RATIO = 0.90
+STORY_IMG_MAX_H_RATIO = 0.28
+STORY_IMG_CENTER_Y_RATIO = 5/6
 
 def wrap_text(text, font, max_width):
     # 자동 줄바꿈
@@ -133,6 +144,125 @@ def draw_dialogue_box_with_choices(screen, node, selected_choice_idx, history=No
             pass
 
     return
+
+STORY_SEARCH_PATHS = [
+    os.path.join(ASSET_DIR, "Image", "Story"),
+    os.path.join(ASSET_DIR, "image", "story"),
+    os.path.join("Asset", "Image", "Story"),
+    os.path.join("Asset", "image", "story"),
+    "",
+]
+
+def _get_story_image(filename):
+    if not filename:
+        return None
+    if filename in _story_img_cache:
+        return _story_img_cache[filename]
+    raw = None
+    for base in STORY_SEARCH_PATHS:
+        path = os.path.join(base, filename) if base else filename
+        if os.path.exists(path):
+            try:
+                raw = pygame.image.load(path).convert_alpha()
+                break
+            except Exception:
+                pass
+    _story_img_cache[filename] = raw
+    return raw
+
+def _get_story_image_scaled(filename, max_w, max_h, upscale=False):
+    # 중앙정렬·페이드용으로 draw_cinematic_dialogue에서 사용
+    if not filename:
+        return None
+    orig = _get_story_image(filename)
+    if orig is None:
+        return None
+    iw, ih = orig.get_size()
+    # 업스케일 금지면, 이미 작으면 그대로 사용
+    if not upscale and iw <= max_w and ih <= max_h:
+        return orig
+    # 축소 비율(가로/세로 한계 내)
+    scale = min(max_w / max(iw, 1), max_h / max(ih, 1))
+    # 업스케일 금지 조건이면 원본 반환
+    if not upscale and scale >= 1.0:
+        return orig
+    key = (filename, int(max_w), int(max_h), int(bool(upscale)))
+    cached = _story_img_scaled_cache.get(key)
+    if cached:
+        return cached
+    import pygame
+    new_w = max(1, int(iw * scale))
+    new_h = max(1, int(ih * scale))
+    scaled = pygame.transform.smoothscale(orig, (new_w, new_h))
+    _story_img_scaled_cache[key] = scaled
+    return scaled
+
+def draw_cinematic_dialogue(screen, node):
+    # 완전 검은 배경 + 단일 대사(히스토리 미표시)
+    screen_w, screen_h = screen.get_size()
+    screen.fill((0, 0, 0))
+
+    speaker = node.get("speaker", "") or ""
+    text = node.get("text", "") or ""
+    image_file = node.get("image")
+    image_prev = node.get("image_prev")
+    image_fade = node.get("image_fade", 1.0)
+    
+    # 텍스트
+    text_max_w = int(screen_w * 0.82)
+    lines = wrap_text(text, KOREAN_FONT_28, text_max_w)
+    speaker_h = 54 if speaker else 0
+    body_h = 36 * len(lines)
+    block_h = speaker_h + body_h
+    # 텍스트 블록: 상단 1/3 근방(조금 더 위)에서 시작
+    text_center_y = int(screen_h * DIALOGUE_TEXT_Y_RATIO)
+    y = max(10, text_center_y - (block_h // 2))
+
+    # 스피커
+    if speaker:
+        name_surf = KOREAN_FONT_BOLD_28.render(f"[{speaker}]", True, (200, 200, 200))
+        screen.blit(name_surf, ((screen_w - name_surf.get_width()) // 2, y))
+        y += 54
+
+    # 본문
+    for line in lines:
+        surf = KOREAN_FONT_28.render(line, True, (255, 255, 255))
+        screen.blit(surf, ((screen_w - surf.get_width()) // 2, y))
+        y += 36
+
+    # 이미지
+    # 같은 파일이면 이전 이미지는 사용하지 않음(유지)
+    if image_prev and image_file and image_prev == image_file:
+        image_prev = None
+        image_fade = 1.0
+    max_w = int(screen_w * 1.0)
+    max_h = int(screen_h * 0.5)
+    cur = _get_story_image_scaled(image_file, max_w, max_h, upscale=False) if image_file else None
+    prv = _get_story_image_scaled(image_prev, max_w, max_h, upscale=False) if image_prev else None
+    img_center_y = (screen_h * 2) // 3
+
+    def _blit_center(img, alpha):
+        if not img:
+            return
+        if 0 <= alpha < 255:
+            surf = img.copy()
+            surf.set_alpha(alpha)
+        else:
+            surf = img
+        ix = (screen_w - img.get_width()) // 2
+        iy = img_center_y - (img.get_height() // 2)
+        screen.blit(surf, (ix, iy))
+
+    a = max(0.0, min(1.0, float(image_fade)))
+    if prv:
+        _blit_center(prv, int(255 * (1.0 - a)))
+    if cur:
+        _blit_center(cur, int(255 * a))
+
+    # 힌트
+    hint_font = pygame.font.Font(FONT_PATH, 18)
+    hint_surf = hint_font.render("좌클릭: 다음/종료  ESC: 건너뛰기", True, (140, 140, 140))
+    screen.blit(hint_surf, (screen_w - hint_surf.get_width() - 20, screen_h - 28))
 
 def draw_field_status_mini(screen, player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, x=18, y=None):
     # 대화 중 좌하단에 간이 체력/탄약/악의 정수 표시

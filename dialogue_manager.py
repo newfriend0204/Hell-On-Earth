@@ -10,6 +10,7 @@ class DialogueManager:
         self.selected_choice = 0
         self.on_effect_callback = None
         self.close_callback = None
+        self.style = "default"
 
         self._hud_status = None
 
@@ -29,11 +30,16 @@ class DialogueManager:
         self._typing_last_ms = 0
         self._last_display_text_cache = None
 
+        self._img_prev_name = None
+        self._img_fade_start_ms = 0
+        self._img_fade_dur_ms = 320
+        self._img_fade = 1.0
+
     def set_hud_status(self, hp, hp_max, ammo, ammo_max):
         # 대화 중 좌하단에 띄울 필드 상태값 전달
         self._hud_status = (hp, hp_max, ammo, ammo_max)
 
-    def start(self, dialogue_data, on_effect_callback=None, close_callback=None):
+    def start(self, dialogue_data, on_effect_callback=None, close_callback=None, style="default"):
         # 대화 시작
         self.active = True
         self.dialogue_data = dialogue_data
@@ -41,6 +47,7 @@ class DialogueManager:
         self.selected_choice = 0
         self.on_effect_callback = on_effect_callback
         self.close_callback = close_callback
+        self.style = style
 
         self.dialogue_history = []
         self.history_anim_timer = 0
@@ -55,6 +62,10 @@ class DialogueManager:
         self._typing_done = True
         self._typing_last_ms = 0
         self._last_display_text_cache = None
+
+        self._img_prev_name = None
+        self._img_fade_start_ms = pygame.time.get_ticks()
+        self._img_fade = 0.0
 
     def close(self):
         # 대화 강제 종료(ESC, 마지막 대사, main에서 콜백 등)
@@ -116,21 +127,31 @@ class DialogueManager:
             self.history_anim_timer -= 1
 
     def next_dialogue(self, next_idx=None):
-        # 현재 노드의 본문(또는 오버라이드 텍스트)을 히스토리에 남기고 다음 인덱스로 진행.
-        # 오버라이드 텍스트가 있었다면 그것부터 히스토리에 남김
-        if self.override_text:
-            self.enqueue_history_line(self._current_node_speaker(), self.override_text)
-            self.override_text = None
-            self.override_speaker = None
+        # cinema 모드가 아니면 히스토리에 쌓음
+        if self.style != "cinema":
+            if self.override_text:
+                self.enqueue_history_line(self._current_node_speaker(), self.override_text)
+                self.override_text = None
+                self.override_speaker = None
+            node = self._current_node()
+            text_to_push = node.get("text", "")
+            if text_to_push:
+                self.enqueue_history_line(node.get("speaker", ""), text_to_push)
 
-        # 현재 노드의 원본 텍스트도 히스토리에 남김
-        node = self._current_node()
-        text_to_push = node.get("text", "")
-        if text_to_push:
-            self.enqueue_history_line(node.get("speaker", ""), text_to_push)
-
+        # 이미지 페이드 준비(현재 → 다음). 같은 파일이면 유지(페이드 없음)
+        old_node = self._current_node()
+        old_img = old_node.get("image") if old_node else None
         if next_idx is not None:
             self.idx = next_idx
+        new_node = self._current_node()
+        new_img = new_node.get("image") if new_node else None
+        if new_img and old_img and new_img == old_img:
+            self._img_prev_name = None
+            self._img_fade = 1.0
+        else:
+            self._img_prev_name = old_img
+            self._img_fade_start_ms = pygame.time.get_ticks()
+            self._img_fade = 0.0
 
         # 다음 노드로 넘어갔으니 타자 상태 초기화
         self._last_display_text_cache = None
@@ -235,6 +256,12 @@ class DialogueManager:
         self._refresh_typing_target_if_needed()
         self._advance_typing()
 
+        # 이미지 페이드 진행
+        if self.active and self.style == "cinema":
+            now = pygame.time.get_ticks()
+            t = (now - self._img_fade_start_ms) / max(1, self._img_fade_dur_ms)
+            self._img_fade = max(0.0, min(1.0, t))
+
         node = self._current_node()
         has_choices = bool(node.get("choices"))
 
@@ -317,10 +344,17 @@ class DialogueManager:
             node = dict(node)
             node["choices"] = []
 
-        ui.draw_dialogue_box_with_choices(
-            screen,
-            node,
-            self.selected_choice,
-            history=self.dialogue_history,
-            hud_status=self._hud_status
-        )
+        if self.style == "cinema":
+            # 이미지 페이드 정보를 UI로 전달
+            node = dict(node)
+            node["image_prev"] = self._img_prev_name
+            node["image_fade"] = self._img_fade
+            ui.draw_cinematic_dialogue(screen, node)
+        else:
+            ui.draw_dialogue_box_with_choices(
+                screen,
+                node,
+                self.selected_choice,
+                history=self.dialogue_history,
+                hud_status=self._hud_status
+            )

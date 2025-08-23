@@ -5,7 +5,10 @@ from config import *
 import config
 import os
 from asset_manager import load_images, load_weapon_assets
-from sound_manager import load_sounds
+from sound_manager import (
+    load_sounds, bgm_set_combat, bgm_update,
+    play_bgm_dialogue, play_bgm_ending_credit, play_bgm_boss, play_bgm_main
+)
 from entities import (
     ExplosionEffectPersistent,
     FieldWeapon,
@@ -30,8 +33,10 @@ from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
 from dialogue_manager import DialogueManager
 from text_data import (
     merchant_dialogue,
-    doctorNF_dialogue,
     drone_dialogue,
+    intro_dialogue,
+    ending_dialogue,
+    doctorNF_dialogue,
     doctorNF12_before_dialogue,
     doctorNF12_after_dialogue,
     doctorNF13_dialogue,
@@ -65,6 +70,7 @@ world.print_grid(grid)
 pygame.init()
 pygame.font.init()
 pygame.mixer.init()
+_bgm_last_is_combat = None
 
 DEBUG_FONT = pygame.font.SysFont('malgungothic', 24)
 BASE_DIR = os.path.dirname(__file__)
@@ -126,7 +132,7 @@ START_WEAPONS = [
     WEAPON_CLASSES[25],
     WEAPON_CLASSES[26],
     WEAPON_CLASSES[27],
-    WEAPON_CLASSES[28],
+    WEAPON_CLASSES[29],
 ]
 
 def _apply_stage_theme_images():
@@ -149,6 +155,11 @@ original_player_image = images["player"]
 original_bullet_image = images["bullet1"]
 original_cartridge_image = images["cartridge_case1"]
 cursor_image = images["cursor"]
+_cursor_angle_deg = 0.0
+_CURSOR_BASE_DPS = 160.0
+_CURSOR_SPEED_FACTOR = 0.60
+_CURSOR_DPS_MAX = 900.0
+_cursor_last_pos = None
 background_image = _apply_stage_theme_images()
 background_rect = background_image.get_rect()
 
@@ -174,6 +185,100 @@ _menu_scales = [1.0 for _ in MENU_BUTTONS]
 _menu_hover  = -1
 _menu_modal = None
 _menu_modal_hover = -1
+
+_ending_credits = {
+    "surfs": [],
+    "heights": [],
+    "total_h": 0,
+    "scroll_y": 0.0,
+    "done": False,
+    "hint_t": 0.0,
+    "hint_animating": False,
+    "hint_triggered": False,
+    "hint_trigger_time": 0,
+    "thanks_index": -1,
+    "lock_scroll": False
+}
+
+def _read_ending_credit_lines():
+    path = os.path.join(ASSET_DIR, "EndingCredit.txt")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read().splitlines()
+    except Exception:
+        raw = ["Hell On Earth", "", "Thanks For Playing My Game."]
+    return raw
+
+def start_ending_credits():
+    config.game_state = config.GAME_STATE_ENDING_CREDITS
+    try:
+        play_bgm_ending_credit(fade_ms=1400)
+    except Exception:
+        pass
+    _ending_credits["surfs"].clear()
+    _ending_credits["heights"].clear()
+    _ending_credits["total_h"] = 0
+    _ending_credits["done"] = False
+    _ending_credits["hint_t"] = 0.0
+    _ending_credits["hint_animating"] = False
+    _ending_credits["hint_triggered"] = False
+    _ending_credits["hint_trigger_time"] = 0
+    _ending_credits["thanks_index"] = -1
+    _ending_credits["lock_scroll"] = False
+
+    # 폰트 구성
+    import pygame
+    FONT_SMALL  = pygame.font.Font(FONT_PATH, 22)
+    FONT_NORMAL = pygame.font.Font(FONT_PATH, 26)
+    FONT_MID    = pygame.font.Font(BOLD_FONT_PATH, 40)
+    FONT_BIG    = pygame.font.Font(BOLD_FONT_PATH, 64)
+
+    lines = _read_ending_credit_lines()
+    # ▶ 'Thanks For Playing My Game.' 라인 인덱스 찾기
+    for i, raw in enumerate(lines):
+        if "thanks for playing my game." in (raw or "").strip().casefold():
+            _ending_credits["thanks_index"] = i
+            break
+    for line in lines:
+        s = (line or "").strip()
+        # 크기 규칙
+        key = s.casefold()
+        if key in ("hell on earth", "thanks for playing my game."):
+            surf = FONT_BIG.render(s, True, (255, 255, 255))
+        elif s.startswith("-----"):
+            # 헤더 처리: 앞뒤 하이픈 제거
+            header = s.strip()
+            while header.startswith("-"):
+                header = header[1:]
+            while header.endswith("-"):
+                header = header[:-1]
+            header = header.strip()
+            surf = FONT_MID.render(header if header else s, True, (220, 220, 255))
+        else:
+            surf = FONT_NORMAL.render(s, True, (210, 210, 210)) if s else FONT_SMALL.render("", True, (210, 210, 210))
+        _ending_credits["surfs"].append(surf)
+        _ending_credits["heights"].append(surf.get_height())
+        _ending_credits["total_h"] += surf.get_height() + 18  # 줄 간격
+
+    _ending_credits["total_h"] = max(0, _ending_credits["total_h"] - 18)
+    _ending_credits["scroll_y"] = SCREEN_HEIGHT + 40  # 화면 아래에서 시작
+
+def start_ending_story():
+    # 시네마틱 대화 시작: 좌클릭 진행 / ESC 스킵(크레딧으로)
+    config.game_state = config.GAME_STATE_ENDING_STORY
+    try:
+        play_bgm_dialogue(fade_ms=1400)
+    except Exception:
+        pass
+    def _on_close():
+        start_ending_credits()
+
+    dialogue_manager.start(
+        ending_dialogue,
+        on_effect_callback=None,
+        close_callback=_on_close,
+        style="cinema"
+    )
 
 def _draw_dim(surface, alpha=160):
     dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -330,6 +435,7 @@ def init_new_game():
     import config, world
 
     # 진행상황 초기화
+    config.intro_shown = False
     config.player_score = 0
     visited_f_rooms = {}
     room_portals = {}
@@ -1183,8 +1289,9 @@ def advance_to_next_stage():
     stage_order = list(STAGE_DATA.keys())
     idx = stage_order.index(config.CURRENT_STAGE)
 
+    idx = stage_order.index(config.CURRENT_STAGE)
     if idx >= len(stage_order) - 1:
-        print("[DEBUG] 마지막 스테이지입니다. 더 이상 진행할 수 없습니다.")
+        start_ending_story()
         return
 
     next_stage = stage_order[idx + 1]
@@ -1705,6 +1812,10 @@ def _start_boss_intro():
     # 커튼 전환이 끝난 다음 프레임에 호출되어, 3초간 텍스트 슬라이드 연출을 시작.
     global boss_intro_active, boss_intro_start_ms, boss_intro_pending
     global _boss_left_surf, _boss_right_block, _boss_right_block_rect
+    try:
+        play_bgm_boss(fade_ms=1400)
+    except Exception:
+        pass
     boss_intro_pending = False
     boss_intro_active = True
     boss_intro_start_ms = pygame.time.get_ticks()
@@ -2494,10 +2605,132 @@ while running:
     current_time = pygame.time.get_ticks()
     events = pygame.event.get()
 
+    # 현재 프레임의 전투 여부 계산
+    _cur_is_combat = (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING) and bool(getattr(config, "combat_state", False))
+    if (_bgm_last_is_combat is None) or (_bgm_last_is_combat != _cur_is_combat):
+        bgm_set_combat(_cur_is_combat, fade_ms=600)
+        _bgm_last_is_combat = _cur_is_combat
+    bgm_update()
+
     if getattr(config, "game_state", 1) != config.GAME_STATE_PLAYING:
         for e in events:
             if e.type == pygame.QUIT:
                 running = False
+
+        # 엔딩 시네마틱 & 크레딧
+        # 엔딩: 시네마틱 대사
+        if config.game_state == config.GAME_STATE_ENDING_STORY:
+            for e in events:
+                if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                    dialogue_manager.active = False
+                    start_ending_credits()
+            dialogue_manager.update(events)
+            dialogue_manager.draw(screen)
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+
+        # 엔딩: 크레딧 스크롤
+        if config.game_state == config.GAME_STATE_ENDING_CREDITS:
+            # ESC 처리 (검은 커튼으로 메뉴 복귀)
+            if any(e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE for e in events):
+                old_surface = screen.copy()
+                def go_menu():
+                    import config as _c
+                    _c.game_state = _c.GAME_STATE_MENU
+                    pygame.mouse.set_visible(True)
+                    try:
+                        from sound_manager import play_bgm_main
+                        play_bgm_main()
+                    except Exception:
+                        pass
+                swipe_curtain_transition(screen, old_surface, go_menu, direction="up", duration=0.5)
+                pygame.display.flip()
+                clock.tick(60)
+                continue
+
+            # 프레임마다 반드시 그리기
+            screen.fill((0, 0, 0))
+            dt = clock.get_time() / 1000.0
+            speed = 70.0
+            if pygame.mouse.get_pressed()[0]:
+                speed *= 4
+
+            # 스크롤 업데이트 (고정 전이라면)
+            if (not _ending_credits["done"]) and (not _ending_credits["lock_scroll"]):
+                _ending_credits["scroll_y"] -= speed * dt
+
+            # 렌더 + Thanks 위치 계산
+            y = int(_ending_credits["scroll_y"])
+            thanks_center_now = None
+            thanks_top_now = None
+            thanks_h = 0
+            for i, surf in enumerate(_ending_credits["surfs"]):
+                x = (SCREEN_WIDTH - surf.get_width()) // 2
+                screen.blit(surf, (x, y))
+                if i == _ending_credits["thanks_index"]:
+                    thanks_h = surf.get_height()
+                    thanks_top_now = y
+                    thanks_center_now = y + thanks_h / 2
+                y += surf.get_height() + 18
+
+            # 크레딧 끝까지 지나간 경우 안전장치
+            if not _ending_credits["done"] and y < -20:
+                _ending_credits["done"] = True
+                _ending_credits["hint_t"] = 0.0
+                # 트리거가 아직 없다면 이제부터 힌트 애니 시작 예약
+                if not _ending_credits["hint_triggered"]:
+                    _ending_credits["hint_triggered"] = True
+                    _ending_credits["hint_trigger_time"] = pygame.time.get_ticks()
+
+            # 'Thanks For Playing My Game.'이 중앙에 오면 딱 멈추기 + 1초 뒤 힌트 애니 시작
+            if (_ending_credits["thanks_index"] >= 0) and (thanks_center_now is not None):
+                cy = SCREEN_HEIGHT / 2
+                # 올라오다가 중앙에 도달/통과하면 그 자리에서 스크롤 고정
+                if not _ending_credits["lock_scroll"] and thanks_center_now <= cy:
+                    desired_top = int(cy - thanks_h / 2)
+                    delta = (thanks_top_now - desired_top)
+                    _ending_credits["scroll_y"] -= delta
+                    _ending_credits["lock_scroll"] = True
+ 
+                    if not _ending_credits["hint_triggered"]:
+                        _ending_credits["hint_triggered"] = True
+                        _ending_credits["hint_trigger_time"] = pygame.time.get_ticks()
+                        _ending_credits["hint_t"] = 0.0
+
+            # 힌트 애니 시작 시점(트리거 1초 후)
+            if _ending_credits["hint_triggered"] and (not _ending_credits["hint_animating"]):
+                if pygame.time.get_ticks() - _ending_credits["hint_trigger_time"] >= 1000:
+                    _ending_credits["hint_animating"] = True
+
+            # 힌트 그리기
+            hint_base_font = pygame.font.Font(FONT_PATH, 20)
+            hint_surf = hint_base_font.render("ESC: 크레딧 끝내기", True, (140, 140, 140))
+            if not _ending_credits["hint_animating"]:
+                hx = SCREEN_WIDTH - hint_surf.get_width() - 20
+                hy = SCREEN_HEIGHT - hint_surf.get_height() - 18
+                screen.blit(hint_surf, (hx, hy))
+            else:
+                _ending_credits["hint_t"] = min(1.0, _ending_credits["hint_t"] + dt * 0.5)
+                def _ease(u):
+                    return 3*(u*u) - 2*(u*u*u)
+                t = _ease(_ending_credits["hint_t"])
+                start_cx = SCREEN_WIDTH - hint_surf.get_width()/2 - 20
+                start_cy = SCREEN_HEIGHT - hint_surf.get_height()/2 - 18
+                end_cx   = SCREEN_WIDTH/2
+                end_cy   = SCREEN_HEIGHT/2 + 110
+                cx = start_cx + (end_cx - start_cx) * t
+                cy = start_cy + (end_cy - start_cy) * t
+                scale = 1.0 + 0.9 * t
+                w = max(1, int(hint_surf.get_width()  * scale))
+                h = max(1, int(hint_surf.get_height() * scale))
+                scaled = pygame.transform.smoothscale(hint_surf, (w, h))
+                screen.blit(scaled, (int(cx - w/2), int(cy - h/2)))
+
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+
         pygame.mouse.set_visible(True)
         screen.fill((0,0,0))
         logo_bottom = _draw_title(screen)
@@ -2781,9 +3014,13 @@ while running:
             render_game_frame()
         dialogue_manager.update(events)
         dialogue_manager.set_hud_status(player_hp, player_hp_max, ammo_gauge, ammo_gauge_max)
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 160))
-        screen.blit(overlay, (0, 0))
+        # 시네마틱 모드면 완전 블랙 배경, 아니면 반투명 오버레이
+        if getattr(dialogue_manager, "style", "default") == "cinema":
+            screen.fill((0, 0, 0))
+        else:
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))
+            screen.blit(overlay, (0, 0))
         dialogue_manager.draw(screen)
         pygame.display.flip()
         clock.tick(60)
@@ -3787,6 +4024,12 @@ while running:
         if hit:
             bullet.to_remove = True
             continue
+    for w in weapons:
+        if hasattr(w, "draw_world"):
+            try:
+                w.draw_world(screen)
+            except Exception:
+                pass
 
     if not player_dead:
         if weapon and not melee.active:
@@ -3805,14 +4048,47 @@ while running:
                 rotated_weapon = pygame.transform.rotate(scaled_image, -angle_degrees - 90)
                 rotated_weapon_rect = rotated_weapon.get_rect(center=(gun_pos_x, gun_pos_y))
                 screen.blit(rotated_weapon, rotated_weapon_rect.move(shake_offset_x, shake_offset_y))
-                if hasattr(render_weapon, "draw_overlay"):
-                    try:
-                        render_weapon.draw_overlay(screen)
-                    except Exception:
-                        pass
+                for w in weapons:
+                    if hasattr(w, "draw_world"):
+                        try:
+                            w.draw_world(screen)
+                        except Exception:
+                            pass
     melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
     if not player_dead:
         screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
+
+    try:
+        import config as _cfg
+        # 현재 활성 무기와 교체 상태를 전역으로 알려줌
+        try:
+            _active_weapon = weapon if 'weapon' in globals() or 'weapon' in locals() else weapons[current_weapon_index]
+        except Exception:
+            _active_weapon = None
+        _cfg.active_weapon = _active_weapon
+        try:
+            _cfg.is_switching_weapon = bool(changing_weapon)
+        except Exception:
+            _cfg.is_switching_weapon = False
+
+        # 플레이어 사망 여부를 전역으로 공유(사망 시 바는 전역적으로 숨김)
+        try:
+            _cfg.player_dead = bool(player_dead)
+        except Exception:
+            _cfg.player_dead = False
+
+        # 바만 선택적으로 그리기 (탄/필드는 개별 무기의 draw_world에서 이미 처리)
+        for _w in weapons:
+            _draw_overlay = getattr(_w, "draw_overlay", None)
+            _should = getattr(_w, "should_draw_overlay", None)
+            if callable(_draw_overlay) and callable(_should):
+                if _should(_active_weapon):
+                    try:
+                        _draw_overlay(screen)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
     
     if not changing_room:
         # 방 전환 위치 체크
@@ -3872,6 +4148,15 @@ while running:
         )
         start_transition_pending = False
         mouse_left_released_after_transition = True
+
+        if not getattr(config, "intro_shown", False):
+            _pending_dialogue = intro_dialogue
+            _pending_dialogue_effect_cb = apply_effect
+            _pending_dialogue_close_cb = on_dialogue_close
+            _pending_dialogue_style = "cinema"
+            dialogue_capture_request = True
+            config.intro_shown = True
+
 
     if slide_direction:
         # 방 전환 실행
@@ -3953,18 +4238,58 @@ while running:
         and not dialogue_manager.active):
 
         if dialogue_capture_request:
-            dialogue_frozen_frame = screen.copy()
             for b in bullets:
                 if isinstance(b, ExplosionEffectPersistent):
                     b.pause()
+            # 현재 프레임 캡처
+            dialogue_frozen_frame = screen.copy()
+            # 커튼: 게임→블랙(시네마틱일 때)
+            if (_pending_dialogue_style or "default") == "cinema":
+                def _draw_black():
+                    screen.fill((0, 0, 0))
+                swipe_curtain_transition(
+                    screen,
+                    dialogue_frozen_frame,
+                    _draw_black,
+                    direction="down",
+                    duration=0.35
+                )
+            else:
+                # 최소 한 프레임 블랙 가림(혹시 모를 깜빡임 방지)
+                screen.fill((0, 0, 0))
+                pygame.display.flip()
+            # 대화 시작(종료 시 커튼 복귀 래퍼: 시네마틱일 때만 사용)
+            orig_close_cb = _pending_dialogue_close_cb  # 원래 콜백 캡처
+            def _close_with_curtain():
+                # 일반 대화는 커튼 없음, 시네마틱만 커튼
+                if getattr(dialogue_manager, "style", "default") == "cinema":
+                    black = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+                    black.fill((0, 0, 0))
+                    def _draw_game():
+                        render_game_frame()
+                    swipe_curtain_transition(
+                        screen,
+                        black,
+                        _draw_game,
+                        direction="up",
+                        duration=0.35
+                    )
+                if orig_close_cb:
+                    try:
+                        orig_close_cb()
+                    except Exception:
+                        pass
+
             dialogue_manager.start(
                 _pending_dialogue,
                 on_effect_callback=_pending_dialogue_effect_cb,
-                close_callback=_pending_dialogue_close_cb,
+                close_callback=_close_with_curtain,
+                style=(_pending_dialogue_style or "default"),
             )
             _pending_dialogue = None
             _pending_dialogue_effect_cb = None
             _pending_dialogue_close_cb = None
+            _pending_dialogue_style = None
             pygame.mouse.set_visible(False)
             dialogue_capture_request = False
             pygame.display.flip()
@@ -4066,8 +4391,29 @@ while running:
                 render_game_frame()
             swipe_curtain_transition(screen, old_surface, _draw_game, direction="left", duration=0.5)
     else:
-        cursor_rect = cursor_image.get_rect(center=(mouse_x, mouse_y))
-        screen.blit(cursor_image, cursor_rect)
+        # 마우스 속도에 따라 회전 속도 증가
+        mx, my = pygame.mouse.get_pos()
+        dt_cursor = clock.get_time() / 1000.0
+        if dt_cursor <= 0:
+            dt_cursor = 1/1000
+        try:
+            _cursor_last_pos
+        except NameError:
+            _cursor_last_pos = None
+        if _cursor_last_pos is None:
+            _cursor_last_pos = (mx, my)
+        dx = mx - _cursor_last_pos[0]
+        dy = my - _cursor_last_pos[1]
+        dist = math.hypot(dx, dy)
+        # 마우스 픽셀/초
+        speed_px = dist / dt_cursor
+        # 각속도 = 기본 + (속도 * 계수), 상한 클램프
+        dps = min(_CURSOR_DPS_MAX, _CURSOR_BASE_DPS + _CURSOR_SPEED_FACTOR * speed_px)
+        _cursor_angle_deg = (_cursor_angle_deg + dps * dt_cursor) % 360.0
+        _cursor_last_pos = (mx, my)
+        rotated = pygame.transform.rotozoom(cursor_image, -_cursor_angle_deg, 1.0)
+        rect = rotated.get_rect(center=(mx, my))
+        screen.blit(rotated, rect)
 
     pygame.display.flip()
     clock.tick(60)
