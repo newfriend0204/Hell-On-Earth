@@ -1,9 +1,13 @@
 import pygame
 import math
 import random
+import math
 from config import *
 import config
 import os
+import sys
+import time
+import ctypes
 from asset_manager import load_images, load_weapon_assets
 from sound_manager import (
     load_sounds, bgm_set_combat, bgm_update,
@@ -54,7 +58,17 @@ from text_data import (
     soldier3_before_dialogue,
     soldier3_after_dialogue,
     soldier4_dialogue,
-    BOSS_DESC
+    drone31_dialogue,
+    drone31_before_dialogue,
+    drone31_after_dialogue,
+    drone32_dialogue,
+    drone32_before_dialogue,
+    drone32_after_dialogue,
+    drone33_dialogue,
+    drone33_before_dialogue,
+    drone33_after_dialogue,
+    BOSS_DESC,
+    weapon_stats
 )
 
 # 맵 상태 초기화
@@ -83,21 +97,114 @@ KOREAN_FONT_BOLD_18 = pygame.font.Font(BOLD_FONT_PATH, 18)
 TITLE_FONT = pygame.font.Font(BOLD_FONT_PATH, 64)
 BUTTON_FONT = pygame.font.Font(BOLD_FONT_PATH, 28)
 SUB_FONT = pygame.font.Font(FONT_PATH, 18)
+RARITY_COLORS = {
+    1: (255, 255, 255),
+    2: (0, 255, 0),
+    3: (0, 128, 255),
+    4: (160, 32, 240),
+    5: (255, 255, 0),
+}
 
-pygame.mouse.set_visible(False)
-
-#screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-ICON_PATH = os.path.join(ASSET_DIR, "Image", "GameIcon.png")
-_icon_surface = pygame.image.load(ICON_PATH).convert_alpha()
-_icon_surface = pygame.transform.smoothscale(
-    _icon_surface,
-    (int(_icon_surface.get_width()), int(_icon_surface.get_height()))
-)
-pygame.display.set_icon(_icon_surface)
+# 닫기/최소화 삭제
+if sys.platform=="win32":
+    hwnd=pygame.display.get_wm_info().get("window")
+    if hwnd:
+        u=ctypes.windll.user32; GWL_STYLE=-16; WS_MINIMIZEBOX=0x20000; WS_MAXIMIZEBOX=0x10000; WS_SYSMENU=0x80000
+        s=u.GetWindowLongW(hwnd,GWL_STYLE)&~(WS_MINIMIZEBOX|WS_MAXIMIZEBOX|WS_SYSMENU)
+        u.SetWindowLongW(hwnd,GWL_STYLE,s)
+        u.SetWindowPos(hwnd,0,0,0,0,0,0x1|0x2|0x4|0x20)
+
+# 커서 보임/숨김 ↔ grab(창 안 가두기) 상태를 즉시 동기화하는 래퍼
+def set_cursor_visible_and_grab(show: bool):
+    pygame.mouse.set_visible(show)
+    try:
+        pygame.event.set_grab((not show) and pygame.display.get_active())
+    except Exception:
+        pass
+
+# 기본: 플레이 중은 커서를 숨기고 창 안에 가둠
+set_cursor_visible_and_grab(False)
 
 pygame.display.set_caption("Hell On Earth")
+
+def _boot_splash(progress=0.0, message="로딩 중...", sub=None):
+    # 부트 스플래시 화면(게이지+퍼센트)을 즉시 갱신한다.
+    try:
+        sw, sh = screen.get_size()
+        # 배경색
+        screen.fill((10, 10, 14))
+        # 타이틀
+        try:
+            title_surf = TITLE_FONT.render("HELL ON EARTH", True, (220, 220, 240))
+            tr = title_surf.get_rect(center=(sw // 2, sh // 2 - 50))
+            screen.blit(title_surf, tr)
+        except Exception:
+            pass
+        # 메시지
+        if message:
+            try:
+                msg_surf = SUB_FONT.render(str(message), True, (190, 190, 205))
+                mr = msg_surf.get_rect(center=(sw // 2, sh // 2 + 60))
+                screen.blit(msg_surf, mr)
+            except Exception:
+                pass
+        # 서브 메시지(선택)
+        if sub:
+            try:
+                sub_surf = SUB_FONT.render(str(sub), True, (150, 150, 170))
+                sr = sub_surf.get_rect(center=(sw // 2, sh // 2 + 86))
+                screen.blit(sub_surf, sr)
+            except Exception:
+                pass
+        # 게이지 바 & 퍼센트
+        try:
+            pct = max(0.0, min(1.0, float(progress)))
+            bar_w, bar_h = 460, 12
+            bx, by = (sw - bar_w) // 2, sh // 2 + 120
+            # 바 배경
+            pygame.draw.rect(screen, (30, 32, 40), pygame.Rect(bx, by, bar_w, bar_h), border_radius=6)
+            # 바 채움
+            fill_w = int(bar_w * pct)
+            if fill_w > 0:
+                pygame.draw.rect(screen, (90, 150, 255), pygame.Rect(bx, by, fill_w, bar_h), border_radius=6)
+            # 외곽선
+            pygame.draw.rect(screen, (70, 80, 95), pygame.Rect(bx, by, bar_w, bar_h), width=1, border_radius=6)
+            # 퍼센트 텍스트
+            ptxt = f"{int(pct*100)}%"
+            p_surf = SUB_FONT.render(ptxt, True, (210, 220, 235))
+            pr = p_surf.get_rect(midtop=(sw // 2, by + bar_h + 6))
+            screen.blit(p_surf, pr)
+        except Exception:
+            pass
+        pygame.display.flip()
+        # 윈도우 응답 유지
+        pygame.event.pump()
+    except Exception:
+        # 어떤 문제여도 게임 진행은 이어가되, 스플래시 실패는 묵살
+        pass
+
+def _count_files(root, exts):
+    try:
+        n = 0
+        for dp, _, files in os.walk(root):
+            for fn in files:
+                if fn.lower().endswith(exts):
+                    n += 1
+        return n
+    except Exception:
+        return 0
+
+def _make_progress_channel(p0, p1):
+    # 구간 [p0, p1]에 서브 진행률 frac(0..1)을 매핑해 스플래시를 갱신하는 콜백을 만든다.
+    def cb(frac=0.0, message=None, sub=None):
+        try:
+            frac = 0.0 if frac is None else float(frac)
+        except Exception:
+            frac = 0.0
+        _boot_splash(p0 + max(0.0, min(1.0, frac)) * (p1 - p0), message, sub)
+    return cb
 
 def get_player_world_position():
     return (
@@ -105,12 +212,74 @@ def get_player_world_position():
         world_y + player_rect.centery
     )
 
-images = load_images()
-sounds = load_sounds()
+# 스플래시 + 진행률: 단계별(이미지→사운드→무기)
+# 가중치: 이미지 70% / 사운드 25% / 무기 5%
+img_cb  = _make_progress_channel(0.00, 0.70)
+snd_cb  = _make_progress_channel(0.70, 0.95)
+wep_cb  = _make_progress_channel(0.95, 1.00)
+
+# 사전 스캔으로 총 개수 추정(정확도 ↑). 실패해도 안전.
+_img_total = _count_files("Asset/Image", (".png", ".jpg"))
+_snd_total = _count_files("Asset/Sound", (".wav", ".mp3"))
+_img_done = 0
+_snd_done = 0
+
+# pygame 로더 임시 래핑(파일 1개 로딩 때마다 게이지 ↑). 끝나면 원복.
+_orig_img_load = pygame.image.load
+def _wrap_img_load(*a, **k):
+    global _img_done
+    surf = _orig_img_load(*a, **k)
+    _img_done += 1
+    if _img_total > 0:
+        name = None
+        try:
+            name = os.path.basename(a[0]) if a and isinstance(a[0], str) else None
+        except Exception:
+            name = None
+        img_cb(_img_done / max(1, _img_total), "이미지 불러오는 중…", name)
+    return surf
+
+_orig_sound_ctor = pygame.mixer.Sound
+def _wrap_sound_ctor(*a, **k):
+    global _snd_done
+    s = _orig_sound_ctor(*a, **k)
+    _snd_done += 1
+    if _snd_total > 0:
+        name = None
+        try:
+            name = os.path.basename(a[0]) if a and isinstance(a[0], str) else None
+        except Exception:
+            name = None
+        snd_cb(_snd_done / max(1, _snd_total), "사운드 불러오는 중…", name)
+    return s
+
+# 0% 첫 화면
+_boot_splash(0.0, "이미지 불러오는 중…")
+try:
+    pygame.image.load = _wrap_img_load
+    images = load_images()
+finally:
+    pygame.image.load = _orig_img_load
+
+if _img_total == 0:
+    img_cb(1.0, "이미지 불러오는 중…", None)
+
+try:
+    pygame.mixer.Sound = _wrap_sound_ctor
+    snd_cb(0.0, "사운드 불러오는 중…", None)
+    sounds = load_sounds()
+finally:
+    pygame.mixer.Sound = _orig_sound_ctor
+
+if _snd_total == 0:
+    snd_cb(1.0, "사운드 불러오는 중…", None)
+
 config.sounds = sounds
 config.images = images
 config.dropped_items = []
+wep_cb(0.0, "무기 에셋 준비 중…", None)
 weapon_assets = load_weapon_assets(images)
+wep_cb(1.0, "초기화 중…", None)
 melee = MeleeController(
     images, sounds,
     get_player_world_pos_fn=get_player_world_position
@@ -128,9 +297,32 @@ _go_exit_rect  = None
 _retry_requested = False
 _exit_requested  = False
 
+dash_active = False
+dash_end_ms = 0
+dash_cooldown_until_ms = 0
+dash_dir = (0.0, 0.0)
+dash_last_spawn_ms = 0
+dash_afterimages = []
+dash_shift_was_down = False
+last_dash_time = -10**9
+last_move_dir = (1.0, 0.0)
+dash_gauge_full_time_ms = -1
+
+DASH_SPEED = int(22 * PLAYER_VIEW_SCALE)
+DASH_DURATION_MS = 144
+DASH_COOLDOWN_MS = 500
+DASH_GHOST_SPAWN_MS = 28
+DASH_GHOST_LIFE_MS = 360
+DASH_GHOST_ALPHA_MAX  = 150
+DASH_GAUGE_FULL_HOLD_MS = 150
+
+speed_wind_trails = []
+_last_wind_spawn_ms = 0
+_prev_player_pos = None
+
 START_WEAPONS = [
     WEAPON_CLASSES[25],
-    WEAPON_CLASSES[26],
+    WEAPON_CLASSES[1],
     WEAPON_CLASSES[27],
     WEAPON_CLASSES[29],
 ]
@@ -199,6 +391,20 @@ _ending_credits = {
     "thanks_index": -1,
     "lock_scroll": False
 }
+
+def _sync_mouse_grab_to_visibility():
+    # 마우스 보임 상태에 따라 grab 상태를 자동 동기화
+    vis = pygame.mouse.get_visible()
+    want_grab = (not vis) and pygame.display.get_active()
+    try:
+        if pygame.event.get_grab() != want_grab:
+            pygame.event.set_grab(want_grab)
+    except Exception:
+        # 일부 플랫폼 호환용
+        try:
+            pygame.event.set_grab(want_grab)
+        except Exception:
+            pass
 
 def _read_ending_credit_lines():
     path = os.path.join(ASSET_DIR, "EndingCredit.txt")
@@ -533,6 +739,7 @@ dialogue_frozen_frame = None
 _pending_dialogue = None
 _pending_dialogue_effect_cb = None
 _pending_dialogue_close_cb = None
+_pending_dialogue_style = None
 
 obstacle_manager = ObstacleManager(
     # 장애물 관리자 초기화
@@ -668,12 +875,11 @@ acceleration_rate = 0.8 * PLAYER_VIEW_SCALE
 deceleration_rate = 0.9 * PLAYER_VIEW_SCALE
 
 normal_max_speed = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE
-sprint_max_speed = SPRINT_MAX_SPEED * PLAYER_VIEW_SCALE
 
 move_left = move_right = move_up = move_down = False
 
 max_speed = normal_max_speed
-allow_sprint = True
+
 recoil_in_progress = False
 
 changing_weapon = False
@@ -718,7 +924,7 @@ running = True
 
 player_radius = int(30 * PLAYER_VIEW_SCALE)
 
-player_hp_max = 200000 # 디버그 원래는 200
+player_hp_max = 200000 # 디버그 - 원래는 200
 player_hp = player_hp_max
 last_hp_visual = player_hp * 1.0
 
@@ -727,7 +933,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 40000 # 디버그 원래는 300
+ammo_gauge_max = 40000 # 디버그 - 원래는 300
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 
@@ -856,6 +1062,10 @@ ENDROOM_NPC_CONFIG = {
     "2-1": {"cls": ScientistNPC,"image": "scientist2", "before": scientist2_before_dialogue,  "after": scientist2_after_dialogue},
     "2-2": {"cls": SoldierNPC,  "image": "soldier3",   "before": soldier3_before_dialogue,    "after": soldier3_after_dialogue},
     "2-3": {"cls": ScientistNPC,"image": "scientist3", "before": scientist3_before_dialogue,  "after": scientist3_after_dialogue},
+
+    "3-1": {"cls": DroneNPC, "image": "drone", "before": drone31_before_dialogue, "after": drone31_after_dialogue},
+    "3-2": {"cls": DroneNPC, "image": "drone", "before": drone32_before_dialogue, "after": drone32_after_dialogue},
+    "3-3": {"cls": DroneNPC, "image": "drone", "before": drone33_before_dialogue, "after": drone33_after_dialogue},
 }
 
 def spawn_room_npcs():
@@ -945,6 +1155,33 @@ def spawn_room_npcs():
                         doctorNF22_dialogue,
                     )
                 )
+            elif npc_info["npc_type"] == "drone_npc" and config.CURRENT_STAGE == "3-1":
+                npcs.append(
+                    DroneNPC(
+                        images["drone"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        drone31_dialogue,
+                    )
+                )
+            elif npc_info["npc_type"] == "drone_npc" and config.CURRENT_STAGE == "3-2":
+                npcs.append(
+                    DroneNPC(
+                        images["drone"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        drone32_dialogue,
+                    )
+                )
+            elif npc_info["npc_type"] == "drone_npc" and config.CURRENT_STAGE == "3-3":
+                npcs.append(
+                    DroneNPC(
+                        images["drone"],
+                        npc_info["x"],
+                        npc_info["y"],
+                        drone33_dialogue,
+                    )
+                )
 
     if room_type == 'E':
         cfg = ENDROOM_NPC_CONFIG.get(config.CURRENT_STAGE)
@@ -968,7 +1205,6 @@ space_pressed_last_frame = False
 
 def preview_effect_text(effect, messages=None):
     # 확인 단계에서 보여줄 안내 문구를 데이터 템플릿으로 생성.
-    import math
     messages = messages or {}
     et  = effect.get("type")
     amt = int(effect.get("amount", 0))
@@ -1022,7 +1258,6 @@ def preview_effect_text(effect, messages=None):
 
 def apply_effect(effect, messages=None, as_text_only=False):
     # 대화 이펙트 적용.
-    import math
     global player_hp, player_hp_max, ammo_gauge, ammo_gauge_max, last_merchant_ms
 
     now = pygame.time.get_ticks()
@@ -1172,12 +1407,30 @@ def try_pickup_weapon():
             field_weapons.remove(fw)
             break
 
+def _quantize_dir_to_8(dx: float, dy: float):
+    # 입력 벡터를 8방향(45° 단위)으로 스냅→정규화.
+    import math
+    if dx == 0 and dy == 0:
+        return (0.0, 0.0)
+    ang = math.degrees(math.atan2(dy, dx))  # -180~180 (오른쪽 0°, 위 -90°)
+    # 8방향 스냅: 0,45,90,135,180,-135,-90,-45
+    snapped = round(ang / 45.0) * 45.0
+    rad = math.radians(snapped)
+    qx, qy = math.cos(rad), math.sin(rad)
+    # 정규화
+    n = math.hypot(qx, qy)
+    return (qx / n, qy / n) if n else (0.0, 0.0)
+
 def damage_player(amount):
-    # 디버그, 무적
+    # 디버그 - 무적
     # return
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
     global player_dead, death_started_ms
+
+    # 대쉬 중엔 피해 0.5배
+    if 'dash_active' in globals() and dash_active:
+        amount = int(round(amount * 0.5))
     player_hp = max(0, player_hp - amount)
     damage_flash_alpha = 255
     shake_timer = shake_timer_max
@@ -1481,7 +1734,7 @@ def change_room(direction):
 
     if new_room_type == 'A':
         if room_key not in room_acquire_type:
-            room_acquire_type[room_key] = random.randint(4, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
+            room_acquire_type[room_key] = random.randint(3, 3)  # 2: 무기방, 3: 상점방, 4: 드론방
         acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
@@ -1533,9 +1786,9 @@ def change_room(direction):
             if room_key not in room_shop_items:
                 center_x = new_world.effective_bg_width / 2
                 center_y = new_world.effective_bg_height / 2
-                spacing = 170 * PLAYER_VIEW_SCALE
+                spacing = 230 * PLAYER_VIEW_SCALE
 
-                stage_weights = config.STAGE_DATA[config.CURRENT_STAGE]["weapon_tier_weights"]
+                stage_weights = config.get_shop_tier_weights(config.CURRENT_STAGE)
                 tier_to_weapons = {}
                 for weapon_class in WEAPON_CLASSES:
                     tier = getattr(weapon_class, "TIER", 1)
@@ -1767,6 +2020,16 @@ def change_room(direction):
     boss_intro_shown_this_entry = False
     print(f"[DEBUG] Entered room at ({new_x}, {new_y}), room_state: {world.room_states[new_y][new_x]}")
 
+    from sound_manager import play_bgm_for_stage
+    import config as _cfg
+    if new_room_type != 'E':
+        # 보스방을 벗어나면 suppress 해제
+        if getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
+            _cfg.SUPPRESS_STAGE_BGM = False
+        # suppress가 꺼져 있고, 현재 음악이 비어 있다면 스테이지 BGM 재생
+        if (not pygame.mixer.music.get_busy()) and (not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False)):
+            play_bgm_for_stage(config.CURRENT_STAGE, fade_ms=1200)
+
     pygame.time.set_timer(pygame.USEREVENT + 1, 200)
 
 def increment_kill_count():
@@ -1797,7 +2060,7 @@ def _progress_with_pause_timebased(elapsed_ms: int, approach_ms: int, pause_ms: 
 def _lerp(a, b, t):
     return a + (b - a) * t
 
-def _render_multiline(font, text, color):
+def _render_multiline(font, text, color, align='left'):
     lines = text.split("\n")
     surfs = [font.render(line, True, color) for line in lines]
     width = max(s.get_width() for s in surfs) if surfs else 0
@@ -1805,7 +2068,14 @@ def _render_multiline(font, text, color):
     block = pygame.Surface((width, height), pygame.SRCALPHA)
     y = 0
     for s in surfs:
-        block.blit(s, (0, y)); y += s.get_height()
+        if align == 'center':
+            x = (width - s.get_width()) // 2
+        elif align == 'right':
+            x = width - s.get_width()
+        else:
+            x = 0
+        block.blit(s, (x, y))
+        y += s.get_height()
     return block
 
 def _start_boss_intro():
@@ -1819,16 +2089,16 @@ def _start_boss_intro():
     boss_intro_pending = False
     boss_intro_active = True
     boss_intro_start_ms = pygame.time.get_ticks()
-    left_title = "보스 등장!"
+    left_title = "무리 등장!" if config.CURRENT_STAGE in ("1-3", "2-3") else "보스 등장!"
     _boss_left_surf = TITLE_FONT.render(left_title, True, (245, 245, 245))
     header = _render_multiline(KOREAN_FONT_BOLD_20, f"{config.CURRENT_STAGE}", (240, 240, 240))
-    tip_text = BOSS_DESC.get(config.CURRENT_STAGE, "데이터 없음.\n패턴을 관찰하세요.")
-    tip_block = _render_multiline(KOREAN_FONT_18, tip_text, (220, 220, 220))
+    tip_text = BOSS_DESC.get(config.CURRENT_STAGE, "")
+    tip_block = _render_multiline(KOREAN_FONT_18, tip_text, (220, 220, 220), align='center')
     w = max(header.get_width(), tip_block.get_width())
     h = header.get_height() + 8 + tip_block.get_height()
     _boss_right_block = pygame.Surface((w, h), pygame.SRCALPHA)
     _boss_right_block.blit(header, (0, 0))
-    _boss_right_block.blit(tip_block, (0, header.get_height() + 8))
+    _boss_right_block.blit(tip_block, ((w - tip_block.get_width()) // 2, header.get_height() + 8))
     _boss_right_block_rect = _boss_right_block.get_rect()
 
 def _draw_boss_intro(screen):
@@ -2447,6 +2717,36 @@ def draw_npc_interact_hint(screen, center_x, anchor_top_y, lines=("대화하기"
     if surf2:
         y += surf1.get_height() + line_gap
         screen.blit(surf2, (box_x + (box_w - surf2.get_width()) // 2, y))
+
+def _get_weapon_name_and_color(weapon_class):
+    # 상점 표기에 쓰는 무기 이름과 등급색 리턴
+    key = weapon_class.__name__.lower()
+    # weapon_stats 키는 'gunX' 꼴
+    weapon_id = key if key in weapon_stats else key
+    stat = weapon_stats.get(weapon_id, {})
+    name = stat.get("name", weapon_id)
+    rank_val = stat.get("rank", "1")
+    try:
+        rank_i = int(rank_val)
+    except Exception:
+        rank_i = 1
+    color = RARITY_COLORS.get(rank_i, RARITY_COLORS[1])
+    return name, color
+
+def _spawn_wind_streak(px, py, dirx, diry, jitter_deg=0.0, length=28, width=6, life_ms=220):
+    # 플레이어 뒤쪽으로 짧은 바람 줄기 하나를 생성
+    ang = math.degrees(math.atan2(diry, dirx)) + jitter_deg
+    back_dx = -math.cos(math.radians(ang)) * 14
+    back_dy = -math.sin(math.radians(ang)) * 14
+    speed_wind_trails.append({
+        "x": px + back_dx,
+        "y": py + back_dy,
+        "angle_deg": ang,
+        "length": length,
+        "width": width,
+        "birth_ms": pygame.time.get_ticks(),
+        "life_ms": life_ms,
+    })
         
 def trigger_combat_start():
     # 방 내부 진입이 확정된 시점에서 즉시 배너
@@ -2481,6 +2781,13 @@ def trigger_combat_end():
                 npc.dialogue = scientist2_after_dialogue
             elif config.CURRENT_STAGE == "2-3":
                 npc.dialogue = scientist3_after_dialogue
+        elif tname == "DroneNPC":
+            if config.CURRENT_STAGE == "3-1":
+                npc.dialogue = drone31_after_dialogue
+            elif config.CURRENT_STAGE == "3-2":
+                npc.dialogue = drone32_after_dialogue
+            elif config.CURRENT_STAGE == "3-3":
+                npc.dialogue = drone33_after_dialogue
 
 def trigger_stage_banner(text):
     stage_banner_fx["text"] = text
@@ -2600,6 +2907,9 @@ else:
     config.combat_enabled = True
     print(f"[DEBUG] Enemies in map: {len(enemies)}. Combat enabled.")
 
+_boot_splash(1.0, "로딩 완료!", None)
+time.sleep(0.3)
+
 while running:
     # 게임 루프 시작
     current_time = pygame.time.get_ticks()
@@ -2638,7 +2948,7 @@ while running:
                 def go_menu():
                     import config as _c
                     _c.game_state = _c.GAME_STATE_MENU
-                    pygame.mouse.set_visible(True)
+                    set_cursor_visible_and_grab(True)
                     try:
                         from sound_manager import play_bgm_main
                         play_bgm_main()
@@ -2731,7 +3041,7 @@ while running:
             clock.tick(60)
             continue
 
-        pygame.mouse.set_visible(True)
+        set_cursor_visible_and_grab(True)
         screen.fill((0,0,0))
         logo_bottom = _draw_title(screen)
 
@@ -2790,10 +3100,16 @@ while running:
                             start_transition_old_surface = screen.copy()
                             init_new_game()
                             config.game_state = config.GAME_STATE_PLAYING
-                            pygame.mouse.set_visible(False)
+                            set_cursor_visible_and_grab(False)
                             start_transition_pending = True
-                            from sound_manager import play_bgm_for_stage
-                            play_bgm_for_stage(config.CURRENT_STAGE)
+                            from sound_manager import play_bgm_for_stage, play_bgm_dialogue
+                            if not getattr(config, "intro_shown", False):
+                                try:
+                                    play_bgm_dialogue(fade_ms=1200)
+                                except Exception:
+                                    pass
+                            else:
+                                play_bgm_for_stage(config.CURRENT_STAGE)
                         elif bid == "howto":
                             _menu_modal = {"type":"panel","name":"howto"}
                         elif bid == "credits":
@@ -2825,6 +3141,19 @@ while running:
         # 이벤트 처리
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.WINDOWFOCUSLOST:
+            # Alt+Tab 등 포커스 이탈 시엔 항상 탈출 허용
+            try:
+                pygame.event.set_grab(False)
+            except Exception:
+                pass
+        elif event.type == pygame.WINDOWFOCUSGAINED:
+            # 복귀했는데 커서가 숨김이면 다시 잡기
+            if not pygame.mouse.get_visible():
+                try:
+                    pygame.event.set_grab(True)
+                except Exception:
+                    pass
         elif event.type == pygame.USEREVENT + 1:
             changing_room = False
             pygame.time.set_timer(pygame.USEREVENT + 1, 0)
@@ -2861,7 +3190,7 @@ while running:
                         _pending_dialogue_close_cb = on_dialogue_close
                         dialogue_capture_request = True 
                         mouse_left_released_after_dialogue = True
-                        pygame.mouse.set_visible(False)
+                        set_cursor_visible_and_grab(False)
                         break
                 player_world_x = world_x + player_rect.centerx * PLAYER_VIEW_SCALE
                 player_world_y = world_y + player_rect.centery * PLAYER_VIEW_SCALE
@@ -2869,7 +3198,7 @@ while running:
             elif event.key == pygame.K_TAB:
                 paused = not paused
                 if paused:
-                    pygame.mouse.set_visible(True)
+                    set_cursor_visible_and_grab(True)
                     tab_menu_selected = 0
                     selected_tab = 0
                     for b in bullets:
@@ -2882,7 +3211,7 @@ while running:
                     )
                     pygame.display.flip()
                 else:
-                    pygame.mouse.set_visible(False)
+                    set_cursor_visible_and_grab(False)
                     for bullet in bullets:
                         if isinstance(bullet, ExplosionEffectPersistent):
                             bullet.resume()
@@ -2896,7 +3225,7 @@ while running:
                 else:
                     pause_menu_active = False
                     confirm_quit_active = False
-                    pygame.mouse.set_visible(False)
+                    set_cursor_visible_and_grab(False)
                     pause_frozen_frame = None
                     for b in bullets:
                         if isinstance(b, ExplosionEffectPersistent):
@@ -2931,7 +3260,7 @@ while running:
                 cx, cy = current_room_pos
                 for enemy in enemies[:]:
                     if enemy.alive:
-                        enemy.hit(9999, config.blood_effects)  # 강제로 사망시킴
+                        enemy.hit(9999, config.blood_effects)  # 디버그 - 강제로 사망시킴
                         enemies.remove(enemy)
                 room_key = (cx, cy)
 
@@ -2940,10 +3269,25 @@ while running:
                     portal_spawn_at_ms = pygame.time.get_ticks() + 500
                     print("[DEBUG] Boss room cleared via cheat. Portal will spawn in 0.5s.")
 
+                    try:
+                        from sound_manager import stop_bgm
+                        stop_bgm(fade_ms=700)
+                    except Exception:
+                        pass
+
+                    import config as _cfg
+                    _cfg.SUPPRESS_STAGE_BGM = True
+
                 if room_key in visited_f_rooms:
                     visited_f_rooms[room_key]["cleared"] = True
 
                 world.update_room_state_after_combat(cy, cx)
+                try:
+                    from sound_manager import play_bgm_for_stage
+                    if not getattr(config, "SUPPRESS_STAGE_BGM", False):
+                        play_bgm_for_stage(config.CURRENT_STAGE, fade_ms=1200)
+                except Exception:
+                    pass
 
                 config.combat_state = False
                 config.combat_enabled = False
@@ -3057,7 +3401,7 @@ while running:
 
     if pause_menu_active:
         if not pygame.mouse.get_visible():
-            pygame.mouse.set_visible(True)
+            set_cursor_visible_and_grab(True)
         if pause_frozen_frame is not None:
             screen.blit(pause_frozen_frame, (0,0))
         else:
@@ -3099,7 +3443,7 @@ while running:
                     bid = pause_buttons[pause_menu_hover]["id"]
                     if bid == "resume":
                         pause_menu_active = False
-                        pygame.mouse.set_visible(False)
+                        set_cursor_visible_and_grab(False)
                         for b in bullets:
                             if isinstance(b, ExplosionEffectPersistent):
                                 b.resume()
@@ -3149,7 +3493,7 @@ while running:
                             init_new_game()
                             import config as _c
                             _c.game_state = _c.GAME_STATE_MENU
-                            pygame.mouse.set_visible(True)
+                            set_cursor_visible_and_grab(True)
                         swipe_curtain_transition(screen, old, go_menu, direction="up", duration=0.5)
                         pause_menu_active = False
                         confirm_quit_active = False
@@ -3236,17 +3580,76 @@ while running:
 
     keys = pygame.key.get_pressed()
 
-    if recoil_in_progress or mouse_left_button_down:
+    # DASH 입력/시작
+    _now = pygame.time.get_ticks()
+    mvx = (1 if move_right else 0) - (1 if move_left else 0)
+    mvy = (1 if move_down else 0) - (1 if move_up else 0)
+    if mvx or mvy:
+        # 마지막 이동 방향 갱신
+        last_move_dir = (mvx, mvy)
+
+    shift_down = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+    if shift_down and (not dash_active) and _now >= dash_cooldown_until_ms:
+        # 현재 진행 방향으로 8방향 보정
+        dx, dy = last_move_dir
+        # 0,0이면 대쉬 시작하지 않음
+        if dx or dy:
+            # 8방향 정규화
+            if dx and dy:
+                dx = 1 if dx > 0 else -1
+                dy = 1 if dy > 0 else -1
+            elif dx:
+                dx = 1 if dx > 0 else -1
+                dy = 0
+            else:
+                dy = 1 if dy > 0 else -1
+                dx = 0
+            dash_dir = (dx, dy)
+            dash_active = True
+            dash_end_ms = _now + DASH_DURATION_MS
+            last_dash_time = _now
+            s = sounds.get("whirl")
+            if s: s.play()
+            dash_cooldown_until_ms = _now + DASH_COOLDOWN_MS
+            dash_last_spawn_ms = 0  # 다음 렌더에서 바로 잔상 스폰 허용
+
+    # 사격 반동/마우스 클릭으로 인한 속도 제한은 '대쉬 중'에는 적용하지 않음
+    if ((recoil_in_progress and not dash_active) or
+        (mouse_left_button_down and not dash_active)):
         max_speed = normal_max_speed
     else:
-        if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-            if allow_sprint:
-                max_speed = sprint_max_speed
-        else:
-            max_speed = normal_max_speed
+        # 대쉬 중에는 대쉬 속도로 클램프
+        max_speed = (DASH_SPEED if dash_active else normal_max_speed)
 
     if weapon:
         max_speed *= (1 - weapon.speed_penalty)
+
+    speed_boost_active = False
+    try:
+        cx, cy = current_room_pos
+        if grid[cy][cx] == 'F' and visited_f_rooms.get((cx, cy), {}).get("cleared", False):
+            speed_boost_active = True
+            max_speed *= 3.0
+    except Exception:
+        pass
+    
+    # 바람 줄기 스폰
+    now_ms = pygame.time.get_ticks()
+    px, py = get_player_world_position()
+    if _prev_player_pos is None:
+        _prev_player_pos = (px, py)
+    dx = px - _prev_player_pos[0]
+    dy = py - _prev_player_pos[1]
+    _prev_player_pos = (px, py)
+    move_len = math.hypot(dx, dy)
+    if move_len > 0 and move_len < 50 and speed_boost_active:
+        if now_ms - _last_wind_spawn_ms >= 45:
+            dirx, diry = (dx / move_len, dy / move_len)
+            _spawn_wind_streak(px, py, dirx, diry, jitter_deg=-18, length=28, width=6, life_ms=220)
+            _spawn_wind_streak(px, py, dirx, diry, jitter_deg=+12, length=22, width=5, life_ms=200)
+            if random.random() < 0.5:
+                _spawn_wind_streak(px, py, dirx, diry, jitter_deg=+25, length=18, width=4, life_ms=180)
+            _last_wind_spawn_ms = now_ms
 
     now_ms = pygame.time.get_ticks()
     if now_ms < getattr(config, "slow_until_ms", 0):
@@ -3255,25 +3658,39 @@ while running:
         if hasattr(config, "move_slow_factor"):
             config.move_slow_factor = 1.0
 
-    if move_left:
-        world_vx -= acceleration_rate
-    elif move_right:
-        world_vx += acceleration_rate
+    if dash_active:
+        # 대쉬 중에는 입력 가속/감속 무시하고 고정 속도 (대각선 정규화)
+        dx, dy = dash_dir
+        _len = math.hypot(dx, dy)
+        if _len > 0:
+            world_vx = (dx / _len) * DASH_SPEED
+            world_vy = (dy / _len) * DASH_SPEED
+        else:
+            world_vx = world_vy = 0.0
     else:
-        if world_vx > 0:
-            world_vx = max(0.0, world_vx - deceleration_rate)
-        elif world_vx < 0:
-            world_vx = min(0.0, world_vx + deceleration_rate)
+        if move_left:
+            world_vx -= acceleration_rate
+        elif move_right:
+            world_vx += acceleration_rate
+        else:
+            if world_vx > 0:
+                world_vx = max(0.0, world_vx - deceleration_rate)
+            elif world_vx < 0:
+                world_vx = min(0.0, world_vx + deceleration_rate)
 
-    if move_up:
-        world_vy -= acceleration_rate
-    elif move_down:
-        world_vy += acceleration_rate
-    else:
-        if world_vy > 0:
-            world_vy = max(0.0, world_vy - deceleration_rate)
-        elif world_vy < 0:
-            world_vy = min(0.0, world_vy + deceleration_rate)
+        if move_up:
+            world_vy -= acceleration_rate
+        elif move_down:
+            world_vy += acceleration_rate
+        else:
+            if world_vy > 0:
+                world_vy = max(0.0, world_vy - deceleration_rate)
+            elif world_vy < 0:
+                world_vy = min(0.0, world_vy + deceleration_rate)
+
+# 대쉬 종료 체크
+    if dash_active and pygame.time.get_ticks() >= dash_end_ms:
+        dash_active = False
 
     world_vx = max(-max_speed, min(max_speed, world_vx))
     world_vy = max(-max_speed, min(max_speed, world_vy))
@@ -3561,6 +3978,23 @@ while running:
     rotated_player_image = pygame.transform.rotate(scaled_player_image, -angle_degrees + 90)
     rotated_player_rect = rotated_player_image.get_rect(center=player_rect.center)
 
+    # 대쉬 잔상 스폰
+    _now = pygame.time.get_ticks()
+    if dash_active and (dash_last_spawn_ms == 0 or _now - dash_last_spawn_ms >= DASH_GHOST_SPAWN_MS):
+        try:
+            wx, wy = get_player_world_position()
+        except Exception:
+            # 폴백: 현 프레임의 플레이어 중심을 월드로 역변환
+            wx = rotated_player_rect.centerx + world_x
+            wy = rotated_player_rect.centery + world_y
+        dash_afterimages.append({
+            "wx": float(wx),
+            "wy": float(wy),
+            "angle": float(angle_degrees),
+            "born": int(_now)
+        })
+        dash_last_spawn_ms = _now
+
     gun_pos_x = player_rect.centerx + math.cos(angle_radians) * (current_distance + recoil_offset)
     gun_pos_y = player_rect.centery + math.sin(angle_radians) * (current_distance + recoil_offset)
 
@@ -3568,9 +4002,9 @@ while running:
     recoil_strength = weapon.recoil_strength
 
     if weapon:
-        # 무기 교체 중에는 발사 입력을 완전히 차단
-        effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon)
-        effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon)
+        # 무기 교체 중에는 발사 입력을 완전히 차단, 대쉬 중에는 발사 불가
+        effective_left  = mouse_left_button_down  and (not melee.active) and (not changing_weapon) and (not dash_active)
+        effective_right = mouse_right_button_down and (not melee.active) and (not changing_weapon) and (not dash_active)
 
         # 대화/일시정지/전환 직후의 클릭잔상 방지
         if (mouse_left_released_after_dialogue
@@ -3619,7 +4053,6 @@ while running:
                 recoil_in_progress = True
                 recoil_offset = 0
                 recoil_velocity = -weapon.recoil_strength
-                allow_sprint = False
                 shake_timer = int(weapon.shake_strength)
 
     recoil_velocity += 1.5
@@ -3628,7 +4061,6 @@ while running:
         recoil_offset = 0
         recoil_velocity = 0
         recoil_in_progress = False
-        allow_sprint = True
 
     delta_seconds = clock.get_time() / 1000.0
     if shake_timer > 0:
@@ -3675,7 +4107,27 @@ while running:
         world.update_room_state_after_combat(cy, cx)
 
         if grid[cy][cx] == 'E':
+            import config as _cfg
+            if grid[cy][cx] == 'E':
+                # 보스방: Boss/Stage BGM 모두 정지 + 이후 자동재생 억제
+                try:
+                    from sound_manager import stop_bgm
+                    # load 없이 부드럽게 페이드아웃 → '뚝' 끊김 방지
+                    stop_bgm(fade_ms=800)
+                except Exception:
+                    pass
+                _cfg.SUPPRESS_STAGE_BGM = True
+            else:
+                # 일반 F방: suppress가 꺼져 있으면 평소대로 스테이지 BGM 복귀
+                try:
+                    from sound_manager import play_bgm_for_stage
+                    if not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
+                        play_bgm_for_stage(_cfg.CURRENT_STAGE, fade_ms=1200)
+                except Exception:
+                    pass
+
             room_portals[room_key] = True
+        
             # 현재 방에 머무는 중이면 0.5초 뒤 스폰
             portal_spawn_at_ms = pygame.time.get_ticks() + 500
             print("[DEBUG] Boss room cleared. Portal will spawn in 0.5s.")
@@ -3744,19 +4196,37 @@ while running:
             screen.blit(weapon_img_scaled, (screen_x - scaled_width//2, screen_y - scaled_height//2))
 
             dist = math.hypot(shop_item.x - player_center_x, shop_item.y - player_center_y)
-            if dist < 100:
-                text_color = (100,255,100) if shop_item.purchased else (160,60,255)
-                key = shop_item.weapon_class.__name__.lower()
-                weapon_name = weapon_stats.get(key, {}).get("name", key)
-                price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, text_color)
-                name_text = KOREAN_FONT_BOLD_20.render(f"{weapon_name}", True, text_color)
-                info_text = KOREAN_FONT_BOLD_20.render("구매완료" if shop_item.purchased else "구매 (Space)", True, text_color)
-                y_cursor = screen_y - scaled_height//2 - price_text.get_height() - name_text.get_height() - 12
-                screen.blit(price_text, (screen_x - price_text.get_width()//2, y_cursor))
-                screen.blit(name_text, (screen_x - name_text.get_width()//2, y_cursor + price_text.get_height() + 2))
-                screen.blit(info_text, (screen_x - info_text.get_width()//2, y_cursor + price_text.get_height() + name_text.get_height() + 6))
+            near = dist < 100
 
-                if not shop_item.purchased and keys[pygame.K_SPACE]:
+            # 텍스트(작은 폰트) 구성: 가격(흰) / 이름(등급색) / 구매안내(흰, 근접 시)
+            weapon_name, name_color = _get_weapon_name_and_color(shop_item.weapon_class)
+            price_line = f"필요 악의 정수: {shop_item.price}"
+            price_surf = KOREAN_FONT_BOLD_18.render(price_line, True, (255, 255, 255))
+            name_surf  = KOREAN_FONT_BOLD_18.render(weapon_name, True, name_color)
+            if near:
+                info_line = "구매완료" if shop_item.purchased else "구매(Space)"
+                info_surf = KOREAN_FONT_BOLD_18.render(info_line, True, (255, 255, 255))
+                lines = [price_surf, name_surf, info_surf]
+            else:
+                lines = [price_surf, name_surf]
+
+            # 박스 크기 계산(가운데 정렬)
+            pad_x, pad_y = 10, 6
+            box_w = max(s.get_width() for s in lines) + pad_x * 2
+            box_h = sum(s.get_height() for s in lines) + pad_y * 2 + (len(lines) - 1) * 3
+            box_rect = pygame.Rect(0, 0, box_w, box_h)
+            box_rect.center = (screen_x, screen_y - scaled_height//2 - box_h//2 - 8)
+            pygame.draw.rect(screen, (0, 0, 0), box_rect, border_radius=8)
+
+            # 텍스트 그리기(세 줄/두 줄)
+            y_cursor = box_rect.top + pad_y
+            for s in lines:
+                screen.blit(s, (box_rect.centerx - s.get_width()//2, y_cursor))
+                y_cursor += s.get_height() + 3
+
+                keys = pygame.key.get_pressed()
+                space_down = keys[pygame.K_SPACE]
+                if near and (not shop_item.purchased) and space_down and (not space_pressed_last_frame):
                     if config.player_score >= shop_item.price:
                         config.player_score -= shop_item.price
                         shop_item.purchased = True
@@ -3767,6 +4237,8 @@ while running:
                             )
                             weapons.append(new_weapon)
                             current_weapon_index = len(weapons) - 1
+                            space_pressed_last_frame = True
+                            break
                         else:
                             current_weapon_class = weapons[current_weapon_index].__class__
                             dropped_fw = FieldWeapon(
@@ -3784,9 +4256,9 @@ while running:
                     else:
                         pass
             else:
-                gray = (180,180,180)
-                price_text = KOREAN_FONT_BOLD_20.render(f"{shop_item.price}", True, gray)
-                screen.blit(price_text, (screen_x - price_text.get_width()//2, screen_y - scaled_height//2 - price_text.get_height() - 4))
+                pass
+    keys = pygame.key.get_pressed()
+    space_pressed_last_frame = keys[pygame.K_SPACE]
 
     for scatter in scattered_bullets[:]:
         # 탄피 이펙트 업데이트
@@ -3916,7 +4388,7 @@ while running:
     )
     obstacle_manager.draw_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y, player_center_world, enemies)
 
-    # 빨간색 선 히트박스 보이기 디버그
+    # 디버그 - 빨간색 선 히트박스 보이기
     # for obs in obstacles_to_check:
     #     for c in obs.colliders:
     #         c.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, (obs.world_x, obs.world_y))
@@ -4055,8 +4527,102 @@ while running:
                         except Exception:
                             pass
     melee.draw(screen, (world_x - shake_offset_x, world_y - shake_offset_y))
+    # 바람 줄기 렌더
+    # 작은 투명 Surface 위에 흰색(알파) 직사각형을 그려 회전 후 블릿
+    now_ms = pygame.time.get_ticks()
+    if speed_wind_trails:
+        alive = []
+        for t in speed_wind_trails:
+            age = now_ms - t["birth_ms"]
+            life = t["life_ms"]
+            if age >= life:
+                continue
+            # 페이드아웃
+            k = 1.0 - (age / life)
+            alpha = int(165 * k)
+            length = int(t["length"] * (0.9 + 0.1 * k))  # 살짝 줄어드는 느낌
+            width  = max(2, int(t["width"]  * (0.8 + 0.2 * k)))
+            # 스크린 좌표 변환
+            sx = int(t["x"] - world_x + shake_offset_x)
+            sy = int(t["y"] - world_y + shake_offset_y)
+            # 조그만 SRCALPHA 캔버스에 스트릭 그리기
+            streak = pygame.Surface((length, width), pygame.SRCALPHA)
+            pygame.draw.rect(streak, (255, 255, 255, alpha), (0, 0, length, width), border_radius=width//2)
+            rotated = pygame.transform.rotate(streak, -t["angle_deg"])  # 화면 좌표계 보정
+            rect = rotated.get_rect(center=(sx, sy))
+            screen.blit(rotated, rect)
+            alive.append(t)
+        speed_wind_trails[:] = alive
+
     if not player_dead:
+        # 대쉬 잔상 렌더
+        if dash_afterimages:
+            now_ms = pygame.time.get_ticks()
+            keep = []
+            for g in dash_afterimages:
+                age = now_ms - g["born"]
+                if age >= DASH_GHOST_LIFE_MS:
+                    continue
+                k = 1.0 - (age / DASH_GHOST_LIFE_MS)
+                alpha = int(DASH_GHOST_ALPHA_MAX * k)
+                # 월드 → 스크린 변환 + 화면 쉐이크 적용
+                sx = int(g["wx"] - world_x + shake_offset_x)
+                sy = int(g["wy"] - world_y + shake_offset_y)
+                # 플레이어 스프라이트를 기반으로 반투명 복제본 생성
+                ghost_base = pygame.transform.smoothscale(
+                    original_player_image,
+                    (int(original_player_image.get_width() * PLAYER_VIEW_SCALE),
+                     int(original_player_image.get_height() * PLAYER_VIEW_SCALE))
+                )
+                ghost_img = pygame.transform.rotate(ghost_base, -g["angle"] + 90)
+                ghost_img.set_alpha(alpha)
+                ghost_rect = ghost_img.get_rect(center=(sx, sy))
+                screen.blit(ghost_img, ghost_rect)
+                keep.append(g)
+            dash_afterimages[:] = keep
+
+        # 플레이어 본체
         screen.blit(rotated_player_image, rotated_player_rect.move(shake_offset_x, shake_offset_y))
+
+        # 대쉬 게이지 바(플레이어 하단, 고정 위치)
+        now_ms = pygame.time.get_ticks()
+        # 0~1 충전율 계산 (쿨다운 남은 시간 기반)
+        if DASH_COOLDOWN_MS <= 0:
+            cd_ratio = 1.0
+        else:
+            remain = max(0, dash_cooldown_until_ms - now_ms)
+            cd_ratio = 1.0 - (remain / float(DASH_COOLDOWN_MS))
+            cd_ratio = max(0.0, min(1.0, cd_ratio))
+
+        # 표시 여부: 충전 중이거나 대쉬 중엔 항상 표시.
+        # 100%가 된 뒤에는 0.3초만 더 보여주고 자동으로 숨김.
+        if cd_ratio < 1.0 or dash_active:
+            dash_gauge_full_time_ms = -1
+            _show_gauge = True
+        else:
+            if dash_gauge_full_time_ms < 0:
+                dash_gauge_full_time_ms = now_ms
+            _show_gauge = (now_ms - dash_gauge_full_time_ms) <= DASH_GAUGE_FULL_HOLD_MS
+
+        if _show_gauge:
+            # 바 스타일
+            bar_w = int(60 * PLAYER_VIEW_SCALE)
+            bar_h = int(4  * PLAYER_VIEW_SCALE)
+            # '회전된 스프라이트 크기'가 아니라 화면 중심 기준(플레이어 고정)으로 배치
+            bar_cx = player_rect.centerx + shake_offset_x
+            bar_cy = player_rect.bottom  + int(4 * PLAYER_VIEW_SCALE) + shake_offset_y
+            bg_rect = pygame.Rect(0, 0, bar_w, bar_h)
+            bg_rect.center = (bar_cx, bar_cy)
+            pygame.draw.rect(screen, (0, 0, 0), bg_rect, border_radius=bar_h//2)
+            # 진행도(쿨다운 충전)
+            fill_w = int(bar_w * cd_ratio)
+            if fill_w > 0:
+                fill_rect = pygame.Rect(bg_rect.left, bg_rect.top, fill_w, bar_h)
+                col = (180 + int(75*cd_ratio), 220, 255)  # 연한 시안 → 밝은 시안
+                pygame.draw.rect(screen, col, fill_rect, border_radius=bar_h//2)
+            # 준비완료 하이라이트(보이는 동안에만)
+            if cd_ratio >= 1.0 and not dash_active:
+                pygame.draw.rect(screen, (240, 240, 240), bg_rect, width=1, border_radius=bar_h//2)
 
     try:
         import config as _cfg
@@ -4150,13 +4716,27 @@ while running:
         mouse_left_released_after_transition = True
 
         if not getattr(config, "intro_shown", False):
+            try:
+                play_bgm_dialogue(fade_ms=1400)
+            except Exception:
+                pass
             _pending_dialogue = intro_dialogue
             _pending_dialogue_effect_cb = apply_effect
-            _pending_dialogue_close_cb = on_dialogue_close
+
+            def _after_intro_close():
+                # 인트로 종료 시 스테이지 BGM으로 복귀하도록 콜백 래핑
+                try:
+                    from sound_manager import play_bgm_for_stage
+                    import config as _cfg
+                    if not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
+                        play_bgm_for_stage(config.CURRENT_STAGE)
+                except Exception:
+                    pass
+                on_dialogue_close()
+            _pending_dialogue_close_cb = _after_intro_close
             _pending_dialogue_style = "cinema"
             dialogue_capture_request = True
             config.intro_shown = True
-
 
     if slide_direction:
         # 방 전환 실행
@@ -4290,7 +4870,7 @@ while running:
             _pending_dialogue_effect_cb = None
             _pending_dialogue_close_cb = None
             _pending_dialogue_style = None
-            pygame.mouse.set_visible(False)
+            set_cursor_visible_and_grab(False)
             dialogue_capture_request = False
             pygame.display.flip()
             clock.tick(60)
@@ -4299,7 +4879,7 @@ while running:
             pause_frozen_frame = screen.copy()
             pause_menu_active = True
             confirm_quit_active = False
-            pygame.mouse.set_visible(True)
+            set_cursor_visible_and_grab(True)
             pause_request = False
             for b in bullets:
                 if isinstance(b, ExplosionEffectPersistent):
@@ -4326,7 +4906,7 @@ while running:
                     pass
                 gameover_sfx_played = True
             screen.fill((0, 0, 0))
-            pygame.mouse.set_visible(True)
+            set_cursor_visible_and_grab(True)
 
             title = TITLE_FONT.render("사망하였습니다.", True, (235, 235, 235))
             sub   = SUB_FONT.render("당신의 운명이 중단되었습니다.", True, (190, 190, 190))
@@ -4354,7 +4934,7 @@ while running:
                 def _draw_new():
                     render_game_frame()
                 swipe_curtain_transition(screen, old_surface, _draw_new, direction="right", duration=0.5)
-                pygame.mouse.set_visible(False)
+                set_cursor_visible_and_grab(False)
                 _retry_requested = False
                 _exit_requested = False
                 _go_hover = -1
@@ -4362,7 +4942,9 @@ while running:
                 player_dead = False
                 gameover_sfx_played = False
                 from sound_manager import play_bgm_for_stage
-                play_bgm_for_stage(config.CURRENT_STAGE)
+                import config as _cfg
+                if not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
+                    play_bgm_for_stage(config.CURRENT_STAGE)
             elif _exit_requested:
                 old_surface = screen.copy()
                 def _draw_menu():
@@ -4370,7 +4952,7 @@ while running:
                     _draw_title(screen)
                 config.game_state = config.GAME_STATE_MENU
                 swipe_curtain_transition(screen, old_surface, _draw_menu, direction="down", duration=0.5)
-                pygame.mouse.set_visible(True)
+                set_cursor_visible_and_grab(True)
                 _retry_requested = False
                 _exit_requested  = False
                 _go_hover = -1
@@ -4415,6 +4997,10 @@ while running:
         rect = rotated.get_rect(center=(mx, my))
         screen.blit(rotated, rect)
 
+    _sync_mouse_grab_to_visibility()
     pygame.display.flip()
     clock.tick(60)
+
+pygame.mouse.set_visible(True)
+pygame.event.set_grab(False)
 pygame.quit()

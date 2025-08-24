@@ -3,7 +3,7 @@ import math
 import random
 from config import *
 import config
-from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile, AcidPool
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile
 
 ENEMY_CLASSES = []
 
@@ -1761,7 +1761,7 @@ class Enemy9(AIBase):
     rank = 5
     HP = 430
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
-    RANGED_COOLDOWN = 1800
+    RANGED_COOLDOWN = 2500
     RANGED_RANGE = 1000
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
@@ -2160,9 +2160,9 @@ class Enemy11(AIBase):
     rank = 5
 
     DETECT_RADIUS = int(600 * PLAYER_VIEW_SCALE)
-    TRIGGER_RADIUS = int(160 * PLAYER_VIEW_SCALE)
-    CANCEL_RADIUS = int(220 * PLAYER_VIEW_SCALE)
-    PREPARE_MS = 2000
+    TRIGGER_RADIUS = int(250 * PLAYER_VIEW_SCALE)
+    CANCEL_RADIUS = int(300 * PLAYER_VIEW_SCALE)
+    PREPARE_MS = 1000
 
     EXPLOSION_RADIUS = int(220 * PLAYER_VIEW_SCALE)
     EXPLOSION_DAMAGE = 60
@@ -5953,8 +5953,14 @@ class Enemy24(AIBase):
 
             if now >= self._next_pulse_at:
                 try:
-                    if self.snd_pulse_tick: self.snd_pulse_tick.play()
-                except: pass
+                    if self.snd_pulse_tick:
+                        try:
+                            self.snd_pulse_tick.stop()
+                        except: 
+                            pass
+                        self.snd_pulse_tick.play(fade_ms=20)
+                except:
+                    pass
                 self._next_pulse_at = now + self._cocoon_pulse_interval(now)
 
             if now >= self._cocoon_ends_at:
@@ -7594,7 +7600,7 @@ class Boss2(AIBase):
 class Boss3(AIBase):
     rank = 10
 
-    HP_MAX = 2100
+    HP_MAX = 2000
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
     RADIUS = 50
 
@@ -9139,7 +9145,7 @@ class Boss5(AIBase):
 class Boss6(AIBase):
     rank = 10
 
-    HP_MAX   = 3600
+    HP_MAX   = 3500
     SPEED    = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.72
     RADIUS   = int(48 * PLAYER_VIEW_SCALE)
     KEEP_MIN = int(260 * PLAYER_VIEW_SCALE)
@@ -10098,7 +10104,7 @@ class Boss6(AIBase):
 class Boss7(AIBase):
 
     rank   = 10
-    HP_MAX = 4800
+    HP_MAX = 4500
     RADIUS = int(52 * PLAYER_VIEW_SCALE)
     SPEED  = 0.0
     ORIENT_OFFSET_DEG = 270

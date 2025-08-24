@@ -9,6 +9,7 @@ START_MAP = {
         {"x": 100, "y": 100, "npc_type": "soldier1_npc"},
         {"x": 100, "y": 100, "npc_type": "soldier2_npc"},
         {"x": 100, "y": 100, "npc_type": "soldier3_npc"},
+        {"x": 100, "y": 100, "npc_type": "drone_npc"},
     ],
     "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
@@ -58,6 +59,56 @@ BOSS_MAP_6 = {
 BOSS_MAP_7 = {
     "obstacles": [],
     "enemy_infos": [{"x": 1600, "y": 1200, "enemy_type": "boss7"}],
+    "crop_rect": {"x_ratio": 2, "y_ratio": 2}
+}
+
+BOSS_MAP_8 = {
+    "obstacles": [],
+    "enemy_infos": [
+        {"x": 1960.0, "y": 1200.0, "enemy_type": "enemy3"},
+        {"x": 1780.0, "y": 1511.77, "enemy_type": "enemy14"},
+        {"x": 1420.0, "y": 1511.77, "enemy_type": "enemy17"},
+        {"x": 1240.0, "y": 1200.0, "enemy_type": "enemy3"},
+        {"x": 1420.0, "y": 888.23,  "enemy_type": "enemy14"},
+        {"x": 1780.0, "y": 888.23,  "enemy_type": "enemy3"},
+
+        {"x": 2260.0, "y": 1200.0,  "enemy_type": "enemy9"},
+        {"x": 1930.0, "y": 1771.58, "enemy_type": "enemy24"},
+        {"x": 1270.0, "y": 1771.58, "enemy_type": "enemy14"},
+        {"x": 940.0,  "y": 1200.0,  "enemy_type": "enemy9"},
+        {"x": 1270.0, "y": 628.42,  "enemy_type": "enemy14"},
+        {"x": 1930.0, "y": 628.42,  "enemy_type": "enemy9"}
+    ],
+    "crop_rect": {"x_ratio": 2, "y_ratio": 2}
+}
+
+BOSS_MAP_9 = {
+    "obstacles": [],
+    "enemy_infos": [
+        # inner ring (r=320, 8기): 근접 압박(27/24)와 돌진/자폭 혼합
+        {"x": 1920.0, "y": 1200.0,  "enemy_type": "enemy27"},
+        {"x": 1826.27,"y": 1426.27, "enemy_type": "enemy17"},
+        {"x": 1600.0, "y": 1520.0,  "enemy_type": "enemy27"},
+        {"x": 1373.73,"y": 1426.27, "enemy_type": "enemy24"},
+        {"x": 1280.0, "y": 1200.0,  "enemy_type": "enemy17"},
+        {"x": 1373.73,"y": 973.73,  "enemy_type": "enemy3"},
+        {"x": 1600.0, "y": 880.0,   "enemy_type": "enemy14"},
+        {"x": 1826.27,"y": 973.73,  "enemy_type": "enemy3"},
+
+        # outer ring (r=640, 8기): 외곽 화력/존재감(9/11/24/14)
+        {"x": 2240.0, "y": 1200.0,  "enemy_type": "enemy9"},
+        {"x": 2052.55,"y": 1652.55, "enemy_type": "enemy11"},
+        {"x": 1600.0, "y": 1840.0,  "enemy_type": "enemy24"},
+        {"x": 1147.45,"y": 1652.55, "enemy_type": "enemy14"},
+        {"x": 960.0,  "y": 1200.0,  "enemy_type": "enemy9"},
+        {"x": 1147.45,"y": 747.45,  "enemy_type": "enemy11"},
+        {"x": 1600.0, "y": 560.0,   "enemy_type": "enemy24"},
+        {"x": 2052.55,"y": 747.45,  "enemy_type": "enemy14"},
+
+        # mid ring (r=480, 2기): 현장 지휘/돌파 역할(27/24)
+        {"x": 2015.69,"y": 1440.0,  "enemy_type": "enemy27"},
+        {"x": 1184.31,"y": 960.0,   "enemy_type": "enemy24"}
+    ],
     "crop_rect": {"x_ratio": 2, "y_ratio": 2}
 }
 
@@ -3017,5 +3068,5 @@ S3_FIGHT_MAPS = [
 ]
 
 MAPS = [START_MAP, END_MAP, ACQUIRE_MAP_1, ACQUIRE_MAP_2, ACQUIRE_MAP_3]
-BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3, BOSS_MAP_4, BOSS_MAP_5, BOSS_MAP_6, BOSS_MAP_7]
+BOSS_MAPS = [BOSS_MAP_1, BOSS_MAP_2, BOSS_MAP_3, BOSS_MAP_4, BOSS_MAP_5, BOSS_MAP_6, BOSS_MAP_7, BOSS_MAP_8, BOSS_MAP_9]
 FIGHT_MAPS = S1_FIGHT_MAPS

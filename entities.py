@@ -7,6 +7,8 @@ from config import PLAYER_VIEW_SCALE
 import pygame.sndarray
 import config
 from ui import KOREAN_FONT_28
+from text_data import weapon_stats
+import re
 
 PARTICLE_COUNT = 30
 PARTICLE_SIZE = int(6 * PLAYER_VIEW_SCALE)
@@ -14,6 +16,14 @@ PARTICLE_SPEED_MIN = 4
 PARTICLE_SPEED_MAX = 12
 PARTICLE_LIFETIME = 2000
 PARTICLE_FADE_TIME = 500
+
+RARITY_COLORS = {
+    1: (255, 255, 255),
+    2: (0, 255, 0),
+    3: (0, 128, 255),
+    4: (160, 32, 240),
+    5: (255, 255, 0),
+}
 
 class MerchantNPC:
     def __init__(self, image, x, y, dialogue):
@@ -197,8 +207,23 @@ class FieldWeapon:
             anim_offset = 5 if phase == 1 else 0
             tri_y = base_tri_y + anim_offset
 
-            text_surf = KOREAN_FONT_28.render(self.weapon_name, True, (255, 255, 255))
-
+            # 등급별 이름 색상 적용
+            cls_name = self.weapon_class.__name__.lower()
+            if cls_name in weapon_stats:
+                weapon_id = cls_name
+            else:
+                m = re.match(r'gun\d+$', cls_name) or re.search(r'gun(\d+)', cls_name)
+                weapon_id = (m.group(0) if (m and m.group(0).startswith('gun'))
+                             else (f"gun{m.group(1)}" if m else None))
+            # weapon_stats의 rank는 문자열 → 정수로 변환해 색상 매핑
+            rank_val = weapon_stats.get(weapon_id, {}).get("rank", "1")
+            try:
+                rank_i = int(rank_val)
+            except Exception:
+                rank_i = 1
+            name_color = RARITY_COLORS.get(rank_i, RARITY_COLORS[1])
+            text_surf = KOREAN_FONT_28.render(self.weapon_name, True, name_color)
+            
             padding_x = 6
             padding_y = 4
             bg_rect = pygame.Rect(0, 0, text_surf.get_width() + padding_x * 2, text_surf.get_height() + padding_y * 2)

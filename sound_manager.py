@@ -135,8 +135,8 @@ def load_sounds():
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)
     weapon_sounds["gun6_leftfire"].set_volume(0.85)
-    weapon_sounds["gun15_leftfire"].set_volume(0.3)
-    weapon_sounds["gun15_rightfire"].set_volume(0.4)
+    weapon_sounds["gun15_leftfire"].set_volume(0.4)
+    weapon_sounds["gun15_rightfire"].set_volume(0.5)
     weapon_sounds["gun29_fire"].set_volume(0.7)
 
 
@@ -236,6 +236,7 @@ def cut_bgm():
 
 def play_bgm_for_stage(stage_like, fade_ms: int = 600):
     # 스테이지(1/2/3 또는 '1-1' 등)를 받아 해당 BGM을 무한 반복 재생
+
     global _bgm_current_key
     _ensure_bgm_files()
     key = _stage_to_key(stage_like)

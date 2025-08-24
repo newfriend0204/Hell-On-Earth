@@ -253,11 +253,13 @@ def draw_cinematic_dialogue(screen, node):
         iy = img_center_y - (img.get_height() // 2)
         screen.blit(surf, (ix, iy))
 
+    # 크로스페이드: 이전(prv)은 서서히 사라지고, 현재(cur)는 동시에 나타남
     a = max(0.0, min(1.0, float(image_fade)))
+    s = (a * a * (3 - 2 * a))
     if prv:
-        _blit_center(prv, int(255 * (1.0 - a)))
+        _blit_center(prv, int(255 * (1.0 - s)))
     if cur:
-        _blit_center(cur, int(255 * a))
+        _blit_center(cur, int(255 * s))
 
     # 힌트
     hint_font = pygame.font.Font(FONT_PATH, 18)

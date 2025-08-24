@@ -14,7 +14,7 @@ GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
 GAME_STATE_ENDING_STORY = 4
 GAME_STATE_ENDING_CREDITS = 5
-game_state = 1
+game_state = 0
 intro_shown = False
 
 # 배경 크기
@@ -27,7 +27,6 @@ ASSET_DIR = os.path.join(BASE_DIR, "Asset")
 
 # 속도
 NORMAL_MAX_SPEED = 6
-SPRINT_MAX_SPEED = 30 #9 디버그
 
 # 사운드 설정
 WALK_VOLUME = 0.5
@@ -50,7 +49,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 55, 2: 33, 3: 12}
     },
     "1-3": {
-        "boss_map": 2,
+        "boss_map": 7,
         "enemy_rank_range": (2, 5),
         "min_f_rooms": 6,
         "max_f_rooms": 7,
@@ -74,7 +73,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 12, 2: 50, 3: 32, 4: 6}
     },
     "2-3": {
-        "boss_map": 2,
+        "boss_map": 8,
         "enemy_rank_range": (3, 6),
         "min_f_rooms": 6,
         "max_f_rooms": 8,
@@ -106,7 +105,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "3-3"
+CURRENT_STAGE = "2-3"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
@@ -149,8 +148,30 @@ TIER_PRICES = {
     5: 100
 }
 
+SHOP_TIER_WEIGHT_BIAS = {
+    1: 0.5,
+    2: 1.0,
+    3: 1.8,
+    4: 3.0,
+    5: 4.0,
+}
+
+def get_shop_tier_weights(stage: str):
+    # 상점 전용 확률표 반환.
+    base = STAGE_DATA[stage]["weapon_tier_weights"]
+    out = {}
+    for tier, w in base.items():
+        if w <= 0:
+            continue
+        bias = SHOP_TIER_WEIGHT_BIAS.get(tier, 1.0)
+        out[tier] = float(w) * bias
+    if not out:
+        return base.copy()
+    return out
+
 combat_state = False
 combat_enabled = True
+SUPPRESS_STAGE_BGM = False
 images = None
 player_score = 10000 # 디버그, 원래는 0
 

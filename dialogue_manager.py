@@ -32,7 +32,7 @@ class DialogueManager:
 
         self._img_prev_name = None
         self._img_fade_start_ms = 0
-        self._img_fade_dur_ms = 320
+        self._img_fade_dur_ms = 650
         self._img_fade = 1.0
 
     def set_hud_status(self, hp, hp_max, ammo, ammo_max):
@@ -138,7 +138,7 @@ class DialogueManager:
             if text_to_push:
                 self.enqueue_history_line(node.get("speaker", ""), text_to_push)
 
-        # 이미지 페이드 준비(현재 → 다음). 같은 파일이면 유지(페이드 없음)
+        # 이미지 크로스페이드 준비(현재 → 다음). 같은 파일이면 페이드 생략
         old_node = self._current_node()
         old_img = old_node.get("image") if old_node else None
         if next_idx is not None:
@@ -256,7 +256,7 @@ class DialogueManager:
         self._refresh_typing_target_if_needed()
         self._advance_typing()
 
-        # 이미지 페이드 진행
+        # 이미지 페이드 진행(0.0→1.0)
         if self.active and self.style == "cinema":
             now = pygame.time.get_ticks()
             t = (now - self._img_fade_start_ms) / max(1, self._img_fade_dur_ms)

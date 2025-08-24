@@ -553,7 +553,7 @@ intro_dialogue = [
     {"speaker": "나", "text": "우리는 비밀리에 전세계적으로 기지를 세워서, \"포탈\"과 그 차원에 대해서 연구하는 조직이다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 4},
     {"speaker": "나", "text": "뭐… 나는 그 복잡한 포탈을 연구하는 사람은 아니다. 그냥 그곳을 지키고 있는 여러 경비원들중 하나지.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 5},
     {"speaker": "나", "text": "도시전설에 비유하자면, SCP재단이 있다. 다른게 있다면, 우리는 실존한다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 6},
-    {"speaker": "나", "text": "그렇게 그저 그런 하루들이 지나가면 좋았겠지만, 사건은 결국 터지고 말았다.", "image": "NFLogo.png", "choices": None, "effect": None, "next": 7},
+    {"speaker": "나", "text": "그렇게 그저 그런 하루들이 지나가면 좋았겠지만, 사건은 결국 터지고 말았다.", "image": "Story1.png", "choices": None, "effect": None, "next": 7},
     {"speaker": "나", "text": "우리는 깊은 숲속에 있는 \"폭스트롯 기지\"에서 근무한다. 다만, 성과가 별로 없었던건지, 지부장은 계획 하나를 실행했다.", "image": "Story1.png", "choices": None, "effect": None, "next": 8},
     {"speaker": "나", "text": "계획 이름은 \"포탈 규격화 실험 3배\".", "image": "Story2.png", "choices": None, "effect": None, "next": 9},
     {"speaker": "나", "text": "안전하지도 않은 이 실험은 지부장과 상급 과학자 한명만 알고 있었고, 비밀리에 실험이 진행되었다.", "image": "Story2.png", "choices": None, "effect": None, "next": 10},
@@ -568,7 +568,7 @@ intro_dialogue = [
 ending_dialogue = [
     {"speaker": "나",   "text": "그리하여, 이 짧고도 긴 여정이자, 모험이 마무리되었다.", "image": "Story6.png",  "choices": None, "effect": None, "next": 1},
     {"speaker": "나",   "text": "새친 연구원의 말대로, 절대악이 쓰러지자, 지옥이 본래의 모습을 되찾았다.", "image": "Story6.png",  "choices": None, "effect": None, "next": 2},
-    {"speaker": "나",   "text": "그것은... 마치 또 하나의 지구처럼 보이고 있었다.", "image": "Story7.png",  "choices": None, "effect": None, "next": 3},
+    {"speaker": "나",   "text": "그것은… 마치 또 하나의 지구처럼 보이고 있었다.", "image": "Story7.png",  "choices": None, "effect": None, "next": 3},
     {"speaker": "나",   "text": "그리고, 지구에 있던 홀린 군인들은 다시 정신을 되찾았다.", "image": "Story7.png",  "choices": None, "effect": None, "next": 4},
     {"speaker": "나",   "text": "그들과 군인, 그리고 과학자들은 지구에서 남은 악마들을 처리하고 있다.", "image": "Story8.png",  "choices": None, "effect": None, "next": 5},
     {"speaker": "나",   "text": "그러나, 우리는 다르다.", "image": "Story8.png",  "choices": None, "effect": None, "next": 6},
@@ -579,6 +579,7 @@ ending_dialogue = [
     {"speaker": "나",   "text": "적어도 그때처럼 악마들을 죽이는 것 보단 훨씬 재밌겠지.", "image": "Story10.png", "choices": None, "effect": None, "next": 11},
     {"speaker": "나",   "text": "나는 천천히, 한걸음 한걸음 나아간다.", "image": "Story10.png", "choices": None, "effect": None, "next": 12},
     {"speaker": "나",   "text": "더 밝은 미래를 향하여, 더 나은 세상을 위하여.", "image": "Story10.png", "choices": None, "effect": None, "next": 13},
+    {"speaker": "",   "text": "~END~", "image": "Story10.png", "choices": None, "effect": None, "next": None},
 ]
 
 doctorNF_dialogue = [
@@ -1401,7 +1402,7 @@ scientist3_before_dialogue = [
     },
     {
         "speaker": "NF 리마 기지 과학자1",
-        "text": "그래도, 저 괴물의 행동을 알고 있는게 중요하겠죠. 제가 분석해봤어요.",
+        "text": "그래도, 저 괴물들에 대해 간략히는 알고 있으신게 좋으시겠죠.",
         "choices": None,
         "effect": None,
         "next": 4
@@ -1422,7 +1423,7 @@ scientist3_before_dialogue = [
     },
     {
         "speaker": "NF 리마 기지 과학자1",
-        "text": "하지만 그래도, 저희가 지금까지 보지 못했던 적들도 조금 보이는 것 같습니다. 조심하세요/",
+        "text": "하지만 그래도, 저희가 지금까지 보지 못했던 적들도 조금 보이는 것 같습니다. 조심하세요.",
         "choices": None,
         "effect": None,
         "next": 7
@@ -1592,10 +1593,31 @@ drone31_before_dialogue = [
     },
     {
         "speaker": "드론(새친 연구원)",
-        "text": "(대충 패턴 말하기)",
+        "text": "저것은 계속 낮은 등급의 적들을 소환하는 존재야.",
         "choices": None,
         "effect": None,
         "next": 5
+    },
+    {
+        "speaker": "드론(새친 연구원)",
+        "text": "물론 너도 그 존재들을 계속 보고 있었겠지만, 저것은 더 높은 등급을 소환하지.",
+        "choices": None,
+        "effect": None,
+        "next": 6
+    },
+    {
+        "speaker": "드론(새친 연구원)",
+        "text": "그것이 끝이 아니다. 저것은 \"레이저\"라는 것을 계속 발산하고 있어.",
+        "choices": None,
+        "effect": None,
+        "next": 7
+    },
+    {
+        "speaker": "드론(새친 연구원)",
+        "text": "레이저가 발사되기 전, 나올 위치가 미리 표시되니, 너는 그것에 따라 피하면서 게속 공격을 하면 좋을 거야.",
+        "choices": None,
+        "effect": None,
+        "next": 8
     },
     {
         "speaker": "드론(새친 연구원)",
@@ -1710,7 +1732,7 @@ drone32_dialogue = [
     },
 ]
 
-drone32_after_dialogue = [
+drone32_before_dialogue = [
     {
         "speaker": "드론(NF 과학자2)",
         "text": "여기까지 오셨네요. 절대악과의 거리가 거의 좁혀졌어요!",
@@ -1790,24 +1812,41 @@ drone32_after_dialogue = [
     },
 ]
 
-drone33_dialogue = [
+drone32_after_dialogue = [
     {
-        "speaker": "드론(새친 연구원)",
-        "text": "여기까지 왔군.",
+        "speaker": "드론(NF 과학자2)",
+        "text": "잡으셨군요! 이제 거의 마지막에 도달했습니다.",
         "choices": None,
         "effect": None,
         "next": 1
     },
     {
-        "speaker": "나",
-        "text": "(새친 연구원의 안색이 급격히 나빠진 것을 보며, 괜찮냐고 질문한다.)",
+        "speaker": "드론(NF 과학자2)",
+        "text": "현재 거의다 연구가 완료되었습니다. 아마 당신이 포탈을 타고 넘어갈 때면, 모두 끝나있을 거에요.",
         "choices": None,
         "effect": None,
         "next": 2
     },
     {
+        "speaker": "드론(NF 과학자2)",
+        "text": "절대악까지의 거리가 얼마 남지 않았습니다. 힘내세요!",
+        "choices": None,
+        "effect": None,
+        "next": None
+    },
+]
+
+drone33_dialogue = [
+    {
         "speaker": "드론(새친 연구원)",
-        "text": "아, 걱정해줘서 고마워. 저 빌어먹을 절대악을 분석하느라 너무 집중한 나머지, 내 몸을 너무 혹사시킨 것 같아.",
+        "text": "여기까지 왔군. 내가 과로사로 죽을 것 같은 느낌이야.",
+        "choices": None,
+        "effect": None,
+        "next": 1
+    },
+    {
+        "speaker": "드론(새친 연구원)",
+        "text": "저 빌어먹을 절대악을 분석하느라 너무 집중한 나머지, 내 몸을 너무 혹사시킨 것 같아.",
         "choices": None,
         "effect": None,
         "next": 3
