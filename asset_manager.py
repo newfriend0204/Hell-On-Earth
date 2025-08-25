@@ -571,7 +571,7 @@ def load_images():
         "obstacle_masks": obstacle_masks,
     }
 
-def load_weapon_assets(images):
+def load_weapon_assets(images, on_progress=None, progress_cb=None):
     # 무기별 전방(Front) 이미지, 상단(Top-down) 이미지, 탄환, 탄피, 폭발 이미지 설정
     weapons = {
         "knife": {
@@ -822,4 +822,26 @@ def load_weapon_assets(images):
             "cartridges": [],
         },
     }
+    # 진행률 콜백(옵션): 무기 1개당 1틱으로 간략 표기
+    cb = on_progress or progress_cb
+    if cb:
+        try:
+            names = list(weapons.keys())
+            total = len(names)
+            for i, key in enumerate(names, 1):
+                # 표시용 라벨: GunN.png 형태로 맞춤(knife는 Knife.png)
+                if key == "knife":
+                    label = "Knife.png"
+                elif key.startswith("gun"):
+                    label = f"Gun{key[3:]}.png"
+                else:
+                    label = key
+                cb(i, label, total)
+                try:
+                    pygame.event.pump()
+                    pygame.time.delay(4)
+                except Exception:
+                    pass
+        except Exception:
+            pass
     return weapons

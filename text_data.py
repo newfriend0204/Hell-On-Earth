@@ -559,9 +559,10 @@ intro_dialogue = [
     {"speaker": "나", "text": "안전하지도 않은 이 실험은 지부장과 상급 과학자 한명만 알고 있었고, 비밀리에 실험이 진행되었다.", "image": "Story2.png", "choices": None, "effect": None, "next": 10},
     {"speaker": "나", "text": "결국 그 계획을 눈치채고 결사 반대한 연구원도 있었지만, 결국 묵살당한채 강제진행되었다.", "image": "Story2.png", "choices": None, "effect": None, "next": 11},
     {"speaker": "나", "text": "뭐, 결과는 뻔했지. 포탈에너지가 급격히 불규칙해지면서, 그 건너 차원의 존재들이 건너오기 시작했다.", "image": "Story3.png", "choices": None, "effect": None, "next": 12},
-    {"speaker": "나", "text": "실험을 진행한 상급 과학자는 즉사. 결사 반대한 연구원은 미리 눈치채고, 눈 앞에 보이는 어떤 \"한 경비원\"을 부르고 시설을 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 13},
-    {"speaker": "나", "text": "연구원은 그 경비원에게 본인이 특수 제작한 역작 슈트를 건내주고, 기지가 차원의 존재들에게 혼란스러울때, 조용히 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 14},
-    {"speaker": "나", "text": "그렇다. 한 경비원은 나다. 그리고 결사 반대한 연구원의 이름은 \"새친 연구원\".", "image": "Story5.png", "choices": None, "effect": None, "next": 15},
+    {"speaker": "나", "text": "이 포탈들은 지구 곳곳에도 열려서 그야말로 아비규환이였지.", "image": "Story3.png", "choices": None, "effect": None, "next": 13},
+    {"speaker": "나", "text": "실험을 진행한 상급 과학자는 즉사. 결사 반대한 연구원은 미리 눈치채고, 눈 앞에 보이는 어떤 \"한 경비원\"을 부르고 시설을 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 14},
+    {"speaker": "나", "text": "연구원은 그 경비원에게 본인이 특수 제작한 역작 슈트를 건내주고, 기지가 차원의 존재들에게 혼란스러울때, 조용히 탈출했다.", "image": "Story4.png", "choices": None, "effect": None, "next": 15},
+    {"speaker": "나", "text": "그렇다. 한 경비원은 나다. 그리고 결사 반대한 연구원의 이름은 \"새친 연구원\".", "image": "Story5.png", "choices": None, "effect": None, "next": 16},
     {"speaker": "나", "text": "그렇게, 우리의 이야기가 시작되었다.", "image": "Story5.png", "choices": None, "effect": None, "next": None},
 ]
 

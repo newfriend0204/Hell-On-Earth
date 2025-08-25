@@ -213,14 +213,15 @@ def get_player_world_position():
     )
 
 # 스플래시 + 진행률: 단계별(이미지→사운드→무기)
-# 가중치: 이미지 70% / 사운드 25% / 무기 5%
-img_cb  = _make_progress_channel(0.00, 0.70)
-snd_cb  = _make_progress_channel(0.70, 0.95)
-wep_cb  = _make_progress_channel(0.95, 1.00)
+img_cb  = _make_progress_channel(0.00, 0.50)
+snd_cb  = _make_progress_channel(0.50, 0.60)
+wep_cb  = _make_progress_channel(0.60, 1.00)
 
 # 사전 스캔으로 총 개수 추정(정확도 ↑). 실패해도 안전.
-_img_total = _count_files("Asset/Image", (".png", ".jpg"))
-_snd_total = _count_files("Asset/Sound", (".wav", ".mp3"))
+_img_total = _count_files(os.path.join(ASSET_DIR, "Image"),
+                          (".png", ".jpg", ".jpeg", ".webp"))
+_snd_total = _count_files(os.path.join(ASSET_DIR, "Sound"),
+                          (".wav", ".mp3", ".ogg"))
 _img_done = 0
 _snd_done = 0
 
@@ -230,13 +231,16 @@ def _wrap_img_load(*a, **k):
     global _img_done
     surf = _orig_img_load(*a, **k)
     _img_done += 1
+    name = None
+    try:
+        name = os.path.basename(a[0]) if a and isinstance(a[0], str) else None
+    except Exception:
+        pass
     if _img_total > 0:
-        name = None
-        try:
-            name = os.path.basename(a[0]) if a and isinstance(a[0], str) else None
-        except Exception:
-            name = None
-        img_cb(_img_done / max(1, _img_total), "이미지 불러오는 중…", name)
+        img_cb(_img_done / max(1, _img_total), "이미지 불러오는 중…",
+               f"{name} ({_img_done}/{max(1,_img_total)})")
+    if name:
+        print(f"[LOAD][IMAGE] {name} ({_img_done}/{max(1,_img_total)})")
     return surf
 
 _orig_sound_ctor = pygame.mixer.Sound
@@ -244,13 +248,16 @@ def _wrap_sound_ctor(*a, **k):
     global _snd_done
     s = _orig_sound_ctor(*a, **k)
     _snd_done += 1
+    name = None
+    try:
+        name = os.path.basename(a[0]) if a and isinstance(a[0], (str, bytes)) else None
+    except Exception:
+        pass
     if _snd_total > 0:
-        name = None
-        try:
-            name = os.path.basename(a[0]) if a and isinstance(a[0], str) else None
-        except Exception:
-            name = None
-        snd_cb(_snd_done / max(1, _snd_total), "사운드 불러오는 중…", name)
+        snd_cb(_snd_done / max(1, _snd_total), "사운드 불러오는 중…",
+               f"{name} ({_snd_done}/{max(1,_snd_total)})")
+    if name:
+        print(f"[LOAD][SOUND] {name} ({_snd_done}/{max(1,_snd_total)})")
     return s
 
 # 0% 첫 화면
@@ -277,9 +284,134 @@ if _snd_total == 0:
 config.sounds = sounds
 config.images = images
 config.dropped_items = []
-wep_cb(0.0, "무기 에셋 준비 중…", None)
-weapon_assets = load_weapon_assets(images)
+
+# 무기 에셋 로딩 UI: 상단/하단 텍스트 초기화
+wep_cb(0.0, "무기 에셋 준비 중…", "초기화/디스크 웜업…")
+try:
+    pygame.event.pump()
+    pygame.display.flip()
+except Exception:
+    pass
+
+weapon_assets = None
+
+# GunN.png(Front) 판단 헬퍼
+def _is_gun_front_name(bn: str) -> bool:
+    if not bn.endswith(".png"): 
+        return False
+    if not bn.startswith("Gun"):
+        return False
+    # Player/Bullet/Cartridge/Explosion/Launcher 등은 제외
+    bad = ("Player", "Bullet", "Cartridge", "Explosion", "Launcher")
+    return not any(x in bn for x in bad)
+
+# GunN.png(Front) 총 개수(퍼센티지용)
+def _count_gun_front_files():
+    base = os.path.join(ASSET_DIR, "Image", "Gun")
+    total = 0
+    try:
+        for _root, _dirs, files in os.walk(base):
+            for fn in files:
+                if _is_gun_front_name(fn):
+                    total += 1
+    except Exception:
+        pass
+    return total
+
+# load_weapon_assets가 콜백 인자를 받는지 체크(받아도 아래 래핑은 유지)
+try:
+    import inspect
+    sig = inspect.signature(load_weapon_assets)
+    supports_cb = any(name in ("on_progress", "progress_cb", "cb") for name in sig.parameters.keys())
+except Exception:
+    supports_cb = False
+    sig = None
+
+# 무기 퍼센티지 합성(메타 25% + 파일 75%) + 단조 증가 가드
+_wep_meta  = [0.0]
+_wep_front = [0.0]
+_wep_best  = [0.0]
+
+def _wep_emit(subtext: str):
+    frac = 0.25 * _wep_meta[0] + 0.75 * _wep_front[0]
+    if frac < _wep_best[0]:
+        frac = _wep_best[0]
+    else:
+        _wep_best[0] = frac
+    # 0.99까지로 묶어두고 마지막에 1.0 마무리
+    wep_cb(min(frac, 0.99), "무기 에셋 준비 중…", subtext)
+
+_orig_img_load = pygame.image.load
+_front_total = _count_gun_front_files()
+_front_seen = [0]  # 리스트로 카운터(최상위 블록이라 nonlocal 불가)
+
+def _wrap_img_load_weapons(path, *args, **kwargs):
+    try:
+        if isinstance(path, str):
+            bn = os.path.basename(path)
+            if _is_gun_front_name(bn):
+                _front_seen[0] += 1
+                _wep_front[0] = _front_seen[0] / float(max(1, _front_total))
+                _wep_emit(f"{bn} ({_front_seen[0]}/{max(1,_front_total)})")
+                print(f"[LOAD][WEAPON] Front {bn} ({_front_seen[0]}/{max(1,_front_total)})")
+                try:
+                    pygame.event.pump()
+                    pygame.display.flip()
+                except Exception:
+                    pass
+    except Exception:
+        # 표시 실패해도 로딩은 계속
+        pass
+    return _orig_img_load(path, *args, **kwargs)
+
+pygame.image.load = _wrap_img_load_weapons
+
+def _wep_progress(index: int, name: str, total: int):
+    # 실제 로딩 호출(콜백 지원하면 같이 넘기되, 래핑은 유지해서 '진짜 로딩 중'에도 표시됨)
+    _wep_meta[0] = index / float(max(1, total))
+    _wep_emit(f"{name} ({index}/{total})")
+    print(f"[LOAD][WEAPON] Meta {name} ({index}/{total})")
+
+try:
+    if supports_cb and sig is not None:
+        try:
+            if "on_progress" in sig.parameters:
+                weapon_assets = load_weapon_assets(images, on_progress=_wep_progress)
+            elif "progress_cb" in sig.parameters:
+                weapon_assets = load_weapon_assets(images, progress_cb=_wep_progress)
+            elif "cb" in sig.parameters:
+                weapon_assets = load_weapon_assets(images, cb=_wep_progress)
+            else:
+                weapon_assets = load_weapon_assets(images)
+        except TypeError:
+            weapon_assets = load_weapon_assets(images)
+    else:
+        weapon_assets = load_weapon_assets(images)
+except Exception:
+    # 마지막 안전망
+    weapon_assets = load_weapon_assets(images)
+finally:
+    pygame.image.load = _orig_img_load
+
+if _front_seen[0] == 0:
+    try:
+        total = len(WEAPON_CLASSES)
+        for i, cls in enumerate(WEAPON_CLASSES, 1):
+            name = getattr(cls, "__name__", str(cls))
+            _wep_meta[0] = i / float(max(1, total))
+            _wep_emit(f"{name} ({i}/{total})")
+            print(f"[LOAD][WEAPON] Fallback {name} ({i}/{total})")
+            pygame.event.pump()
+            pygame.display.flip()
+            pygame.time.delay(12)
+    except Exception:
+        pass
+
+if weapon_assets is None:
+    weapon_assets = load_weapon_assets(images)
+
 wep_cb(1.0, "초기화 중…", None)
+
 melee = MeleeController(
     images, sounds,
     get_player_world_pos_fn=get_player_world_position
@@ -433,7 +565,6 @@ def start_ending_credits():
     _ending_credits["lock_scroll"] = False
 
     # 폰트 구성
-    import pygame
     FONT_SMALL  = pygame.font.Font(FONT_PATH, 22)
     FONT_NORMAL = pygame.font.Font(FONT_PATH, 26)
     FONT_MID    = pygame.font.Font(BOLD_FONT_PATH, 40)
@@ -1409,7 +1540,6 @@ def try_pickup_weapon():
 
 def _quantize_dir_to_8(dx: float, dy: float):
     # 입력 벡터를 8방향(45° 단위)으로 스냅→정규화.
-    import math
     if dx == 0 and dy == 0:
         return (0.0, 0.0)
     ang = math.degrees(math.atan2(dy, dx))  # -180~180 (오른쪽 0°, 위 -90°)
@@ -1538,7 +1668,6 @@ def advance_to_next_stage():
     except NameError:
         pass
 
-    import config
     stage_order = list(STAGE_DATA.keys())
     idx = stage_order.index(config.CURRENT_STAGE)
 
@@ -1586,7 +1715,6 @@ def advance_to_next_stage():
 def _collect_all_dropped_items_instant():
     # 방 이동 직전 즉시 정산: 필드의 체력/탄약 오브를 모두 획득 처리
     global player_hp, ammo_gauge, player_hp_max, ammo_gauge_max
-    import config
     gained_hp = 0
     gained_ammo = 0
     for item in list(getattr(config, "dropped_items", [])):
@@ -2758,7 +2886,6 @@ def trigger_combat_start():
 
 def trigger_combat_end():
     # 배너: 종료, 라벨: 페이드 아웃
-    import config, pygame
     config.auto_collect_ready_at = pygame.time.get_ticks() + 500
     config.auto_collect_fired = False
     combat_banner_fx["mode"] = "end"

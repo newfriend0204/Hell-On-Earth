@@ -14,7 +14,7 @@ GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
 GAME_STATE_ENDING_STORY = 4
 GAME_STATE_ENDING_CREDITS = 5
-game_state = 0
+game_state = 1
 intro_shown = False
 
 # 배경 크기
@@ -105,7 +105,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "2-3"
+CURRENT_STAGE = "1-1"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
