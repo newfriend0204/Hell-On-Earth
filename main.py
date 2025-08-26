@@ -240,7 +240,8 @@ def _wrap_img_load(*a, **k):
         img_cb(_img_done / max(1, _img_total), "이미지 불러오는 중…",
                f"{name} ({_img_done}/{max(1,_img_total)})")
     if name:
-        print(f"[LOAD][IMAGE] {name} ({_img_done}/{max(1,_img_total)})")
+        pass #나중에 삭제
+        # print(f"[LOAD][IMAGE] {name} ({_img_done}/{max(1,_img_total)})") 디버그 - 나중에 풀기
     return surf
 
 _orig_sound_ctor = pygame.mixer.Sound
@@ -257,7 +258,8 @@ def _wrap_sound_ctor(*a, **k):
         snd_cb(_snd_done / max(1, _snd_total), "사운드 불러오는 중…",
                f"{name} ({_snd_done}/{max(1,_snd_total)})")
     if name:
-        print(f"[LOAD][SOUND] {name} ({_snd_done}/{max(1,_snd_total)})")
+        pass #나중에 삭제
+        #print(f"[LOAD][SOUND] {name} ({_snd_done}/{max(1,_snd_total)})") #디버그 - 나중에 풀기
     return s
 
 # 0% 첫 화면
@@ -353,7 +355,7 @@ def _wrap_img_load_weapons(path, *args, **kwargs):
                 _front_seen[0] += 1
                 _wep_front[0] = _front_seen[0] / float(max(1, _front_total))
                 _wep_emit(f"{bn} ({_front_seen[0]}/{max(1,_front_total)})")
-                print(f"[LOAD][WEAPON] Front {bn} ({_front_seen[0]}/{max(1,_front_total)})")
+                # print(f"[LOAD][WEAPON] Front {bn} ({_front_seen[0]}/{max(1,_front_total)})") 디버그 - 나중에 풀기
                 try:
                     pygame.event.pump()
                     pygame.display.flip()
@@ -370,7 +372,7 @@ def _wep_progress(index: int, name: str, total: int):
     # 실제 로딩 호출(콜백 지원하면 같이 넘기되, 래핑은 유지해서 '진짜 로딩 중'에도 표시됨)
     _wep_meta[0] = index / float(max(1, total))
     _wep_emit(f"{name} ({index}/{total})")
-    print(f"[LOAD][WEAPON] Meta {name} ({index}/{total})")
+    # print(f"[LOAD][WEAPON] Meta {name} ({index}/{total})") 디버그 - 나중에 풀기
 
 try:
     if supports_cb and sig is not None:
@@ -453,8 +455,8 @@ _last_wind_spawn_ms = 0
 _prev_player_pos = None
 
 START_WEAPONS = [
-    WEAPON_CLASSES[25],
-    WEAPON_CLASSES[1],
+    WEAPON_CLASSES[42],
+    WEAPON_CLASSES[0],
     WEAPON_CLASSES[27],
     WEAPON_CLASSES[29],
 ]
@@ -825,7 +827,8 @@ def init_new_game():
 
     # (선택) 무기 인스턴스도 재생성해서 내부 쿨다운/상태 초기화
     try:
-        global weapons, current_weapon_index, changing_weapon, change_animation_timer, recoil_in_progress
+        global weapons, current_weapon_index, changing_weapon
+        global change_animation_timer, recoil_in_progress
         weapons = [
             cls.create_instance(
                 weapon_assets, sounds,
@@ -1730,7 +1733,9 @@ def _collect_all_dropped_items_instant():
 
 def change_room(direction):
     # 방 전환 처리
-    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width, effective_bg_height, current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound, boss_intro_shown_this_entry, shop_items, room_acquire_type
+    global current_room_pos, CURRENT_MAP, world_instance, world_x, world_y, enemies, changing_room, effective_bg_width
+    global current_boss, field_weapons, shop_items, current_portal, background_image, next_room_enter_sound, effective_bg_height
+    global boss_intro_shown_this_entry, shop_items, room_acquire_type
     
     current_portal = None
     _collect_all_dropped_items_instant()
@@ -2053,7 +2058,8 @@ def change_room(direction):
         east_hole_open=east_hole_open,
         expansion=expansion
     )
-    obstacle_manager.static_obstacles = [w for w in obstacle_manager.static_obstacles if w.image_filename != "invisible_wall"]
+    obstacle_manager.static_obstacles = [w for w in obstacle_manager.static_obstacles
+                                         if w.image_filename != "invisible_wall"]
     obstacle_manager.static_obstacles.extend(walls)
 
     bullets.clear()
@@ -3043,7 +3049,8 @@ while running:
     events = pygame.event.get()
 
     # 현재 프레임의 전투 여부 계산
-    _cur_is_combat = (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING) and bool(getattr(config, "combat_state", False))
+    _cur_is_combat = (getattr(config, "game_state", 1) ==
+                      config.GAME_STATE_PLAYING) and bool(getattr(config, "combat_state", False))
     if (_bgm_last_is_combat is None) or (_bgm_last_is_combat != _cur_is_combat):
         bgm_set_combat(_cur_is_combat, fade_ms=600)
         _bgm_last_is_combat = _cur_is_combat
@@ -3245,8 +3252,6 @@ while running:
                             _menu_modal = {"type":"confirm_quit"}
 
         elif config.game_state in (config.GAME_STATE_HOWTO, config.GAME_STATE_CREDITS):
-            # (이전 방식 화면 전환은 더 이상 안 쓰지만, 남겨진 상태로 진입해도
-            #  사용자 경험을 해치지 않도록 메뉴 팝업과 동일하게 처리)
             target = "howto" if config.game_state == config.GAME_STATE_HOWTO else "credits"
             _menu_modal = {"type":"panel","name": target}
             config.game_state = config.GAME_STATE_MENU
@@ -3648,7 +3653,7 @@ while running:
     weapon = weapons[current_weapon_index]
     current_weapon_instance = weapon
     
-    #적 바보 만들기
+    #디버그 - 적 안움직이게 하려면 아래 주석
     player_pos = get_player_world_position()
     if not player_dead:
         if not boss_intro_active:
@@ -3815,7 +3820,7 @@ while running:
             elif world_vy < 0:
                 world_vy = min(0.0, world_vy + deceleration_rate)
 
-# 대쉬 종료 체크
+    # 대쉬 종료 체크
     if dash_active and pygame.time.get_ticks() >= dash_end_ms:
         dash_active = False
 

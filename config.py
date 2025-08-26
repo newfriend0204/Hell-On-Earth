@@ -28,9 +28,6 @@ ASSET_DIR = os.path.join(BASE_DIR, "Asset")
 # 속도
 NORMAL_MAX_SPEED = 6
 
-# 사운드 설정
-WALK_VOLUME = 0.5
-
 STAGE_DATA = {
     "1-1": {
         "boss_map": 0,
@@ -105,7 +102,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "1-1"
+CURRENT_STAGE = "2-2"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
@@ -117,6 +114,12 @@ STAGE_PRICE_MULT = {
     "3-1": 1.70,
     "3-2": 1.85,
     "3-3": 1.90,
+}
+
+STAGE_THEME = {
+    "1-1": "map1", "1-2": "map1", "1-3": "map1",
+    "2-1": "map2", "2-2": "map2", "2-3": "map2",
+    "3-1": "map3", "3-2": "map3", "3-3": "map3",
 }
 
 def get_stage_price_mult(stage=None):
@@ -134,12 +137,7 @@ DRONE_COST_GROWTH = 1.15
 drone_hp_up_count = 0
 drone_ammo_up_count = 0
 
-STAGE_THEME = {
-    "1-1": "map1", "1-2": "map1", "1-3": "map1",
-    "2-1": "map2", "2-2": "map2", "2-3": "map2",
-    "3-1": "map3", "3-2": "map3", "3-3": "map3",
-}
-
+#무기 티어마다의 필요 비용
 TIER_PRICES = {
     1: 20,
     2: 40,
@@ -148,6 +146,7 @@ TIER_PRICES = {
     5: 100
 }
 
+#상점에서의 등급 확률 증가/감소
 SHOP_TIER_WEIGHT_BIAS = {
     1: 0.5,
     2: 1.0,
@@ -157,7 +156,7 @@ SHOP_TIER_WEIGHT_BIAS = {
 }
 
 def get_shop_tier_weights(stage: str):
-    # 상점 전용 확률표 반환.
+    # 상점 전용 확률표 반환
     base = STAGE_DATA[stage]["weapon_tier_weights"]
     out = {}
     for tier, w in base.items():
@@ -173,7 +172,7 @@ combat_state = False
 combat_enabled = True
 SUPPRESS_STAGE_BGM = False
 images = None
-player_score = 10000 # 디버그, 원래는 0
+player_score = 10000 # 디버그 - 원래는 0
 
 ESSENCE_COST_PER_HP = 0.30
 ESSENCE_COST_PER_AMMO = 0.20

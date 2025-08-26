@@ -2,7 +2,6 @@ import pygame
 import config
 import os
 import re
-import os
 import pygame
 from config import ASSET_DIR
 from text_data import weapon_stats

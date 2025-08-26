@@ -2884,7 +2884,7 @@ class Enemy14(AIBase):
     MAX_HP = 420
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.65
 
-    NEAR_DISTANCE = int(320 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(420 * PLAYER_VIEW_SCALE)
     FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
 
     TURN_SPEED_DEG = 70
@@ -2898,8 +2898,8 @@ class Enemy14(AIBase):
     SUMMON_COOLDOWN_MS = 10000
     SUMMON_COOLDOWN_PHASE2_MS = 7000
     TELEGRAPH_MS = 700
-    SUMMON_MIN_RADIUS = int(400 * PLAYER_VIEW_SCALE)   # 자기 기준
-    SUMMON_MAX_RADIUS = int(600 * PLAYER_VIEW_SCALE)   # 자기 기준
+    SUMMON_MIN_RADIUS = int(400 * PLAYER_VIEW_SCALE)
+    SUMMON_MAX_RADIUS = int(600 * PLAYER_VIEW_SCALE)
     MAX_MINIONS = 3
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,

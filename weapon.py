@@ -3071,7 +3071,7 @@ class Gun24(WeaponBase):
 class Gun25(WeaponBase):
     TIER = 2
     AMMO_COST = 9
-    DAMAGE = 6
+    DAMAGE = 8
     NUM_PELLETS = 10
     SPREAD_DEGREES = 26
     FIRE_DELAY_PAIR = 820
@@ -3262,7 +3262,7 @@ class Gun26(WeaponBase):
 class Gun27(WeaponBase):
     TIER = 5
     CHARGE_TIME_MS = 800
-    LEFT_DAMAGE = 120
+    LEFT_DAMAGE = 90
     RIGHT_DAMAGE = 50
 
     LEFT_AMMO_COST = 35
@@ -3615,7 +3615,7 @@ class Gun28(WeaponBase):
     LEFT_COOLDOWN = 1200
     RIGHT_COOLDOWN = 250
 
-    ORB_SPEED = 8 * config.PLAYER_VIEW_SCALE
+    ORB_SPEED = 10 * config.PLAYER_VIEW_SCALE
     ORB_MAX_TRAVEL = 2400 * config.PLAYER_VIEW_SCALE
     ORB_RADIUS_HIT = 14
 
@@ -3999,8 +3999,8 @@ class Gun28(WeaponBase):
 class Gun29(WeaponBase):
     TIER = 5
 
-    PRIMARY_DAMAGE = 90
-    CHAIN_DAMAGE   = 40
+    PRIMARY_DAMAGE = 70
+    CHAIN_DAMAGE   = 35
 
     LEFT_AMMO_COST  = 20
     RIGHT_AMMO_COST = 28
@@ -4384,7 +4384,7 @@ class Gun30(WeaponBase):
     TIER = 5
 
     TICK_MS = 80
-    DAMAGE_PER_TICK = 20
+    DAMAGE_PER_TICK = 15
     AMMO_PER_SEC = 25.0
     AMMO_PER_TICK = AMMO_PER_SEC * (TICK_MS / 1000.0)
     HEAT_PER_TICK = 2.0
@@ -4882,7 +4882,7 @@ class Gun31(WeaponBase):
     AMMO_PER_MISSILE = 17
     COOLDOWN_MS = 1200
 
-    DAMAGE_PER_MISSILE = 80
+    DAMAGE_PER_MISSILE = 90
     SPLASH_RADIUS = 40
     SPLASH_FACTOR = 0.3
 
@@ -5345,7 +5345,7 @@ class Gun32(WeaponBase):
     TIER = 4
 
     PELLETS = 18
-    PELLET_DAMAGE = 15
+    PELLET_DAMAGE = 13
     PELLET_SPREAD_DEG = 28
     PELLET_RANGE = int(720 * config.PLAYER_VIEW_SCALE)
     PELLET_HIT_RADIUS = 6
@@ -5664,8 +5664,8 @@ class Gun32(WeaponBase):
 class Gun33(WeaponBase):
     TIER = 4
 
-    LEFT_DAMAGE = 55
-    RIGHT_DAMAGE = 70
+    LEFT_DAMAGE = 50
+    RIGHT_DAMAGE = 75
     LEFT_COOLDOWN_MS = 190
     RIGHT_COOLDOWN_MS = 350
     LEFT_AMMO_COST = 10
@@ -6988,15 +6988,15 @@ class Gun36(WeaponBase):
     LEFT_COOLDOWN_MS    = 450
     RIGHT_COOLDOWN_MS   = 0
 
-    MAX_MINES           = 6
-    AUTO_FUSE_MS        = 10_000
+    MAX_MINES           = 10
+    AUTO_FUSE_MS        = 10000
     MINE_SPEED          = 14.5
     MINE_MAX_RANGE      = 2000.0
     MINE_RADIUS         = 20
     MINE_STUCK_NUDGE    = 2.0
 
     EXPLOSION_RADIUS    = 90
-    EXPLOSION_DAMAGE    = 75
+    EXPLOSION_DAMAGE    = 60
 
     EXPLOSION_RING_MS   = 520
     EXPLOSION_RAYS      = 12
@@ -7994,7 +7994,7 @@ class Gun38(WeaponBase):
     TIER = 5
     NAME = "BFG6000"
 
-    LEFT_AMMO_COST        = 50
+    LEFT_AMMO_COST        = 80
     LEFT_COOLDOWN_MS      = 2000
     CHARGE_TIME_MS        = 800
 
@@ -8008,7 +8008,7 @@ class Gun38(WeaponBase):
     VINE_RANGE            = 260.0
     VINE_MAX_TARGETS      = 99
     VINE_TICK_MS          = 100
-    VINE_DAMAGE_PER_TICK  = 17
+    VINE_DAMAGE_PER_TICK  = 20
     VINE_KEEP_ALIVE_MS    = 200
 
     FIRE_SHAKE_STRENGTH   = 18
@@ -8550,7 +8550,1212 @@ class Gun38(WeaponBase):
             self._state = "idle"
             self._last_room_pos = cur
 
+class Gun39(WeaponBase):
+    TIER = 2
+    NAME = "리듬 DMR"
+
+    LEFT_AMMO_COST = 15
+    DAMAGE = 30
+    SPREAD = 4
+
+    MIN_CLICK_INTERVAL_MS = 100
+    FIRE_DELAY = 0
+
+    RHYTHM_TARGET_MS = 500
+    RHYTHM_WINDOW_MS = 70
+    RHYTHM_PERFECT_MS = 30
+    BONUS_DMG = 0.75
+    PERFECT_BONUS_DMG = 1.25
+
+    METER_TOTAL_MS = 700
+    METER_W = int(90 * config.PLAYER_VIEW_SCALE)
+    METER_H = max(4, int(4 * config.PLAYER_VIEW_SCALE))
+    METER_MARGIN_Y = int(24 * config.PLAYER_VIEW_SCALE)
+    METER_OFFSET_DOWN_PX = int(20 * config.PLAYER_VIEW_SCALE)
+
+    COLOR_NORMAL  = (255, 255, 255)
+    COLOR_GOOD    = (120, 200, 255)
+    COLOR_PERFECT = (255, 220, 120)
+    METER_COLOR_HOLD_MS = 300
+
+    FX_DURATION_MS = 160
+    FX_START_R = 42
+    FX_END_R = 28
+    FX_THICKNESS = 2
+    STAR_RAYS = 8
+    STAR_MAX_LEN = 18
+    STAR_MIN_LEN = 6
+
+    BULLET_SCALE_MUL = 1.2
+    BULLET_ALPHA = 190
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        wa = weapon_assets.get("gun39", {})
+        front   = wa.get("front")
+        topdown = wa.get("topdown")
+        return Gun39(
+            name=Gun39.NAME,
+            front_image=front, topdown_image=topdown,
+            uses_bullets=True,  bullet_images=wa.get("bullets", []),
+            uses_cartridges=True, cartridge_images=wa.get("cartridges", []),
+            can_left_click=True, can_right_click=False,
+            left_click_ammo_cost=Gun39.LEFT_AMMO_COST, right_click_ammo_cost=0,
+            tier=Gun39.TIER,
+            sounds_dict={
+                "fire":    sounds.get("gun39_fire"),
+                "good":    sounds.get("gun39_good"),
+                "perfect": sounds.get("gun39_perfect"),
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = 0
+        self.recoil_strength = 9
+        self.speed_penalty = 0
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+        self.shake_strength = 12
+
+        self._prev_left_allowed = False
+        self._last_rhythm_state = "none" # "none" | "good" | "perfect" | "early" | "late"
+        self._last_rhythm_time = 0
+        self._fx_started_ms = -1
+        self._fx_pos = (0, 0)
+
+    # 입력 처리: '누를 때 한 발'
+    def on_update(self, mouse_left_down, mouse_right_down):
+        left_allowed, _ = self._filter_inputs(mouse_left_down, mouse_right_down)
+        left_edge = left_allowed and (not self._prev_left_allowed)
+        self._prev_left_allowed = left_allowed
+
+        if not (self.can_left_click and left_edge):
+            return
+        if self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        now = pygame.time.get_ticks()
+
+        if self.last_shot_time > 0 and (now - self.last_shot_time) < self.MIN_CLICK_INTERVAL_MS:
+            return
+
+        self.on_left_click()
+        self.last_shot_time = now
+
+    # 실제 발사 처리
+    def on_left_click(self):
+        # 탄 소모 + 기본 발사음
+        self.reduce_ammo(self.left_click_ammo_cost)
+        try:
+            snd = self.sounds.get("fire")
+            if snd: snd.play()
+        except Exception:
+            pass
+
+        # 조준 벡터 계산(스크린 기준 → 월드 방향)
+        mx, my = pygame.mouse.get_pos()
+        pxs, pys = config.player_rect.centerx, config.player_rect.centery
+        dx, dy = (mx - pxs), (my - pys)
+        angle = math.atan2(dy, dx)
+        vx, vy = math.cos(angle), math.sin(angle)
+
+        # 월드 기준 총구 위치
+        pwx, pwy = self.get_player_world_position()
+        muzzle_x = pwx + vx * 30 * config.PLAYER_VIEW_SCALE
+        muzzle_y = pwy + vy * 30 * config.PLAYER_VIEW_SCALE
+
+        # 리듬 판정
+        now = pygame.time.get_ticks()
+        delta = now - self.last_shot_time if self.last_shot_time > 0 else None
+        dmg_mul = 1.0
+        rhythm_state = "none"
+        if delta is not None:
+            diff = abs(delta - self.RHYTHM_TARGET_MS)
+            if diff <= self.RHYTHM_PERFECT_MS:
+                dmg_mul = 1.0 + self.PERFECT_BONUS_DMG
+                rhythm_state = "perfect"
+            elif diff <= self.RHYTHM_WINDOW_MS:
+                dmg_mul = 1.0 + self.BONUS_DMG
+                rhythm_state = "good"
+            else:
+                rhythm_state = "early" if delta < self.RHYTHM_TARGET_MS else "late"
+
+        # 보너스 탄 비주얼(스케일 1.2x + 반투명)
+        bullet_img = self.bullet_images[0] if self.bullet_images else None
+        if bullet_img and rhythm_state in ("good", "perfect"):
+            w, h = bullet_img.get_width(), bullet_img.get_height()
+            sw, sh = int(w * self.BULLET_SCALE_MUL), int(h * self.BULLET_SCALE_MUL)
+            try:
+                scaled = pygame.transform.smoothscale(bullet_img, (sw, sh)).convert_alpha()
+            except Exception:
+                scaled = pygame.transform.scale(bullet_img, (sw, sh)).convert_alpha()
+            scaled.set_alpha(self.BULLET_ALPHA)
+            bullet_img_use = scaled
+        else:
+            bullet_img_use = bullet_img
+
+        # 총알 생성
+        if bullet_img_use:
+            bullet = Bullet(
+                muzzle_x,
+                muzzle_y,
+                muzzle_x + vx * 2200,
+                muzzle_y + vy * 2200,
+                self.SPREAD,
+                bullet_img_use,
+                speed=12 * config.PLAYER_VIEW_SCALE,
+                max_distance=2200 * config.PLAYER_VIEW_SCALE,
+                damage=int(round(self.DAMAGE * dmg_mul))
+            )
+            bullet.trail_enabled = self.bullet_has_trail
+            config.bullets.append(bullet)
+
+        # 탄피 배출
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            evx = math.cos(eject_angle) * 1.2
+            evy = math.sin(eject_angle) * 1.2
+            scatter = ScatteredBullet(pwx, pwy, evx, evy, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+        # 보너스 피드백 사운드 + 마우스 이펙트
+        self._last_rhythm_state = rhythm_state
+        self._last_rhythm_time = now
+        if rhythm_state in ("good", "perfect"):
+            try:
+                key = "perfect" if rhythm_state == "perfect" else "good"
+                snd = self.sounds.get(key)
+                if snd: snd.play()
+            except Exception:
+                pass
+            self._fx_started_ms = now
+            self._fx_pos = (mx, my)
+
+    # 월드 상의 미니 UI(총 위 타이밍 게이지) + 마우스 이펙트
+    def draw_world(self, screen):
+        # 활성 무기만 그리기(있으면)
+        try:
+            import config as _cfg
+            if getattr(_cfg, "active_weapon", None) is not self:
+                return
+        except Exception:
+            pass
+
+        # 게이지 색상: 최근 판정에 따라 잠시동안 색상 변경
+        now = pygame.time.get_ticks()
+        meter_color = self.COLOR_NORMAL
+        if self._last_rhythm_state in ("good", "perfect"):
+            if now - self._last_rhythm_time <= self.METER_COLOR_HOLD_MS:
+                meter_color = self.COLOR_GOOD if self._last_rhythm_state == "good" else self.COLOR_PERFECT
+
+        # 마우스 스크린 좌표 기준(커서 바로 아래)
+        mx, my = pygame.mouse.get_pos()
+        x = mx - self.METER_W // 2
+        y = my + self.METER_OFFSET_DOWN_PX
+
+        # 외곽선
+        pygame.draw.rect(screen, meter_color, (x, y, self.METER_W, self.METER_H), 1)
+
+        # 목표 윈도우(±RHYTHM_WINDOW_MS) 표시 – 테두리 박스
+        L = max(0, self.RHYTHM_TARGET_MS - self.RHYTHM_WINDOW_MS)
+        R = min(self.METER_TOTAL_MS, self.RHYTHM_TARGET_MS + self.RHYTHM_WINDOW_MS)
+        lx = x + int(self.METER_W * (L / self.METER_TOTAL_MS))
+        rx = x + int(self.METER_W * (R / self.METER_TOTAL_MS))
+        pygame.draw.rect(screen, meter_color, (lx, y+1, max(1, rx - lx), self.METER_H-2), 1)
+
+        # 퍼펙트(±RHYTHM_PERFECT_MS) 좁은 구간 – 얇은 채움(색상 동일)
+        PL = max(0, self.RHYTHM_TARGET_MS - self.RHYTHM_PERFECT_MS)
+        PR = min(self.METER_TOTAL_MS, self.RHYTHM_TARGET_MS + self.RHYTHM_PERFECT_MS)
+        plx = x + int(self.METER_W * (PL / self.METER_TOTAL_MS))
+        prx = x + int(self.METER_W * (PR / self.METER_TOTAL_MS))
+        if prx - plx >= 2:
+            pygame.draw.rect(screen, meter_color, (plx, y, prx - plx, self.METER_H), 0)
+
+        # 진행 틱(마지막 발사 이후 경과 ms)
+        if self.last_shot_time > 0:
+            elapsed = now - self.last_shot_time
+            if elapsed <= self.METER_TOTAL_MS:
+                tx = x + int(self.METER_W * (elapsed / self.METER_TOTAL_MS))
+                pygame.draw.line(screen, meter_color, (tx, y - 2), (tx, y + self.METER_H + 2), 1)
+
+        # 마우스 이펙트: 링 + PERFECT 시 스타버스트
+        if 0 <= (now - self._fx_started_ms) <= self.FX_DURATION_MS:
+            t = (now - self._fx_started_ms) / self.FX_DURATION_MS
+            r = int(self.FX_START_R + (self.FX_END_R - self.FX_START_R) * t)
+            cx, cy = self._fx_pos
+            col = self.COLOR_GOOD if self._last_rhythm_state == "good" else self.COLOR_PERFECT
+            # 링
+            try:
+                pygame.draw.circle(screen, col, (int(cx), int(cy)), r, self.FX_THICKNESS)
+            except Exception:
+                pass
+            # 스타버스트(퍼펙트 전용)
+            if self._last_rhythm_state == "perfect":
+                for i in range(self.STAR_RAYS):
+                    ang = (2 * math.pi * i) / self.STAR_RAYS
+                    # 길이 천천히 줄어드는 효과
+                    ln = int(self.STAR_MAX_LEN - (self.STAR_MAX_LEN - self.STAR_MIN_LEN) * t)
+                    sx = int(cx + math.cos(ang) * (r - 2))
+                    sy = int(cy + math.sin(ang) * (r - 2))
+                    ex = int(cx + math.cos(ang) * (r - 2 + ln))
+                    ey = int(cy + math.sin(ang) * (r - 2 + ln))
+                    pygame.draw.line(screen, col, (sx, sy), (ex, ey), 1)
+
+class Gun40(WeaponBase):
+    TIER = 1
+
+    LEFT_AMMO_COST = 6
+    LEFT_FIRE_DELAY = 380
+    LEFT_DAMAGE = 38
+    LEFT_SPREAD = 2
+
+    RIGHT_AMMO_COST = 5
+    RIGHT_FIRE_DELAY = 850 
+    BURST_SHOTS = 4
+    BURST_INTERVAL = 70
+    RIGHT_DAMAGE = 22
+    BURST_BASE_SPREAD = 18
+    BURST_SPREAD_STEP = 12
+
+    SPEED = 18 * config.PLAYER_VIEW_SCALE
+    RANGE = 2000 * config.PLAYER_VIEW_SCALE
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun40(
+            name=".357 리볼버",
+            front_image=weapon_assets["gun40"]["front"],
+            topdown_image=weapon_assets["gun40"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun40"]["bullets"],
+            uses_cartridges=False,
+            cartridge_images=[],
+            can_left_click=True,
+            can_right_click=True,
+            left_click_ammo_cost=Gun40.LEFT_AMMO_COST,
+            right_click_ammo_cost=Gun40.RIGHT_AMMO_COST,
+            tier=Gun40.TIER,
+            sounds_dict={
+                "fire": sounds["gun40_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=True,
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+
+        self.fire_delay = Gun40.LEFT_FIRE_DELAY
+        self.right_fire_delay = Gun40.RIGHT_FIRE_DELAY
+        self.last_right_click_time = 0
+
+        self._shake_left = 12
+        self._shake_right_base = 18
+        self._recoil_left = 9
+        self._recoil_right_base = 12
+
+        self.recoil_strength = self._recoil_left
+        self.shake_strength  = self._shake_left
+
+        self.speed_penalty = 0.0
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+
+        self._burst_remaining = 0
+        self._burst_last_time = 0
+        self._burst_index     = 0
+
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+
+        # 버스트 진행 중이면 샷 간격에 맞춰 다음 발 발사
+        if self._burst_remaining > 0:
+            if now - self._burst_last_time >= Gun40.BURST_INTERVAL:
+                self._burst_index += 1
+                self._fire_burst_shot(self._burst_index)   # ← 여기서 '한 발' 발사 + 탄약 차감
+                self._burst_remaining -= 1
+                self._burst_last_time = now
+            return  # 버스트 중에는 다른 입력 무시
+
+        # 배타 입력 필터(동시 입력 시 먼저 누른 버튼 고정)
+        left_allowed, right_allowed = self._filter_inputs(mouse_left_down, mouse_right_down)
+
+        # 좌클릭: 단발
+        if self.can_left_click and left_allowed and now - self.last_shot_time >= self.fire_delay:
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now  # 메인 루프의 반동/셰이크 트리거
+
+        # 우클릭: 버스트 시작
+        if self.can_right_click and right_allowed and now - self.last_right_click_time >= self.right_fire_delay:
+            # 현재 탄약으로 가능한 샷 수 계산(요청: 탄환마다 소모)
+            possible = min(
+                Gun40.BURST_SHOTS,
+                self.get_ammo_gauge() // self.right_click_ammo_cost
+            )
+            if possible > 0:
+                self._start_burst(possible)
+                self.last_right_click_time = now
+
+    # 좌/우 클릭 동작
+    def on_left_click(self):
+        # 좌클릭은 '정확한 한 발' 컨셉
+        if self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        # 좌클릭용 반동/셰이크 값 적용(메인 루프가 이 값을 읽어 트리거)
+        self.recoil_strength = self._recoil_left
+        self.shake_strength  = self._shake_left
+
+        self._fire_one_bullet(
+            damage=Gun40.LEFT_DAMAGE,
+            spread_deg=Gun40.LEFT_SPREAD
+        )
+
+    def on_right_click(self):
+        # 사용하지 않음(버스트는 on_update에서 _start_burst로 시작)
+        pass
+
+    # 내부 유틸
+    def _start_burst(self, shots_to_fire: int):
+        # 첫 발 즉시 발사 후 나머지 예약
+        self._burst_index = 1
+        self._burst_remaining = max(0, shots_to_fire - 1)
+        self._burst_last_time = pygame.time.get_ticks()
+
+        # 첫 발 즉시 처리
+        self._fire_burst_shot(self._burst_index)
+        # 사운드는 각 발마다 재생(첫 발에서 이미 재생됨)
+
+    def _fire_burst_shot(self, shot_index: int):
+        # 탄약 부족 시 버스트 즉시 중단
+        if self.get_ammo_gauge() < self.right_click_ammo_cost:
+            self._burst_remaining = 0
+            return
+
+        # 탄약 차감 → 한 발 발사
+        self.reduce_ammo(self.right_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        # 우클릭용 반동/셰이크(메인 루프 트리거용):
+        # shot_index가 커질수록 살짝 더 강하게 준다.
+        self.recoil_strength = self._recoil_right_base + 0.5 * (shot_index - 1)
+        self.shake_strength  = self._shake_right_base + 2   * (shot_index - 1)
+
+        # 메인 루프의 recoil/shake 트리거는 weapon.last_shot_time == now 조건
+        self.last_shot_time = pygame.time.get_ticks()
+
+        # 샷 인덱스에 따른 큰 퍼짐 적용
+        spread = Gun40.BURST_BASE_SPREAD + Gun40.BURST_SPREAD_STEP * (shot_index - 1)
+
+        self._fire_one_bullet(
+            damage=Gun40.RIGHT_DAMAGE,
+            spread_deg=spread
+        )
+
+    def _mouse_angle_and_player(self):
+        # 마우스 방향 각도와 플레이어 월드 좌표
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        angle = math.atan2(dy, dx)
+        return angle, px, py
+
+    def _fire_one_bullet(self, damage, spread_deg):
+        # 직선 탄환 1발 생성(총구 오프셋 + 스프레드 적용은 Bullet이 담당)
+        angle, px, py = self._mouse_angle_and_player()
+        vx = math.cos(angle)
+        vy = math.sin(angle)
+
+        # 총구 위치 오프셋(플레이어 중심 → 총구)
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+        sx = px + offset_x
+        sy = py + offset_y
+
+        bullet = Bullet(
+            sx, sy,
+            sx + vx * Gun40.RANGE,
+            sy + vy * Gun40.RANGE,
+            spread_angle_degrees=spread_deg,
+            bullet_image=self.bullet_images[0],
+            speed=Gun40.SPEED,
+            max_distance=Gun40.RANGE,
+            damage=damage
+        )
+        bullet.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet)
+
+class Gun41(WeaponBase):
+    TIER = 1
+
+    LEFT_AMMO_COST = 7
+    LEFT_FIRE_DELAY = 180
+    LEFT_DAMAGE = 22
+    LEFT_SPREAD = 3
+    SPEED = 12 * config.PLAYER_VIEW_SCALE
+    RANGE = 1800 * config.PLAYER_VIEW_SCALE
+
+    TRACER_BONUS_DAMAGE = 12
+    TRACER_RANGE_MULT = 1.20
+    TRACER_KNOCKBACK = 150
+    TRACER_EXPLOSION_RADIUS = 60
+    TRACER_SPREAD = LEFT_SPREAD
+
+    RECOIL_NORMAL = 5
+    RECOIL_TRACER = 7
+    SHAKE_NORMAL = 7
+    SHAKE_TRACER = 10
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun41(
+            name="트레이서 카빈",
+            front_image=weapon_assets["gun41"]["front"],
+            topdown_image=weapon_assets["gun41"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun41"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun1"]["cartridges"],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun41.LEFT_AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=Gun41.TIER,
+            sounds_dict={
+                "fire": sounds["gun41_fire"],
+                "explosion": sounds["gun41_explosion"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=False,
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+
+        self.fire_delay = Gun41.LEFT_FIRE_DELAY
+
+        self.recoil_strength = Gun41.RECOIL_NORMAL
+        self.shake_strength = Gun41.SHAKE_NORMAL
+        self.speed_penalty = 0.0
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+
+        self._shot_counter = 0
+
+    # 기본 on_update는 좌클릭 발사만 처리하므로 그대로 사용
+    # (fire_delay/탄약 조건 충족 시 on_left_click 호출)
+    def on_left_click(self):
+        if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        # 이번 발사가 트레이서인지 판정 (5발째)
+        is_tracer = ((self._shot_counter + 1) % 5 == 0)
+
+        # 탄약 차감/사운드
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        # 마우스 방향/플레이어 월드 좌표
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        base_angle = math.atan2(dy, dx)
+
+        # 스프레드
+        spread_deg = Gun41.TRACER_SPREAD if is_tracer else Gun41.LEFT_SPREAD
+        final_angle = base_angle + math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
+        vx, vy = math.cos(final_angle), math.sin(final_angle)
+
+        # 총구 오프셋
+        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
+        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+        sx = px + offset_x
+        sy = py + offset_y
+
+        if is_tracer:
+            # 트레이서: PressureBullet 사용, 소폭 넉백 + 짧은 폭발 사운드
+            from entities import PressureBullet
+
+            damage = Gun41.LEFT_DAMAGE + Gun41.TRACER_BONUS_DAMAGE
+            max_dist = int(Gun41.RANGE * Gun41.TRACER_RANGE_MULT)
+
+            bullet = PressureBullet(
+                x=sx,
+                y=sy,
+                vx=vx,
+                vy=vy,
+                image=self.bullet_images[1][0],
+                explosion_radius=Gun41.TRACER_EXPLOSION_RADIUS,
+                damage=damage,
+                knockback_distance=Gun41.TRACER_KNOCKBACK,
+                explosion_sound=self.sounds["explosion"],  # 적중/폭발 시 재생
+            )
+            # 속도/사거리 보정
+            bullet.speed = Gun41.SPEED
+            bullet.max_distance = max_dist
+
+            # 트레이서 감각(반동/셰이크↑)
+            self.recoil_strength = Gun41.RECOIL_TRACER
+            self.shake_strength = Gun41.SHAKE_TRACER
+
+            bullet.trail_enabled = True
+            config.bullets.append(bullet)
+
+            # 카운터 리셋
+            self._shot_counter = 0
+        else:
+            # 기본탄: 직선 Bullet
+            bullet = Bullet(
+                sx, sy,
+                sx + vx * Gun41.RANGE,
+                sy + vy * Gun41.RANGE,
+                spread_deg,
+                self.bullet_images[0][0],
+                speed=Gun41.SPEED,
+                max_distance=Gun41.RANGE,
+                damage=Gun41.LEFT_DAMAGE
+            )
+            bullet.trail_enabled = self.bullet_has_trail
+            config.bullets.append(bullet)
+
+            # 반동/셰이크(보통)
+            self.recoil_strength = Gun41.RECOIL_NORMAL
+            self.shake_strength = Gun41.SHAKE_NORMAL
+
+            # 카운터 증가(1~4)
+            self._shot_counter = (self._shot_counter + 1) % 5
+
+        # 탄피 배출
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = base_angle + math.radians(90 + random.uniform(-15, 15))
+            evx = math.cos(eject_angle) * 1.2
+            evy = math.sin(eject_angle) * 1.2
+            pcx, pcy = self.get_player_world_position()
+            scatter = ScatteredBullet(pcx, pcy, evx, evy, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+class Gun42(WeaponBase):
+    TIER = 1
+
+    LEFT_AMMO_COST = 5
+    LEFT_FIRE_DELAY = 320
+    LEFT_DAMAGE = 15
+    LEFT_SPREAD = 5.0
+
+    BONUS_DAMAGE_PLUS = 15
+    BONUS_SPREAD = 1.5
+    BONUS_PIERCE = 1
+
+    SPEED = 12 * config.PLAYER_VIEW_SCALE
+    RANGE = 1800 * config.PLAYER_VIEW_SCALE
+
+    RECOIL_NORMAL = 6
+    RECOIL_BONUS  = 7
+    SHAKE_NORMAL  = 8
+    SHAKE_BONUS   = 10
+
+    STATIONARY_WINDOW_MS = 300
+    STATIONARY_THRESH_PX = 10.0
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun42(
+            name="궁수의 권총",
+            front_image=weapon_assets["gun42"]["front"],
+            topdown_image=weapon_assets["gun42"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun42"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun1"]["cartridges"],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun42.LEFT_AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=Gun42.TIER,
+            sounds_dict={
+                "fire": sounds["gun42_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=False,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=False,
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        from collections import deque
+        self.fire_delay = Gun42.LEFT_FIRE_DELAY
+        self.recoil_strength = Gun42.RECOIL_NORMAL
+        self.shake_strength = Gun42.SHAKE_NORMAL
+        self.speed_penalty = 0.0
+        self.distance_from_center = int(46 * config.PLAYER_VIEW_SCALE)
+
+        self._move_samples = deque()
+        self._ring_color = (255, 255, 255)
+
+    # 유틸: 이동 샘플 누적/거리 계산
+    def _sample_player_motion(self):
+        now = pygame.time.get_ticks()
+        px, py = self.get_player_world_position()
+        self._move_samples.append((now, float(px), float(py)))
+
+        # 0.3s 이전 샘플 제거
+        cutoff = now - self.STATIONARY_WINDOW_MS
+        while self._move_samples and self._move_samples[0][0] < cutoff:
+            self._move_samples.popleft()
+
+    def _recent_travel_dist(self):
+        # 최근 샘플 기준 누적 거리
+        if len(self._move_samples) < 2:
+            return 0.0
+        d = 0.0
+        prev_t, prev_x, prev_y = self._move_samples[0]
+        for t, x, y in self._move_samples:
+            d += math.hypot(x - prev_x, y - prev_y)
+            prev_x, prev_y = x, y
+        return d
+
+    # 반복 검사
+    def on_update(self, mouse_left_down, mouse_right_down):
+        # 이동 샘플링
+        self._sample_player_motion()
+
+        # 기본 입력 처리(좌클릭만 사용)
+        now = pygame.time.get_ticks()
+        if self.can_left_click and mouse_left_down and (now - self.last_shot_time >= self.fire_delay):
+            if self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
+
+    # 사격
+    def on_left_click(self):
+        if self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        # 정지 보너스 판정
+        stationary = (self._recent_travel_dist() <= self.STATIONARY_THRESH_PX)
+
+        # 탄약/사운드
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        # 마우스 각도
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        base_angle = math.atan2(dy, dx)
+
+        spread_deg = self.BONUS_SPREAD if stationary else self.LEFT_SPREAD
+        final_angle = base_angle + math.radians(random.uniform(-spread_deg/2, spread_deg/2))
+        ux, uy = math.cos(final_angle), math.sin(final_angle)
+
+        # 총구 위치
+        sx = px + ux * (30 * config.PLAYER_VIEW_SCALE)
+        sy = py + uy * (30 * config.PLAYER_VIEW_SCALE)
+
+        # 데미지/반동/셰이크
+        if stationary:
+            damage = self.LEFT_DAMAGE + self.BONUS_DAMAGE_PLUS
+            self.recoil_strength = self.RECOIL_BONUS
+            self.shake_strength  = self.SHAKE_BONUS
+        else:
+            damage = self.LEFT_DAMAGE
+            self.recoil_strength = self.RECOIL_NORMAL
+            self.shake_strength  = self.SHAKE_NORMAL
+
+        # 탄 생성
+        if stationary:
+            # 보너스 샷: 1회 관통 탄
+            bullet = self._PiercingBulletG42(
+                sx, sy, ux, uy,
+                image=self.bullet_images[0],
+                speed=self.SPEED, max_distance=self.RANGE,
+                damage=damage, pierce=self.BONUS_PIERCE
+            )
+            config.bullets.append(bullet)
+            # 정지 보너스 샷에만 링 이펙트 표시
+            self._spawn_muzzle_ring(sx, sy, strong=True)
+            self._spawn_plume(sx, sy, ux, uy, strong=True)
+        else:
+            # 기본탄: 엔진 Bullet
+            b = Bullet(
+                sx, sy,
+                sx + ux * self.RANGE,
+                sy + uy * self.RANGE,
+                spread_angle_degrees=self.LEFT_SPREAD,
+                bullet_image=self.bullet_images[0],
+                speed=self.SPEED, max_distance=self.RANGE, damage=damage
+            )
+            b.trail_enabled = False
+            config.bullets.append(b)
+            # 이동 중 샷: 링 없음, 플룸만
+            self._spawn_plume(sx, sy, ux, uy, strong=False)
+
+        # 탄피 배출
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = base_angle + math.radians(90 + random.uniform(-15, 15))
+            evx = math.cos(eject_angle) * 1.2
+            evy = math.sin(eject_angle) * 1.2
+            pcx, pcy = self.get_player_world_position()
+            scatter = ScatteredBullet(pcx, pcy, evx, evy, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+    # 비주얼 이펙트
+    def _spawn_muzzle_ring(self, x, y, strong=False):
+        # 작고 빠르게 확장하는 링 1~2개
+        radius = 10 if not strong else 14
+        life   = 140 if not strong else 190
+        color  = (255, 255, 255, 220) if not strong else (255, 250, 210, 235)
+        config.effects.append(self._RingPulse(x, y, radius, life, color))
+
+    def _spawn_plume(self, x, y, ux, uy, strong=False):
+        # 깃털처럼 가벼운 플룸(삼각형 꼬리) – 방향 반대로 길게
+        length = 26 if not strong else 38
+        life   = 120 if not strong else 180
+        config.effects.append(self._FeatherPlume(x, y, ux, uy, length, life))
+
+    # 내부 이펙트 클래스들
+    class _RingPulse:
+        def __init__(self, cx, cy, base_radius, life_ms, color_rgba):
+            self.cx, self.cy = float(cx), float(cy)
+            self.base_r = float(base_radius)
+            self.life = int(life_ms)
+            self.color = color_rgba
+            self.start = pygame.time.get_ticks()
+            self.finished = False
+
+        def update(self):
+            if pygame.time.get_ticks() - self.start >= self.life:
+                self.finished = True
+
+        def draw(self, screen, world_x, world_y):
+            t = (pygame.time.get_ticks() - self.start) / self.life
+            if t >= 1.0: return
+            alpha = max(0, int(self.color[3] * (1.0 - t)))
+            r = int(self.base_r * (1.0 + 1.2*t))
+            surf = pygame.Surface((r*2+4, r*2+4), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (self.color[0], self.color[1], self.color[2], alpha), (r+2, r+2), r, width=2)
+            screen.blit(surf, (self.cx - r - 2 - world_x, self.cy - r - 2 - world_y))
+
+    class _FeatherPlume:
+        def __init__(self, sx, sy, ux, uy, length, life_ms):
+            # ux,uy는 진행 방향 단위벡터. 꼬리는 반대방향.
+            self.sx, self.sy = float(sx), float(sy)
+            self.nx, self.ny = -ux, -uy
+            self.length = float(length)
+            self.life = int(life_ms)
+            self.start = pygame.time.get_ticks()
+            self.finished = False
+
+        def update(self):
+            if pygame.time.get_ticks() - self.start >= self.life:
+                self.finished = True
+
+        def draw(self, screen, world_x, world_y):
+            t = (pygame.time.get_ticks() - self.start) / self.life
+            if t >= 1.0: return
+            # 길이, 알파 감소
+            L = self.length * (1.0 - 0.8*t)
+            alpha = max(0, int(160 * (1.0 - t)))
+            # 삼각형 꼬리 좌표
+            tip_x = self.sx - world_x
+            tip_y = self.sy - world_y
+            base_x = tip_x + self.nx * L
+            base_y = tip_y + self.ny * L
+            # 폭은 길이의 18%
+            w = max(2.0, L * 0.18)
+            # 좌우로 직교 벡터
+            px, py = -self.ny, self.nx
+            p1 = (int(base_x + px*w), int(base_y + py*w))
+            p2 = (int(base_x - px*w), int(base_y - py*w))
+            p3 = (int(tip_x), int(tip_y))
+
+            surf_w = int(max(p1[0], p2[0], p3[0]) - min(p1[0], p2[0], p3[0]) + 4)
+            surf_h = int(max(p1[1], p2[1], p3[1]) - min(p1[1], p2[1], p3[1]) + 4)
+            if surf_w <= 0 or surf_h <= 0:
+                return
+            surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+
+            ox = min(p1[0], p2[0], p3[0]) - 2
+            oy = min(p1[1], p2[1], p3[1]) - 2
+            pts = [(p1[0]-ox, p1[1]-oy), (p2[0]-ox, p2[1]-oy), (p3[0]-ox, p3[1]-oy)]
+            pygame.draw.polygon(surf, (255, 255, 255, alpha), pts)
+            screen.blit(surf, (ox, oy))
+
+    class _PiercingBulletG42:
+        def __init__(self, sx, sy, ux, uy, image, speed, max_distance, damage, pierce=1):
+            # 위치/속도
+            self.x = float(sx); self.y = float(sy)
+            self.vx = float(ux) * float(speed)
+            self.vy = float(uy) * float(speed)
+            self.start_x = float(sx); self.start_y = float(sy)
+
+            self.image = image
+            self.angle_degrees = -math.degrees(math.atan2(self.vy, self.vx))
+            self.radius = image.get_width() / 2
+
+            self.speed = float(speed)
+            self.max_distance = float(max_distance)
+            self.damage = int(damage)
+            self.pierce = int(pierce)
+
+            # 렌더/제거
+            self.trail = []
+            self.to_remove = False
+
+            # 충돌 보조
+            from collider import Collider  # 타입 참조용
+            self.collider = Collider("circle", center=(self.x, self.y), size=self.radius)
+
+        def _travelled(self):
+            return math.hypot(self.x - self.start_x, self.y - self.start_y)
+
+        def _damage_enemy(self, enemy, dmg):
+            try:
+                if hasattr(enemy, "hit"):
+                    enemy.hit(dmg, None)
+                elif hasattr(enemy, "on_hit"):
+                    enemy.on_hit(dmg, knockback=0, hit_type="bullet")
+                else:
+                    enemy.hp = getattr(enemy, "hp", 0) - dmg
+                    if enemy.hp <= 0:
+                        enemy.alive = False
+            except Exception:
+                pass
+
+        def update(self, obstacle_manager):
+            # 이동
+            self.x += self.vx
+            self.y += self.vy
+            self.collider.center = (self.x, self.y)
+            self.trail.append((self.x, self.y))
+            if len(self.trail) > 18:
+                self.trail.pop(0)
+
+            # 거리 초과
+            if self._travelled() >= self.max_distance:
+                self.to_remove = True
+                return
+
+            # 적 충돌
+            if getattr(config, "combat_state", True):
+                for e in list(getattr(config, "all_enemies", [])):
+                    if not getattr(e, "alive", True):
+                        continue
+                    ex = getattr(e, "world_x", getattr(e, "x", None))
+                    ey = getattr(e, "world_y", getattr(e, "y", None))
+                    if ex is None or ey is None:
+                        continue
+                    er = int(getattr(e, "radius", 26))
+                    if math.hypot(ex - self.x, ey - self.y) <= (er + self.radius*0.6):
+                        # 타격
+                        self._damage_enemy(e, self.damage)
+                        # 관통 소비
+                        if self.pierce > 0:
+                            self.pierce -= 1
+                            # 살짝 앞으로 밀어 끼임 방지
+                            self.x += (self.vx / max(1.0, self.speed)) * 6.0
+                            self.y += (self.vy / max(1.0, self.speed)) * 6.0
+                            self.collider.center = (self.x, self.y)
+                        else:
+                            self.to_remove = True
+                            return
+                        # 한 프레임 당 1체만 처리
+                        break
+
+            # 장애물 충돌
+            obstacles = (
+                obstacle_manager.placed_obstacles
+                + obstacle_manager.static_obstacles
+                + obstacle_manager.combat_obstacles
+            )
+            for obs in obstacles:
+                for c in getattr(obs, "colliders", []):
+                    if getattr(c, "bullet_passable", False):
+                        continue
+                    pen = c.compute_penetration_circle((self.x, self.y), self.radius, (obs.world_x, obs.world_y))
+                    if not pen:
+                        continue
+                    # 관통 처리
+                    if self.pierce > 0:
+                        self.pierce -= 1
+                        # 충돌면 법선 방향으로 조금 밀어줌
+                        px, py = pen
+                        nlen = math.hypot(px, py)
+                        nx, ny = (0.0, -1.0) if nlen == 0 else (px/nlen, py/nlen)
+                        self.x += nx * (abs(nlen) + 1.2)
+                        self.y += ny * (abs(nlen) + 1.2)
+                        self.collider.center = (self.x, self.y)
+                        # 계속 진행
+                        break
+                    else:
+                        self.to_remove = True
+                        return
+
+        def draw(self, screen, world_x, world_y):
+            # 트레일
+            for pos in self.trail:
+                sx = pos[0] - world_x
+                sy = pos[1] - world_y
+                trail_w = 18
+                trail_h = 3
+                alpha = 60
+                surf = pygame.Surface((trail_w, trail_h), pygame.SRCALPHA)
+                surf.fill((255, 255, 255, alpha))
+                rot = pygame.transform.rotate(surf, self.angle_degrees)
+                rect = rot.get_rect(center=(sx, sy))
+                screen.blit(rot, rect)
+
+            # 본체
+            screen_x = self.x - world_x
+            screen_y = self.y - world_y
+            rotated = pygame.transform.rotate(self.image, self.angle_degrees)
+            rect = rotated.get_rect(center=(int(screen_x), int(screen_y)))
+            screen.blit(rotated, rect)
+
+class Gun43(WeaponBase):
+    TIER = 3
+
+    LEFT_AMMO_COST = 10
+    LEFT_FIRE_DELAY = 200
+    LEFT_DAMAGE = 30
+    LEFT_SPREAD = 2.2
+
+    SPEED = 12 * config.PLAYER_VIEW_SCALE
+    RANGE = 1900 * config.PLAYER_VIEW_SCALE
+
+    AFTERIMAGE_DELAY_MS = 400
+    AFTERIMAGE_DMG_MULT = 0.80
+    AFTERIMAGE_RANGE_MULT = 0.80
+
+    RECOIL_PRIMARY = 9
+    SHAKE_PRIMARY = 12
+
+    PENDING_LIMIT = 16
+
+    @staticmethod
+    def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
+        return Gun43(
+            name="잔상 카빈",
+            front_image=weapon_assets["gun43"]["front"],
+            topdown_image=weapon_assets["gun43"]["topdown"],
+            uses_bullets=True,
+            bullet_images=weapon_assets["gun43"]["bullets"],
+            uses_cartridges=True,
+            cartridge_images=weapon_assets["gun1"]["cartridges"],
+            can_left_click=True,
+            can_right_click=False,
+            left_click_ammo_cost=Gun43.LEFT_AMMO_COST,
+            right_click_ammo_cost=0,
+            tier=Gun43.TIER,
+            sounds_dict={
+                "fire": sounds["gun43_fire"],
+            },
+            get_ammo_gauge_fn=ammo_gauge,
+            reduce_ammo_fn=consume_ammo,
+            bullet_has_trail=True,
+            get_player_world_position_fn=get_player_world_position,
+            exclusive_inputs=False,
+        )
+
+    def __init__(self, name, front_image, topdown_image, **kwargs):
+        super().__init__(name, front_image, topdown_image, **kwargs)
+        self.fire_delay = Gun43.LEFT_FIRE_DELAY
+        self.recoil_strength = Gun43.RECOIL_PRIMARY
+        self.shake_strength = Gun43.SHAKE_PRIMARY
+        self.speed_penalty = 0.05
+        self.distance_from_center = int(50 * config.PLAYER_VIEW_SCALE)
+
+        self._pending_afterimages = []
+
+    # 반복 검사
+    def on_update(self, mouse_left_down, mouse_right_down):
+        now = pygame.time.get_ticks()
+
+        # 잔상 스폰 처리
+        if self._pending_afterimages:
+            # 리스트를 그대로 순회하면서 pop하기보다, 인덱스/필터 방식
+            remain = []
+            for (t_spawn, sx, sy, angle, dmg, max_dist) in self._pending_afterimages:
+                if now >= t_spawn:
+                    ux, uy = math.cos(angle), math.sin(angle)
+                    bullet = Bullet(
+                        sx, sy,
+                        sx + ux * max_dist,
+                        sy + uy * max_dist,
+                        spread_angle_degrees=0.0,
+                        bullet_image=self.bullet_images[0],
+                        speed=self.SPEED,
+                        max_distance=max_dist,
+                        damage=int(dmg)
+                    )
+                    bullet.trail_enabled = True
+                    # 잔상 꼬리(청록 느낌)
+                    self._spawn_ghost_plume(sx, sy, ux, uy, strong=False)
+                    config.bullets.append(bullet)
+                else:
+                    remain.append((t_spawn, sx, sy, angle, dmg, max_dist))
+            self._pending_afterimages = remain
+
+        # 좌클릭 처리
+        if self.can_left_click and mouse_left_down:
+            if now - self.last_shot_time >= self.fire_delay and self.get_ammo_gauge() >= self.left_click_ammo_cost:
+                self.on_left_click()
+                self.last_shot_time = now
+
+    def on_left_click(self):
+        if self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
+
+        # 탄약 차감/사운드
+        self.reduce_ammo(self.left_click_ammo_cost)
+        self.sounds["fire"].play()
+
+        # 마우스 각도 + 스프레드 적용
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        px, py = self.get_player_world_position()
+        dx = mouse_x - config.player_rect.centerx
+        dy = mouse_y - config.player_rect.centery
+        base_angle = math.atan2(dy, dx)
+        final_angle = base_angle + math.radians(random.uniform(-self.LEFT_SPREAD/2, self.LEFT_SPREAD/2))
+        ux, uy = math.cos(final_angle), math.sin(final_angle)
+
+        # 총구 위치
+        sx = px + ux * (30 * config.PLAYER_VIEW_SCALE)
+        sy = py + uy * (30 * config.PLAYER_VIEW_SCALE)
+
+        # 원탄 생성(스프레드는 이미 angle에 반영했으므로 0으로)
+        b = Bullet(
+            sx, sy,
+            sx + ux * self.RANGE,
+            sy + uy * self.RANGE,
+            spread_angle_degrees=0.0,
+            bullet_image=self.bullet_images[0],
+            speed=self.SPEED,
+            max_distance=self.RANGE,
+            damage=self.LEFT_DAMAGE
+        )
+        b.trail_enabled = True
+        config.bullets.append(b)
+
+        # 카메라 셰이크(원탄 전용)
+        self.recoil_strength = self.RECOIL_PRIMARY
+        self.shake_strength  = self.SHAKE_PRIMARY
+
+        # 비주얼 이펙트(원탄): 타임 립플 + 고스트 플룸(강)
+        self._spawn_time_ripple(sx, sy)
+        self._spawn_ghost_plume(sx, sy, ux, uy, strong=True)
+
+        # 잔상 예약
+        if len(self._pending_afterimages) < self.PENDING_LIMIT:
+            t_spawn = pygame.time.get_ticks() + self.AFTERIMAGE_DELAY_MS
+            dmg = self.LEFT_DAMAGE * self.AFTERIMAGE_DMG_MULT
+            max_dist = int(self.RANGE * self.AFTERIMAGE_RANGE_MULT)
+            self._pending_afterimages.append((t_spawn, sx, sy, final_angle, dmg, max_dist))
+
+        # 탄피 배출
+        if self.uses_cartridges and self.cartridge_images:
+            eject_angle = base_angle + math.radians(90 + random.uniform(-15, 15))
+            evx = math.cos(eject_angle) * 1.2
+            evy = math.sin(eject_angle) * 1.2
+            pcx, pcy = self.get_player_world_position()
+            scatter = ScatteredBullet(pcx, pcy, evx, evy, self.cartridge_images[0])
+            config.scattered_bullets.append(scatter)
+
+    # 이펙트
+    def _spawn_time_ripple(self, x, y):
+        # 얕고 빠른 원형 링 1개 (원탄만)
+        config.effects.append(self._RingPulse43(x, y, base_radius=12, life_ms=110))
+
+    def _spawn_ghost_plume(self, x, y, ux, uy, strong=False):
+        # 진행 반대방향으로 길게 남는 꼬리, 잔상은 청록빛/알파 약함
+        length = 30 if not strong else 42
+        life   = 120 if not strong else 180
+        tint   = (180, 255, 240, 150) if not strong else (220, 255, 245, 190)
+        config.effects.append(self._Plume43(x, y, -ux, -uy, length, life, tint))
+
+    # 내부 이펙트 클래스들
+    class _RingPulse43:
+        def __init__(self, cx, cy, base_radius=12, life_ms=110):
+            self.cx, self.cy = float(cx), float(cy)
+            self.base_r = float(base_radius)
+            self.life = int(life_ms)
+            self.start = pygame.time.get_ticks()
+            self.finished = False
+
+        def update(self):
+            if pygame.time.get_ticks() - self.start >= self.life:
+                self.finished = True
+
+        def draw(self, screen, world_x, world_y):
+            t = (pygame.time.get_ticks() - self.start) / self.life
+            if t >= 1.0:
+                return
+            alpha = max(0, int(200 * (1.0 - t)))
+            r = int(self.base_r * (1.0 + 1.15 * t))
+            surf = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (255, 255, 255, alpha), (r + 2, r + 2), r, width=2)
+            screen.blit(surf, (self.cx - r - 2 - world_x, self.cy - r - 2 - world_y))
+
+    class _Plume43:
+        def __init__(self, sx, sy, nx, ny, length, life_ms, color_rgba):
+            self.sx, self.sy = float(sx), float(sy)
+            self.nx, self.ny = float(nx), float(ny)
+            self.length = float(length)
+            self.life = int(life_ms)
+            self.color = color_rgba
+            self.start = pygame.time.get_ticks()
+            self.finished = False
+
+        def update(self):
+            if pygame.time.get_ticks() - self.start >= self.life:
+                self.finished = True
+
+        def draw(self, screen, world_x, world_y):
+            t = (pygame.time.get_ticks() - self.start) / self.life
+            if t >= 1.0:
+                return
+            L = self.length * (1.0 - 0.85 * t)
+            alpha = max(0, int(self.color[3] * (1.0 - t)))
+            tip_x = self.sx - world_x
+            tip_y = self.sy - world_y
+            base_x = tip_x + self.nx * L
+            base_y = tip_y + self.ny * L
+            w = max(2.0, L * 0.18)
+            px, py = -self.ny, self.nx
+            p1 = (int(base_x + px*w), int(base_y + py*w))
+            p2 = (int(base_x - px*w), int(base_y - py*w))
+            p3 = (int(tip_x), int(tip_y))
+            surf_w = int(max(p1[0], p2[0], p3[0]) - min(p1[0], p2[0], p3[0]) + 4)
+            surf_h = int(max(p1[1], p2[1], p3[1]) - min(p1[1], p2[1], p3[1]) + 4)
+            if surf_w <= 0 or surf_h <= 0:
+                return
+            surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+            ox = min(p1[0], p2[0], p3[0]) - 2
+            oy = min(p1[1], p2[1], p3[1]) - 2
+            pts = [(p1[0]-ox, p1[1]-oy), (p2[0]-ox, p2[1]-oy), (p3[0]-ox, p3[1]-oy)]
+            pygame.draw.polygon(surf, (self.color[0], self.color[1], self.color[2], alpha), pts)
+            screen.blit(surf, (ox, oy))
+
 WEAPON_CLASSES = [Gun1, Gun2, Gun3, Gun4, Gun5, Gun6, Gun7, Gun8, Gun9, Gun10,
                   Gun11, Gun12, Gun13, Gun14, Gun15, Gun16, Gun17, Gun18, Gun19, Gun20,
                   Gun21, Gun22, Gun23, Gun24, Gun25, Gun26, Gun27, Gun28, Gun29, Gun30,
-                  Gun31, Gun32, Gun33, Gun34, Gun35, Gun36, Gun37, Gun38]
+                  Gun31, Gun32, Gun33, Gun34, Gun35, Gun36, Gun37, Gun38, Gun39, Gun40,
+                  Gun41, Gun42, Gun43]

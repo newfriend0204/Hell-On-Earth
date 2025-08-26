@@ -8,9 +8,6 @@ def load_sounds():
 
     # 믹서 채널 수 설정
     pygame.mixer.set_num_channels(32)
-    
-    walk_sound = pygame.mixer.Sound(path_sound("Sound", "ForestWalk.mp3"))
-    walk_sound.set_volume(0.3)
 
     enemy_die_sound = pygame.mixer.Sound(path_sound("Sound", "EnemyDie.mp3"))
     enemy_die_sound.set_volume(0.5)
@@ -97,6 +94,14 @@ def load_sounds():
         "gun38_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Fire.mp3")),
         "gun38_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Explosion.mp3")),
         "gun38_loop": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun38Loop.mp3")),
+        "gun39_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun39Fire.mp3")),
+        "gun39_good": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun39Good.mp3")),
+        "gun39_perfect": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun39Perfect.mp3")),
+        "gun40_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun40Fire.mp3")),
+        "gun41_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun41Fire.mp3")),
+        "gun41_explosion": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun41Explosion.mp3")),
+        "gun42_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun42Fire.mp3")),
+        "gun43_fire": pygame.mixer.Sound(path_sound("Sound", "Gun", "Gun43Fire.mp3")),
     }
 
     entity_sounds = {
@@ -129,7 +134,6 @@ def load_sounds():
         "boss7_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockCharge.mp3")),
         "boss7_fire": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockBurst.mp3")),
         "spawn_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnCharge.mp3")),
-        "spawn_enemy": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnEnemy.mp3")),
         "spawn_burst": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
     }
 
@@ -172,7 +176,6 @@ def load_sounds():
 
     return {
         # 모든 사운드 딕셔너리 반환
-        "walk": walk_sound,
         "enemy_die": enemy_die_sound,
         "room_move": room_move_sound,
         "swap_gun": swap_gun_sound,
