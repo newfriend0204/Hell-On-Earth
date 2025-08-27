@@ -1139,13 +1139,13 @@ class Enemy5(AIBase):
     STATE_PREPARE_ATTACK = 1
     STATE_ATTACK = 2
 
-    HP = 150
+    HP = 190
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.7
     APPROACH_SPEED = BASE_SPEED * 0.5
     BULLET_SPEED = 12 * PLAYER_VIEW_SCALE
-    PELLET_COUNT = 8
-    PELLET_SPREAD_DEG = 30
-    PELLET_DAMAGE = 10
+    PELLET_COUNT = 7
+    PELLET_SPREAD_DEG = 25
+    PELLET_DAMAGE = 8
     PELLET_RANGE = 500 * PLAYER_VIEW_SCALE
     MIN_COOLDOWN = 2000
     MAX_COOLDOWN = 5000
@@ -1320,15 +1320,15 @@ class Enemy6(AIBase):
     HP_MAX = 700
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
 
-    FIREBALL_DAMAGE = 45
-    FIREBALL_BURN_DMG = 12
+    FIREBALL_DAMAGE = 35
+    FIREBALL_BURN_DMG = 10
     FIREBALL_BURN_DURATION = 2000
     FIREBALL_COOLDOWN = 1500
 
-    PILLAR_DAMAGE_TICK = 25
+    PILLAR_DAMAGE_TICK = 20
     PILLAR_RADIUS = 150
     PILLAR_DELAY = 700
-    PILLAR_DURATION = 3000
+    PILLAR_DURATION = 2000
     PILLAR_COOLDOWN = 3500
 
     TELEPORT_MIN_COOLDOWN = 6000
@@ -1621,7 +1621,7 @@ class Enemy7(AIBase):
 class Enemy8(AIBase):
     rank = 2
 
-    HP = 220
+    HP = 200
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
     RETREAT_SPEED = BASE_SPEED * 1.2
 
@@ -1629,7 +1629,7 @@ class Enemy8(AIBase):
     GRENADE_EXPLOSION_RADIUS = 150
     GRENADE_DAMAGE = 30
     GRENADE_KNOCKBACK = 120
-    GRENADE_EXPLOSION_DELAY = 1500  # ms
+    GRENADE_EXPLOSION_DELAY = 1500
     THROW_COOLDOWN = 2500
     PREPARE_TIME = 500
     NEAR_DISTANCE = 300 * PLAYER_VIEW_SCALE
@@ -1759,7 +1759,7 @@ class Enemy8(AIBase):
 
 class Enemy9(AIBase):
     rank = 5
-    HP = 430
+    HP = 400
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
     RANGED_COOLDOWN = 2500
     RANGED_RANGE = 1000
@@ -1849,17 +1849,17 @@ class Enemy10(AIBase):
     rank = 6
 
     DETECT_MIN = 0
-    DETECT_MAX = 1400 * PLAYER_VIEW_SCALE
+    DETECT_MAX = 1000 * PLAYER_VIEW_SCALE
     LASER_TRACK_TIME = 1500
-    FIRE_DURATION = 2000
-    OVERHEAT_TIME = 1000
+    FIRE_DURATION = 1750
+    OVERHEAT_TIME = 2500
     FIRE_INTERVAL = 75
     ROT_SPEED_TRACK = math.radians(100)
     ROT_SPEED_FIRE = math.radians(80)
-    BULLET_SPEED = 14 * PLAYER_VIEW_SCALE
+    BULLET_SPEED = 10 * PLAYER_VIEW_SCALE
     BULLET_RANGE = 700 * PLAYER_VIEW_SCALE
     BULLET_DAMAGE = 7
-    LASER_THICKNESS = 3
+    LASER_THICKNESS = 6
     LASER_COLOR = (255, 0, 0)
 
     DEATH_EXPL_RADIUS = 180 * PLAYER_VIEW_SCALE
@@ -2161,7 +2161,7 @@ class Enemy11(AIBase):
 
     DETECT_RADIUS = int(600 * PLAYER_VIEW_SCALE)
     TRIGGER_RADIUS = int(250 * PLAYER_VIEW_SCALE)
-    CANCEL_RADIUS = int(300 * PLAYER_VIEW_SCALE)
+    CANCEL_RADIUS = int(400 * PLAYER_VIEW_SCALE)
     PREPARE_MS = 1000
 
     EXPLOSION_RADIUS = int(220 * PLAYER_VIEW_SCALE)
@@ -4668,7 +4668,7 @@ class Enemy19(AIBase):
         screen.blit(body, body_rect)
 
 class Enemy20(AIBase):
-    rank = 8
+    rank = 9
 
     MAX_HP = 700
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
@@ -5444,7 +5444,7 @@ class Enemy22(AIBase):
         self.spawn_dropped_items(2, 3)
 
 class Enemy23(AIBase):
-    rank = 8
+    rank = 9
 
     HP = 700
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
@@ -7753,7 +7753,7 @@ class Boss3(AIBase):
             if self.hp <= 0:
                 self.alive = False
                 self.boss._sound("anvil_break", "AnvilBreak")
-                self.boss.spawn_dropped_items(1, 2)
+                self.boss.spawn_dropped_items(4, 4)
 
         def draw(self, screen, world_x, world_y, sx=0, sy=0):
             if not self.alive: return

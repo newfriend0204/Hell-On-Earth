@@ -52,6 +52,394 @@ RANK_LABELS = {
     "5": "5(전설)",
 }
 
+def _fit_image(img, max_w, max_h, upscale=False):
+    # 안전 스케일러: (max_w, max_h) 박스 안으로 비율 유지 스케일.
+    iw, ih = img.get_width(), img.get_height()
+    if iw <= 0 or ih <= 0:
+        return img
+    if max_w <= 0 or max_h <= 0:
+        return img
+    scale = min(max_w / iw, max_h / ih)
+    if not upscale:
+        scale = min(1.0, scale)
+    tw = max(1, int(iw * scale))
+    th = max(1, int(ih * scale))
+    if tw == iw and th == ih:
+        return img
+    return pygame.transform.smoothscale(img, (tw, th))
+
+def _ui_draw_dim(surface, alpha=170):
+    dim = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    dim.fill((0,0,0,alpha))
+    surface.blit(dim, (0,0))
+
+def _ui_draw_center_panel(surface, w, h):
+    panel = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (18,18,18,235), (0,0,w,h), border_radius=16)
+    pygame.draw.rect(panel, (200,200,200,90), (0,0,w,h), width=2, border_radius=18)
+    rect = panel.get_rect(center=surface.get_rect().center)
+    surface.blit(panel, rect)
+    return rect
+
+def _ui_draw_chip(surface, text, center_xy, active=False):
+    font = KOREAN_FONT_25
+    pad_x, pad_y = 18, 8
+    label = font.render(text, True, (230,230,230))
+    w = label.get_width() + pad_x*2
+    h = label.get_height() + pad_y*2
+    chip = pygame.Surface((w,h), pygame.SRCALPHA)
+    bg = (34,34,34,230) if not active else (60,60,60,240)
+    pygame.draw.rect(chip, bg, (0,0,w,h), border_radius=999)
+    pygame.draw.rect(chip, (200,200,200,90), (0,0,w,h), width=2, border_radius=999)
+    chip.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
+    rect = chip.get_rect(center=center_xy)
+    surface.blit(chip, rect)
+    return rect
+
+def _ui_draw_button(surface, text, center_xy):
+    font = KOREAN_FONT_25
+    label = font.render(text, True, (230,230,230))
+    w, h = max(160, label.get_width()+48), label.get_height()+28
+    btn = pygame.Surface((w,h), pygame.SRCALPHA)
+    pygame.draw.rect(btn, (18,18,18,230), (0,0,w,h), border_radius=14)
+    pygame.draw.rect(btn, (200,200,200,90), (0,0,w,h), width=2, border_radius=16)
+    btn.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
+    rect = btn.get_rect(center=center_xy)
+    surface.blit(btn, rect)
+    return rect
+
+def _ui_draw_divider(surface, x1, y1, x2, y2, color=(90,90,90), width=2):
+    pygame.draw.line(surface, color, (int(x1),int(y1)), (int(x2),int(y2)), width)
+
+def _fit_image(img, max_w, max_h, upscale=False):
+    # (max_w,max_h) 박스 안으로 비율 유지 축소. 기본은 업스케일 금지
+    iw, ih = img.get_width(), img.get_height()
+    if iw == 0 or ih == 0:
+        return img
+    scale = min(max_w / iw, max_h / ih)
+    if not upscale:
+        scale = min(1.0, scale)
+    tw, th = max(1, int(iw * scale)), max(1, int(ih * scale))
+    if tw == iw and th == ih:
+        return img
+    return pygame.transform.smoothscale(img, (tw, th))
+
+def _ui_draw_wrapped_text(surface, text, font, color, x, y, max_width, line_gap=6):
+    cur_y = y
+    for block in (text or "").split('\n'):
+        if block.strip() == "":
+            cur_y += font.get_height() + line_gap
+            continue
+        words = block.split(' ')
+        line = ""
+        for w in words:
+            trial = w if not line else line + " " + w
+            if font.size(trial)[0] <= max_width:
+                line = trial
+            else:
+                surf = font.render(line, True, color)
+                surface.blit(surf, (x, cur_y))
+                cur_y += font.get_height() + line_gap
+                line = w
+        if line:
+            surf = font.render(line, True, color)
+            surface.blit(surf, (x, cur_y))
+            cur_y += font.get_height() + line_gap
+    return cur_y
+
+def draw_weapon_gallery_modal(screen, images, weapon_assets, weapon_stats, tier, scroll):
+    _ui_draw_dim(screen, 170)
+    rect = _ui_draw_center_panel(screen, 980, 660)
+    title = KOREAN_FONT_BOLD_28.render("무기 도감", True, (235,235,235))
+    screen.blit(title, ((screen.get_width()-title.get_width())//2, rect.y+18))
+
+    chip_rects = []
+    cx = screen.get_width()//2
+    gap = 140
+    top = rect.y + 18 + title.get_height() + 8
+    for i,t in enumerate([1,2,3,4,5]):
+        cr = _ui_draw_chip(screen, RANK_LABELS.get(str(t), str(t)), (cx + (i-2)*gap, top+18), active=(t==tier))
+        chip_rects.append((cr, t))
+
+    grid_top = top + 58
+    grid_left = rect.x + 40
+    grid_right = rect.right - 40
+    grid_bottom = rect.bottom - 80
+    grid_w = grid_right - grid_left
+    cols = 5
+    card_w = grid_w//cols - 16
+    card_h = 160
+
+    ids = []
+    for wid, stat in weapon_stats.items():
+        if str(stat.get("rank","")).strip() == str(tier):
+            if wid in weapon_assets:
+                ids.append(wid)
+    def _key(wid):
+        m = re.search(r'(\d+)', wid)
+        return int(m.group(1)) if m else 0
+    ids.sort(key=_key)
+
+    item_rects = []
+    font = KOREAN_FONT_BOLD_22
+    for idx, wid in enumerate(ids):
+        col = idx % cols
+        row = idx // cols
+        x = grid_left + col*(card_w+16)
+        y = grid_top + row*(card_h+16) - int(scroll)
+        if y > grid_bottom or y+card_h < grid_top:
+            continue
+        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(card, (18,18,18,230), (0,0,card_w,card_h), border_radius=12)
+        pygame.draw.rect(card, (200,200,200,70), (0,0,card_w,card_h), width=2, border_radius=12)
+        img = weapon_assets.get(wid, {}).get("front") or weapon_assets.get(wid, {}).get("topdown")
+        if img is None:
+            img = pygame.Surface((80,80), pygame.SRCALPHA); pygame.draw.rect(img,(80,80,80,150),(0,0,80,80),border_radius=12)
+        max_img_w = card_w - 28
+        max_img_h = card_h - 56  # 이름 라벨 공간 확보
+        thumb = _fit_image(img, max_img_w, max_img_h)
+        card.blit(thumb, ((card_w - thumb.get_width())//2, 12))
+        name = weapon_stats[wid].get("name", wid.upper())
+        # 긴 이름은 두 줄로 자동 래핑(폰트 크기 유지)
+        if font.size(name)[0] <= card_w - 16:
+            label = font.render(name, True, (230,230,230))
+            card.blit(label, ((card_w - label.get_width())//2, card_h - label.get_height() - 14))
+        else:
+            words = name.split(' ')
+            line1, line2 = "", ""
+            for w in words:
+                trial = (line1 + " " + w).strip()
+                if font.size(trial)[0] <= card_w - 16:
+                    line1 = trial
+                else:
+                    line2 = (line2 + " " + w).strip()
+            y0 = card_h - font.get_height() * (2 if line2 else 1) - 14
+            label1 = font.render(line1, True, (230,230,230))
+            card.blit(label1, ((card_w - label1.get_width())//2, y0))
+            if line2:
+                label2 = font.render(line2, True, (230,230,230))
+                card.blit(label2, ((card_w - label2.get_width())//2, y0 + font.get_height()))
+        r = card.get_rect(topleft=(x,y))
+        screen.blit(card, r)
+        item_rects.append((r, wid))
+
+    total_rows = (len(ids)+cols-1)//cols
+    total_h = total_rows*(card_h+16)
+    max_scroll = max(0, total_h - (grid_bottom-grid_top))
+    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36))
+    return {"chip_rects": chip_rects, "item_rects": item_rects, "close_rect": close_rect, "max_scroll": max_scroll}
+
+def draw_weapon_detail_modal(screen, weapon_assets, weapon_stats, wid):
+    stat = weapon_stats.get(wid, {})
+    name = stat.get("name", wid.upper())
+    _ui_draw_dim(screen, 170)
+    rect = _ui_draw_center_panel(screen, 1080, 680)
+
+    header = KOREAN_FONT_BOLD_28.render(name, True, (235,235,235))
+    screen.blit(header, ((screen.get_width()-header.get_width())//2, rect.y+18))
+    _ui_draw_divider(screen, rect.x+16, rect.y+18+header.get_height()+10, rect.right-16, rect.y+18+header.get_height()+10)
+
+    left_x   = rect.x + 24
+    left_w   = 440 
+    content_top    = rect.y + 96
+    content_bottom = rect.bottom - 60
+    avail_h = max(200, content_bottom - content_top)
+    gap_h   = 16
+    top_h   = int(avail_h * 0.56)
+    bottom_h = max(160, avail_h - top_h - gap_h)
+    right_x = left_x + left_w + 40
+    right_w = max(240, rect.right - right_x - 24)
+
+    # 좌측 상단
+    img_front = weapon_assets.get(wid, {}).get("front")
+    if img_front is None:
+        img_front = pygame.Surface((200,120), pygame.SRCALPHA); pygame.draw.rect(img_front,(80,80,80,150),(0,0,200,120),border_radius=12)
+    imgF = _fit_image(img_front, left_w-20, top_h-20, upscale=True)
+    box = pygame.Surface((left_w, top_h), pygame.SRCALPHA)
+    pygame.draw.rect(box, (18,18,18,210), (0,0,left_w,top_h), border_radius=12)
+    pygame.draw.rect(box, (200,200,200,80), (0,0,left_w,top_h), width=2, border_radius=12)
+    box.blit(imgF, ((left_w-imgF.get_width())//2, (top_h-imgF.get_height())//2))
+    screen.blit(box, (left_x, content_top))
+
+    _ui_draw_divider(screen, left_x, rect.y + 100 + top_h + 12, left_x + left_w, rect.y + 100 + top_h + 12)
+
+    # 좌측 하단
+    img_topdown = weapon_assets.get(wid, {}).get("topdown")
+    if img_topdown is None:
+        img_topdown = pygame.Surface((160,160), pygame.SRCALPHA); pygame.draw.rect(img_topdown,(80,80,80,150),(0,0,160,160),border_radius=12)
+    # 상세에서는 업스케일 허용해서 더 크게 보여줌
+    imgT = _fit_image(img_topdown, left_w-20, bottom_h-20, upscale=True)
+    box2 = pygame.Surface((left_w, bottom_h), pygame.SRCALPHA)
+    pygame.draw.rect(box2, (18,18,18,210), (0,0,left_w,bottom_h), border_radius=12)
+    pygame.draw.rect(box2, (200,200,200,80), (0,0,left_w,bottom_h), width=2, border_radius=12)
+    box2.blit(imgT, ((left_w-imgT.get_width())//2, (bottom_h-imgT.get_height())//2))
+    screen.blit(box2, (left_x, content_top + top_h + gap_h))
+
+    _ui_draw_divider(screen, right_x-16, content_top-4, right_x-16, rect.bottom-60)
+
+    small = KOREAN_FONT_18
+    x = right_x
+    y = content_top + 14
+
+    rank_key = str(stat.get("rank",""))
+    rank_label = RANK_LABELS.get(rank_key, rank_key)
+    stat_rows = [
+        (rank_icon, "등급", rank_label),
+        (power_icon, "공격력", str(stat.get("power","-"))),
+        (spread_icon, "탄퍼짐", str(stat.get("spread","-"))),
+        (cost_icon, "소모량", str(stat.get("cost","-"))),
+    ]
+    for icon, label, val in stat_rows:
+        screen.blit(icon, (x, y))
+        txt = f"{label}: {val}"
+        surf = small.render(txt, True, (230,230,230))
+        screen.blit(surf, (x + 40, y + 4))
+        y += 36
+        _ui_draw_divider(screen, x, y, x + right_w - 12, y); y += 8
+
+    y += 6
+    cap = KOREAN_FONT_BOLD_22.render("설명", True, (200,255,200))
+    screen.blit(cap, (x, y)); y += cap.get_height() + 6
+    y = _ui_draw_wrapped_text(screen, stat.get("desc",""), small, (220,220,220), x, y, right_w-12)
+    _ui_draw_divider(screen, x, y+4, x + right_w - 12, y+4); y += 14
+
+    cap = KOREAN_FONT_BOLD_22.render("사용법", True, (200,255,200))
+    screen.blit(cap, (x, y)); y += cap.get_height() + 6
+    _ = _ui_draw_wrapped_text(screen, stat.get("usage",""), small, (220,220,220), x, y, right_w-12)
+
+    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36))
+    return back_rect
+
+def draw_enemy_gallery_modal(screen, images, enemy_book, rank, scroll):
+    _ui_draw_dim(screen, 170)
+    rect = _ui_draw_center_panel(screen, 980, 660)
+    title = KOREAN_FONT_BOLD_28.render("적 도감", True, (235,235,235))
+    screen.blit(title, ((screen.get_width()-title.get_width())//2, rect.y+18))
+
+    chip_rects = []
+    cx = screen.get_width()//2
+    gap = 110
+    top = rect.y + 18 + title.get_height() + 8
+    for i,rk in enumerate([1,2,3,4,5]):
+        chip_rects.append((_ui_draw_chip(screen, f"{rk}", (cx + (i-2)*gap, top+14), active=(rk==rank)), rk))
+    for i,rk in enumerate([6,7,8,9,10]):
+        chip_rects.append((_ui_draw_chip(screen, f"{rk}", (cx + (i-2)*gap, top+14+48), active=(rk==rank)), rk))
+
+    grid_top = top + 100
+    grid_left = rect.x + 40
+    grid_right = rect.right - 40
+    grid_bottom = rect.bottom - 80
+    grid_w = grid_right - grid_left
+    cols = 5
+    card_w = grid_w//cols - 16
+    card_h = 170
+
+    ids = [eid for eid,data in enemy_book.items() if str(data.get("rank","")).strip()==str(rank)]
+    def _key(eid):
+        m = re.search(r'(\d+)', eid)
+        return int(m.group(1)) if m else 0
+    ids.sort(key=_key)
+
+    item_rects = []
+    font = KOREAN_FONT_BOLD_22
+    for idx, eid in enumerate(ids):
+        col = idx % cols
+        row = idx // cols
+        x = grid_left + col*(card_w+16)
+        y = grid_top + row*(card_h+16) - int(scroll)
+        if y > grid_bottom or y+card_h < grid_top:
+            continue
+        card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        pygame.draw.rect(card, (18,18,18,230), (0,0,card_w,card_h), border_radius=12)
+        pygame.draw.rect(card, (200,200,200,70), (0,0,card_w,card_h), width=2, border_radius=12)
+        img = images.get(eid)
+        if img is None:
+            img = pygame.Surface((96,96), pygame.SRCALPHA); pygame.draw.rect(img,(80,80,80,150),(0,0,96,96),border_radius=12)
+        max_img_w = card_w - 28
+        max_img_h = card_h - 56
+        thumb = _fit_image(img, max_img_w, max_img_h)
+        card.blit(thumb, ((card_w - thumb.get_width())//2, 10))
+        name = enemy_book[eid].get("name", eid.upper())
+        if font.size(name)[0] <= card_w - 16:
+            label = font.render(name, True, (230,230,230))
+            card.blit(label, ((card_w - label.get_width())//2, card_h - label.get_height() - 12))
+        else:
+            words = name.split(' ')
+            line1, line2 = "", ""
+            for w in words:
+                trial = (line1 + " " + w).strip()
+                if font.size(trial)[0] <= card_w - 16:
+                    line1 = trial
+                else:
+                    line2 = (line2 + " " + w).strip()
+            y0 = card_h - font.get_height() * (2 if line2 else 1) - 12
+            label1 = font.render(line1, True, (230,230,230))
+            card.blit(label1, ((card_w - label1.get_width())//2, y0))
+            if line2:
+                label2 = font.render(line2, True, (230,230,230))
+                card.blit(label2, ((card_w - label2.get_width())//2, y0 + font.get_height()))
+        r = card.get_rect(topleft=(x,y))
+        screen.blit(card, r)
+        item_rects.append((r, eid))
+
+    total_rows = (len(ids)+cols-1)//cols
+    total_h = total_rows*(card_h+16)
+    max_scroll = max(0, total_h - (grid_bottom-grid_top))
+    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36))
+    return {"chip_rects": chip_rects, "item_rects": item_rects, "close_rect": close_rect, "max_scroll": max_scroll}
+
+def draw_enemy_detail_modal(screen, images, enemy_book, eid):
+    data = enemy_book.get(eid, {})
+    name = data.get("name", eid.upper())
+    _ui_draw_dim(screen, 170)
+    rect = _ui_draw_center_panel(screen, 1000, 640)
+
+    header = KOREAN_FONT_BOLD_28.render(name, True, (235,235,235))
+    screen.blit(header, ((screen.get_width()-header.get_width())//2, rect.y+18))
+    _ui_draw_divider(screen, rect.x+16, rect.y+18+header.get_height()+10, rect.right-16, rect.y+18+header.get_height()+10)
+
+    img = images.get(eid)
+    if img is None:
+        img = pygame.Surface((160,160), pygame.SRCALPHA); pygame.draw.rect(img,(80,80,80,150),(0,0,160,160),border_radius=12)
+    # 좌측 단일 박스: 패널 내 가용 높이를 최대한 활용
+    left_x   = rect.x + 24
+    left_w   = 480
+    content_top    = rect.y + 96
+    content_bottom = rect.bottom - 60
+    box_h = max(300, content_bottom - content_top)
+    # 업스케일 허용으로 크게
+    thumb = _fit_image(img, left_w - 20, box_h - 20, upscale=True)
+    box = pygame.Surface((left_w, box_h), pygame.SRCALPHA)
+    bw, bh = box.get_width(), box.get_height()
+    pygame.draw.rect(box, (18,18,18,210), (0, 0, bw, bh), border_radius=12)
+    pygame.draw.rect(box, (200,200,200,80), (0, 0, bw, bh), width=2, border_radius=12)
+    box.blit(thumb, ((bw - thumb.get_width()) // 2, (bh - thumb.get_height()) // 2))
+    screen.blit(box, (left_x, content_top))
+
+    right_x = left_x + left_w + 40
+    right_w = max(240, rect.right - right_x - 24)
+    small = KOREAN_FONT_18
+    y = content_top + 8
+
+    surf = small.render(f"이름: {name}", True, (230,230,230))
+    screen.blit(surf, (right_x, y)); y += small.get_height() + 10
+    rk = str(data.get("rank","-"))
+    surf = small.render(f"랭크: {rk}", True, (230,230,230))
+    screen.blit(surf, (right_x, y)); y += small.get_height() + 6
+    _ui_draw_divider(screen, right_x, y+4, right_x+right_w-12, y+4); y += 16
+
+    cap = KOREAN_FONT_BOLD_22.render("패턴", True, (200,255,200))
+    screen.blit(cap, (right_x, y)); y += cap.get_height() + 6
+    y = _ui_draw_wrapped_text(screen, data.get("pattern","준비중"), small, (220,220,220), right_x, y, right_w-12)
+    _ui_draw_divider(screen, right_x, y+4, right_x+right_w-12, y+4); y += 14
+
+    cap = KOREAN_FONT_BOLD_22.render("공략법", True, (200,255,200))
+    screen.blit(cap, (right_x, y)); y += cap.get_height() + 6
+    _ = _ui_draw_wrapped_text(screen, data.get("tips","준비중"), small, (220,220,220), right_x, y, right_w-12)
+
+    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36))
+    return back_rect
+
 def wrap_text_2lines(text, font, max_width):
     # 공격력 전용: 최대 2줄 자동 줄바꿈 + 긴 토큰 강제 분해
     s = str(text)

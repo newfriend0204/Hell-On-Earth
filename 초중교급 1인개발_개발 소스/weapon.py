@@ -276,7 +276,7 @@ class WeaponBase:
 class Gun1(WeaponBase):
     TIER = 1
     AMMO_COST = 5
-    DAMAGE = 28
+    DAMAGE = 32
     SPREAD = 8
     FIRE_DELAY = 350
 

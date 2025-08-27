@@ -325,6 +325,9 @@ def load_images():
     merchant1_img = pygame.image.load(path_image("Image", "character", "Merchant1.png")).convert_alpha()
     merchant1_img = pygame.transform.smoothscale(merchant1_img, (90, 90))
 
+    merchant2_img = pygame.image.load(path_image("Image", "character", "Merchant2.png")).convert_alpha()
+    merchant2_img = pygame.transform.smoothscale(merchant2_img, (90, 90))
+
     doctorNF_img = pygame.image.load(path_image("Image", "character", "DoctorNF.png")).convert_alpha()
     doctorNF_img = pygame.transform.smoothscale(doctorNF_img, (90, 90))
 
@@ -547,6 +550,7 @@ def load_images():
         "cartridge_case2": cartridge_case_img2,
         "enemy_bullet": enemy_bullet_img,
         "merchant1": merchant1_img,
+        "merchant2": merchant2_img,
         "doctorNF": doctorNF_img,
         "soldier1": soldier1_img,
         "soldier2": soldier2_img,

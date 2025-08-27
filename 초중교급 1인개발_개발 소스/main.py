@@ -31,12 +31,13 @@ from collider import Collider
 from obstacle_manager import ObstacleManager
 from ai import ENEMY_CLASSES
 from weapon import WEAPON_CLASSES, MeleeController
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter, draw_shock_overlay
+from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter, draw_shock_overlay, draw_weapon_gallery_modal, draw_weapon_detail_modal, draw_enemy_gallery_modal, draw_enemy_detail_modal
 import world
 from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
 from dialogue_manager import DialogueManager
 from text_data import (
-    merchant_dialogue,
+    merchant1_dialogue,
+    merchant2_dialogue,
     drone_dialogue,
     intro_dialogue,
     ending_dialogue,
@@ -68,7 +69,8 @@ from text_data import (
     drone33_before_dialogue,
     drone33_after_dialogue,
     BOSS_DESC,
-    weapon_stats
+    ENEMY_BOOK,
+    weapon_stats,
 )
 
 # 맵 상태 초기화
@@ -455,10 +457,8 @@ _last_wind_spawn_ms = 0
 _prev_player_pos = None
 
 START_WEAPONS = [
-    WEAPON_CLASSES[46],
-    WEAPON_CLASSES[47],
-    WEAPON_CLASSES[48],
-    WEAPON_CLASSES[49],
+    WEAPON_CLASSES[0],
+    WEAPON_CLASSES[1],
 ]
 
 def _apply_stage_theme_images():
@@ -504,6 +504,8 @@ SUB_FONT    = pygame.font.Font(FONT_PATH, 18)
 MENU_BUTTONS = [
     {"id": "start",   "label": "시작하기"},
     {"id": "howto",   "label": "조작법"},
+    {"id": "weapons", "label": "무기 도감"},
+    {"id": "enemies", "label": "적 도감"},
     {"id": "credits", "label": "크레딧"},
     {"id": "quit",    "label": "나가기"},
 ]
@@ -511,6 +513,7 @@ _menu_scales = [1.0 for _ in MENU_BUTTONS]
 _menu_hover  = -1
 _menu_modal = None
 _menu_modal_hover = -1
+_gallery_state = {"mode": None, "tier": 1, "rank": 1, "scroll": 0.0, "detail_id": None}
 
 _ending_credits = {
     "surfs": [],
@@ -850,9 +853,16 @@ def init_new_game():
 
 pause_menu_active = False
 pause_menu_hover  = -1
-pause_scales      = [1.0, 1.0]
-pause_buttons     = [{"id":"resume","label":"계속하기"},{"id":"quit","label":"나가기"}]
+pause_scales      = [1.0, 1.0, 1.0, 1.0]
+pause_buttons     = [
+    {"id":"resume","label":"계속하기"},
+    {"id":"weapons","label":"무기 도감"},
+    {"id":"enemies","label":"적 도감"},
+    {"id":"quit","label":"나가기"},
+]
 pause_frozen_frame = None
+pause_gallery_active = False
+pause_gallery_mode = None  # "weapons" or "enemies"
 confirm_quit_active = False
 confirm_left_released = False
 pause_request = False
@@ -1224,15 +1234,26 @@ def spawn_room_npcs():
     elif room_type == 'A' and shop_items:
         center_x = world_instance.effective_bg_width / 2
         center_y = world_instance.effective_bg_height / 2 - 190
-        npcs.append(
-            MerchantNPC(
-                images["merchant1"],
-                center_x,
-                center_y,
-                merchant_dialogue,
+        # 스테이지별 상인 분기: 1-1~2-3 → merchant1 / 3-1~3-3 → merchant2
+        stage = getattr(config, "CURRENT_STAGE", "") or ""
+        if stage.startswith("3-"):
+            npcs.append(
+                MerchantNPC(
+                    images.get("merchant2", images.get("merchant1")),
+                    center_x,
+                    center_y,
+                    merchant2_dialogue,
+                )
             )
-        )
-
+        else:
+            npcs.append(
+                MerchantNPC(
+                    images.get("merchant1"),
+                    center_x,
+                    center_y,
+                    merchant1_dialogue,
+                )
+            )
     if "npc_infos" in CURRENT_MAP:
         for npc_info in CURRENT_MAP["npc_infos"]:
             if npc_info["npc_type"] == "doctorNF_npc" and config.CURRENT_STAGE == "1-1":
@@ -1495,6 +1516,15 @@ def apply_effect(effect, messages=None, as_text_only=False):
             need = cost - config.player_score
             return emit("insufficient", need=need)
     return "" if as_text_only else None
+
+def handle_dialogue_effect(effect, messages=None, as_text_only=False):
+    # 확인 단계용: effect.type == "preview"면 비용/획득량을 담은 안내문을 생성만 함
+    if effect and effect.get("type") == "preview":
+        target = effect.get("target") or {}
+        line = preview_effect_text(target, messages)
+        return line if as_text_only else None
+    # 그 외엔 실제 효과 즉시 적용
+    return apply_effect(effect, messages, as_text_only)
 
 def try_pickup_weapon():
     # 스페이스 무기 줍기 단발 입력을 이벤트로 처리
@@ -1867,7 +1897,7 @@ def change_room(direction):
 
     if new_room_type == 'A':
         if room_key not in room_acquire_type:
-            room_acquire_type[room_key] = random.randint(2, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
+            room_acquire_type[room_key] = random.randint(4, 4)  # 2: 무기방, 3: 상점방, 4: 드론방 디버그 - 활성화 상태
         acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
@@ -3192,7 +3222,7 @@ while running:
         if config.game_state == config.GAME_STATE_MENU:
             from sound_manager import play_bgm_main
             play_bgm_main()
-            cx = SCREEN_WIDTH//2; base_y = 400; gap = 72
+            cx = SCREEN_WIDTH//2; base_y = 450; vgap = 76
             mouse_pos = pygame.mouse.get_pos()
 
             # 기본 버튼 렌더 (모달이 떠 있을 때도 배경처럼 보이게 그리되, 상호작용은 막음)
@@ -3200,9 +3230,15 @@ while running:
             for i in range(len(MENU_BUTTONS)):
                 _menu_scales[i] = _lerp(_menu_scales[i], 1.08 if (_menu_hover==i and not _menu_modal) else 1.0, 0.18)
             rects = []
+            # 2열(행 단위 페어링)
+            left_cx  = SCREEN_WIDTH//2 - 120
+            right_cx = SCREEN_WIDTH//2 + 120
             for i, btn in enumerate(MENU_BUTTONS):
-                cy = base_y + i*gap
-                rect = _draw_button(screen, btn["label"], (cx, cy), False, _menu_scales[i])
+                col = 0 if (i % 2) == 0 else 1
+                row = i // 2
+                cx_i = left_cx if col == 0 else right_cx
+                cy_i = base_y + row * vgap
+                rect = _draw_button(screen, btn["label"], (cx_i, cy_i), False, _menu_scales[i])
                 rects.append(rect)
                 if not _menu_modal and rect.collidepoint(mouse_pos): hovered = i
             if not _menu_modal and hovered != -1 and hovered != _menu_hover:
@@ -3233,6 +3269,63 @@ while running:
                             sounds["button_click"].play(); _menu_modal = None
                         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and close_rect.collidepoint(mouse_pos):
                             sounds["button_click"].play(); _menu_modal = None
+                elif _menu_modal["type"] == "gallery_weapons":
+                    res = draw_weapon_gallery_modal(screen, images, weapon_assets, weapon_stats, _gallery_state["tier"], _gallery_state["scroll"])
+                    for e in events:
+                        if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                            if _gallery_state["detail_id"] is not None:
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                            else:
+                                sounds["button_click"].play(); _menu_modal = None; _gallery_state.update({"mode":None,"scroll":0.0})
+                        elif e.type == pygame.MOUSEWHEEL and _gallery_state["detail_id"] is None:
+                            _gallery_state["scroll"] -= e.y * 40
+                            _gallery_state["scroll"] = max(0.0, min(_gallery_state["scroll"], res["max_scroll"]))
+                        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                            if res["close_rect"].collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                sounds["button_click"].play(); _menu_modal = None; _gallery_state.update({"mode":None,"scroll":0.0})
+                            else:
+                                for r, v in res["chip_rects"]:
+                                    if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                        sounds["button_click"].play(); _gallery_state["tier"] = v; _gallery_state["scroll"] = 0.0; break
+                                for r, wid in res["item_rects"]:
+                                    if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                        sounds["button_click"].play(); _gallery_state["detail_id"] = wid; break
+                    if _gallery_state["detail_id"] is not None:
+                        back_rect = draw_weapon_detail_modal(screen, weapon_assets, weapon_stats, _gallery_state["detail_id"])
+                        for e in events:
+                            if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and back_rect.collidepoint(mouse_pos):
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
+
+                elif _menu_modal["type"] == "gallery_enemies":
+                    res = draw_enemy_gallery_modal(screen, images, ENEMY_BOOK, _gallery_state["rank"], _gallery_state["scroll"])
+                    for e in events:
+                        if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                            if _gallery_state["detail_id"] is not None:
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                            else:
+                                sounds["button_click"].play(); _menu_modal = None; _gallery_state.update({"mode":None,"scroll":0.0})
+                        elif e.type == pygame.MOUSEWHEEL and _gallery_state["detail_id"] is None:
+                            _gallery_state["scroll"] -= e.y * 40
+                            _gallery_state["scroll"] = max(0.0, min(_gallery_state["scroll"], res["max_scroll"]))
+                        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                            if res["close_rect"].collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                sounds["button_click"].play(); _menu_modal = None; _gallery_state.update({"mode":None,"scroll":0.0})
+                            else:
+                                for r, v in res["chip_rects"]:
+                                    if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                        sounds["button_click"].play(); _gallery_state["rank"] = v; _gallery_state["scroll"] = 0.0; break
+                                for r, eid in res["item_rects"]:
+                                    if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                        sounds["button_click"].play(); _gallery_state["detail_id"] = eid; break
+                    if _gallery_state["detail_id"] is not None:
+                        back_rect = draw_enemy_detail_modal(screen, images, ENEMY_BOOK, _gallery_state["detail_id"])
+                        for e in events:
+                            if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and back_rect.collidepoint(mouse_pos):
+                                sounds["button_click"].play(); _gallery_state["detail_id"] = None
             else:
                 # 모달이 없을 때만 메뉴 상호작용
                 for e in events:
@@ -3254,6 +3347,10 @@ while running:
                                     pass
                             else:
                                 play_bgm_for_stage(config.CURRENT_STAGE)
+                        elif bid == "weapons":
+                            _menu_modal = {"type":"gallery_weapons"}; _gallery_state.update({"mode":"weapons","scroll":0.0,"detail_id":None})
+                        elif bid == "enemies":
+                            _menu_modal = {"type":"gallery_enemies"}; _gallery_state.update({"mode":"enemies","scroll":0.0,"detail_id":None})
                         elif bid == "howto":
                             _menu_modal = {"type":"panel","name":"howto"}
                         elif bid == "credits":
@@ -3328,7 +3425,7 @@ while running:
                 for npc in npcs:
                     if npc.is_player_near(player_cx, player_cy):
                         _pending_dialogue = npc.dialogue
-                        _pending_dialogue_effect_cb = apply_effect
+                        _pending_dialogue_effect_cb = handle_dialogue_effect
                         _pending_dialogue_close_cb = on_dialogue_close
                         dialogue_capture_request = True 
                         mouse_left_released_after_dialogue = True
@@ -3365,16 +3462,28 @@ while running:
                 if not pause_menu_active:
                     pause_request = True
                 else:
-                    pause_menu_active = False
-                    confirm_quit_active = False
-                    set_cursor_visible_and_grab(False)
-                    pause_frozen_frame = None
-                    for b in bullets:
-                        if isinstance(b, ExplosionEffectPersistent):
-                            b.resume()
-                    screen.set_clip(None)
-                    render_game_frame()
-                    pygame.display.flip()
+                    # ESC 단계적 스택 처리: 상세보기 → 갤러리 → 확인창 → 일시정지 종료
+                    if _gallery_state.get("detail_id"):
+                        sounds["button_click"].play()
+                        _gallery_state["detail_id"] = None
+                    elif pause_gallery_active:
+                        sounds["button_click"].play()
+                        pause_gallery_active = False
+                        _gallery_state.update({"mode": None, "scroll": 0.0})
+                    elif confirm_quit_active:
+                        sounds["button_click"].play()
+                        confirm_quit_active = False
+                    else:
+                        pause_menu_active = False
+                        confirm_quit_active = False
+                        set_cursor_visible_and_grab(False)
+                        pause_frozen_frame = None
+                        for b in bullets:
+                            if isinstance(b, ExplosionEffectPersistent):
+                                b.resume()
+                        screen.set_clip(None)
+                        render_game_frame()
+                        pygame.display.flip()
 
                     for b in bullets:
                         if isinstance(b, ExplosionEffectPersistent):
@@ -3556,6 +3665,49 @@ while running:
         overlay.fill((0,0,0,160))
         screen.blit(overlay, (0,0))
 
+        # 갤러리가 열려 있으면 일시정지 버튼 대신 갤러리 우선
+        if pause_menu_active:
+            if pause_gallery_active:
+                # 갤러리 입력에서 즉시 마우스 좌표를 읽어 써야 버튼 히트 테스트가 안정적
+                mouse_pos = pygame.mouse.get_pos()
+                if pause_gallery_mode == "weapons":
+                    res = draw_weapon_gallery_modal(screen, images, weapon_assets, weapon_stats, _gallery_state["tier"], _gallery_state["scroll"])
+                else:
+                    res = draw_enemy_gallery_modal(screen, images, ENEMY_BOOK, _gallery_state["rank"], _gallery_state["scroll"])
+                for e in events:
+                    if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                        if _gallery_state["detail_id"] is not None:
+                            sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                        else:
+                            sounds["button_click"].play(); pause_gallery_active = False; _gallery_state.update({"mode":None,"scroll":0.0})
+                    elif e.type == pygame.MOUSEWHEEL and _gallery_state["detail_id"] is None:
+                        _gallery_state["scroll"] -= e.y * 40
+                        _gallery_state["scroll"] = max(0.0, min(_gallery_state["scroll"], res["max_scroll"]))
+                    elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                        if res["close_rect"].collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                            sounds["button_click"].play(); pause_gallery_active = False; _gallery_state.update({"mode":None,"scroll":0.0})
+                        else:
+                            for r, v in res["chip_rects"]:
+                                if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                    sounds["button_click"].play()
+                                    if pause_gallery_mode == "weapons": _gallery_state["tier"] = v
+                                    else: _gallery_state["rank"] = v
+                                    _gallery_state["scroll"] = 0.0
+                                    break
+                            for r, idv in res["item_rects"]:
+                                if r.collidepoint(mouse_pos) and _gallery_state["detail_id"] is None:
+                                    sounds["button_click"].play(); _gallery_state["detail_id"] = idv; break
+                if _gallery_state["detail_id"] is not None:
+                    back_rect = (draw_weapon_detail_modal(screen, weapon_assets, weapon_stats, _gallery_state["detail_id"])
+                                if pause_gallery_mode == "weapons"
+                                else draw_enemy_detail_modal(screen, images, ENEMY_BOOK, _gallery_state["detail_id"]))
+                    for e in events:
+                        if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                            sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and back_rect.collidepoint(mouse_pos):
+                            sounds["button_click"].play(); _gallery_state["detail_id"] = None
+                pygame.display.flip(); clock.tick(60); continue
+
         cx, base_y, gap = SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 10, 80
         mouse_pos = pygame.mouse.get_pos()
         hovered = -1
@@ -3593,6 +3745,10 @@ while running:
                         pause_frozen_frame = None
                         render_game_frame()
                         pygame.display.flip()
+                    elif bid == "weapons":
+                        pause_gallery_active = True; pause_gallery_mode = "weapons"; _gallery_state.update({"mode":"weapons","scroll":0.0,"detail_id":None})
+                    elif bid == "enemies":
+                        pause_gallery_active = True; pause_gallery_mode = "enemies"; _gallery_state.update({"mode":"enemies","scroll":0.0,"detail_id":None})
                     elif bid == "quit":
                         confirm_quit_active = True
                         confirm_hover = -1
@@ -4888,7 +5044,7 @@ while running:
             except Exception:
                 pass
             _pending_dialogue = intro_dialogue
-            _pending_dialogue_effect_cb = apply_effect
+            _pending_dialogue_effect_cb = handle_dialogue_effect
 
             def _after_intro_close():
                 # 인트로 종료 시 스테이지 BGM으로 복귀하도록 콜백 래핑
