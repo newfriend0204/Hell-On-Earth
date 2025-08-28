@@ -3460,31 +3460,28 @@ while running:
                     pygame.display.flip()
             elif event.key == pygame.K_ESCAPE and not dialogue_manager.active:
                 if not pause_menu_active:
+                    # 게임 진행 중 → 일시정지 요청
                     pause_request = True
+                elif pause_gallery_active:
+                    # 갤러리/상세보기의 ESC는 아래 pause 섹션에서만 처리 (중복 방지)
+                    pass
+                elif confirm_quit_active:
+                    # 확인창 열려 있을 때는 여기서만 닫기
+                    sounds["button_click"].play()
+                    confirm_quit_active = False
                 else:
-                    # ESC 단계적 스택 처리: 상세보기 → 갤러리 → 확인창 → 일시정지 종료
-                    if _gallery_state.get("detail_id"):
-                        sounds["button_click"].play()
-                        _gallery_state["detail_id"] = None
-                    elif pause_gallery_active:
-                        sounds["button_click"].play()
-                        pause_gallery_active = False
-                        _gallery_state.update({"mode": None, "scroll": 0.0})
-                    elif confirm_quit_active:
-                        sounds["button_click"].play()
-                        confirm_quit_active = False
-                    else:
-                        pause_menu_active = False
-                        confirm_quit_active = False
-                        set_cursor_visible_and_grab(False)
-                        pause_frozen_frame = None
-                        for b in bullets:
-                            if isinstance(b, ExplosionEffectPersistent):
-                                b.resume()
-                        screen.set_clip(None)
-                        render_game_frame()
-                        pygame.display.flip()
-
+                    # 일시정지 해제
+                    sounds["button_click"].play()
+                    pause_menu_active = False
+                    confirm_quit_active = False
+                    set_cursor_visible_and_grab(False)
+                    pause_frozen_frame = None
+                    for b in bullets:
+                        if isinstance(b, ExplosionEffectPersistent):
+                            b.resume()
+                    screen.set_clip(None)
+                    render_game_frame()
+                    pygame.display.flip()
                     for b in bullets:
                         if isinstance(b, ExplosionEffectPersistent):
                             b.resume()
@@ -4385,9 +4382,10 @@ while running:
         recoil_velocity = 0
         recoil_in_progress = False
 
+    shake_elapsed += clock.get_time() / 1000.0
+
     delta_seconds = clock.get_time() / 1000.0
     if shake_timer > 0:
-        shake_elapsed += delta_seconds
         ratio = shake_timer / shake_timer_max
         current_magnitude = shake_magnitude * ratio
         shake_offset_x = math.sin(shake_elapsed * shake_speed) * current_magnitude
@@ -4396,6 +4394,18 @@ while running:
     else:
         shake_offset_x = 0
         shake_offset_y = 0
+
+    # 외부(이펙트) 카메라 셰이크 훅
+    cam_until = getattr(config, "cam_shake_until_ms", 0)
+    if cam_until:
+        now_cam = pygame.time.get_ticks()
+        if now_cam <= cam_until:
+            amp  = getattr(config, "cam_shake_amp", 4.0)
+            freq = getattr(config, "cam_shake_freq", 60.0)
+            shake_offset_x += math.sin(shake_elapsed * freq) * amp
+            shake_offset_y += math.cos(shake_elapsed * freq) * amp
+        else:
+           config.cam_shake_until_ms = 0
 
     if portal_spawn_at_ms is not None:
         now_ms = pygame.time.get_ticks()

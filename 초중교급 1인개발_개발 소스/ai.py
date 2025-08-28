@@ -5747,7 +5747,7 @@ class Enemy24(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.10,
+            radius=self.RADIUS, push_strength=0.18,
             alert_duration=self.P1_WINDUP_MS, damage_player_fn=damage_player_fn, rank=rank
         )
         self.image_original = images.get("enemy24", images.get("enemy10"))
@@ -7022,6 +7022,6110 @@ class Enemy27(AIBase):
             else:
                 pygame.draw.rect(screen, (110, 110, 110, 180), rect, width=1)
 
+class Enemy28(AIBase):
+    rank = 3
+
+    HP = 260
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.80
+    NEAR_DISTANCE = int(220 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(520 * PLAYER_VIEW_SCALE)
+    KEEP_MIN = int(280 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(340 * PLAYER_VIEW_SCALE)
+
+    PISTOL_COOLDOWN   = 500
+    PISTOL_DAMAGE     = 12
+    PISTOL_SPREAD_DEG = 3.0
+    PISTOL_RANGE      = 2000 * PLAYER_VIEW_SCALE
+    PISTOL_SPEED      = 10 * PLAYER_VIEW_SCALE
+
+    DRONE_MAX          = 2
+    DRONE_SPEED        = 6 * PLAYER_VIEW_SCALE
+    DRONE_DAMAGE       = 40
+    DRONE_TRIGGER_DIST = 60
+    DRONE_RADIUS       = int(55 * PLAYER_VIEW_SCALE)
+    DRONE_WARNING_TIME = 500
+    DRONE_SPAWN_CD     = 3500
+    DRONE_SUMMON_MS    = 1000
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=int(30 * PLAYER_VIEW_SCALE),
+            push_strength=0.12,
+            alert_duration=self.DRONE_SUMMON_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy28", images.get("enemy2"))
+        self.gun_image_original = pygame.transform.flip(images["gun1"], True, False)
+        self.bullet_image = images["enemy_bullet"]
+        self.cartridge_image = images["cartridge_case1"]
+        self.explosion_image = images.get("explosion1")
+        self.drone_img = images["drone"]
+
+        self.fire_sound = sounds.get("gun1_fire_enemy")
+        self.sound_drone_spawn = sounds.get("drone_spawn")
+        self.sound_drone_warning = sounds.get("drone_warning")
+        self.sound_drone_explosion = sounds.get("drone_explosion")
+
+        self.kill_callback = kill_callback
+        self.hp = self.HP
+
+        self.current_distance = 45 * PLAYER_VIEW_SCALE
+        self.recoil_strength = 6
+        self.recoil_offset = 0
+        self.recoil_velocity = 0
+        self.recoil_in_progress = False
+
+        self.drones = []
+        self.last_drone_spawn_time = 0
+        self._summoning_until = 0
+
+        self._last_pistol_time = 0
+        self._zigzag_t0 = pygame.time.get_ticks()
+        self._zigzag_amp = int(80 * PLAYER_VIEW_SCALE)
+
+    class DroneChaser:
+        def __init__(self, owner, spawn_x, spawn_y):
+            # 단순 추적 → 경고 → 폭발까지의 경량 드론 로직
+            self.owner = owner
+            self.x = spawn_x
+            self.y = spawn_y
+            self.state = "chasing"
+            self.warning_start = None
+            self.angle = 0
+        def update(self, px, py):
+            # 상태 업데이트: 플레이어 추적/경고 타이머 처리
+            if self.state == "dead":
+                return
+            dx, dy = px - self.x, py - self.y
+            dist = math.hypot(dx, dy)
+            self.angle = math.atan2(dy, dx)
+            if self.state == "chasing":
+                if dist > 0:
+                    self.x += (dx / dist) * Enemy28.DRONE_SPEED
+                    self.y += (dy / dist) * Enemy28.DRONE_SPEED
+                if dist < Enemy28.DRONE_TRIGGER_DIST:
+                    self.state = "warning"
+                    self.warning_start = pygame.time.get_ticks()
+                    if self.owner.sound_drone_warning: self.owner.sound_drone_warning.play()
+            elif self.state == "warning":
+                if pygame.time.get_ticks() - self.warning_start >= Enemy28.DRONE_WARNING_TIME:
+                    self.explode()
+        def explode(self, no_damage=False):
+            # 폭발 처리: 시각효과/사운드/플레이어 피해
+            if self.owner.sound_drone_warning: self.owner.sound_drone_warning.stop()
+            if self.owner.explosion_image:
+                config.effects.append(ExplosionEffectPersistent(self.x, self.y, self.owner.explosion_image))
+            if self.owner.sound_drone_explosion: self.owner.sound_drone_explosion.play()
+            if (not no_damage) and self.owner.damage_player:
+                px, py = config.world_x + config.player_rect.centerx, config.world_y + config.player_rect.centery
+                if math.hypot(px - self.x, py - self.y) <= Enemy28.DRONE_RADIUS:
+                    self.owner.damage_player(Enemy28.DRONE_DAMAGE)
+            self.state = "dead"
+        def draw(self, screen, world_x, world_y):
+            # 드론 렌더: 경고 상태면 붉은 톤 추가
+            if self.state == "dead": return
+            img = self.owner.drone_img.copy()
+            if self.state == "warning":
+                img.fill((255,0,0), special_flags=pygame.BLEND_RGB_ADD)
+            rotated = pygame.transform.rotate(img, -math.degrees(self.angle) - 90)
+            rect = rotated.get_rect(center=(self.x - world_x, self.y - world_y))
+            screen.blit(rotated, rect)
+
+    def stop_sounds_on_remove(self):
+        # 삭제 시 경고음 잔류 방지
+        try: self.sound_drone_warning.stop()
+        except: pass
+
+    def _start_summon(self):
+        # 드론 소환 캐스팅 시작(제자리 대기 + 경고 아이콘)
+        self._summoning_until = pygame.time.get_ticks() + self.DRONE_SUMMON_MS
+        self.show_alert = True
+    def _finish_summon(self):
+        # 드론 소환 완료(주변에 1기 생성) + 쿨다운 갱신
+        sx = self.world_x + random.randint(-80, 80)
+        sy = self.world_y + random.randint(-80, 80)
+        self.drones.append(self.DroneChaser(self, sx, sy))
+        if self.sound_drone_spawn: self.sound_drone_spawn.play()
+        self.last_drone_spawn_time = pygame.time.get_ticks()
+        self._summoning_until = 0
+        self.show_alert = False
+    def _can_shoot(self):
+        # 권총 발사 가능 여부(쿨다운)
+        return pygame.time.get_ticks() - self._last_pistol_time >= self.PISTOL_COOLDOWN
+
+    def shoot(self):
+        # 권총 한 발 발사: 총구 오프셋/퍼짐/탄피 배출/사운드/리코일
+        if self.fire_sound: self.fire_sound.play()
+        self.recoil_offset = 0
+        self.recoil_velocity = -self.recoil_strength
+        self.recoil_in_progress = True
+        self._last_pistol_time = pygame.time.get_ticks()
+        spawn_offset = 30
+        vertical_offset = 6
+        offset_angle = self.direction_angle + math.radians(90)
+        offset_dx = math.cos(offset_angle) * vertical_offset
+        offset_dy = math.sin(offset_angle) * vertical_offset
+        bx = self.world_x + math.cos(self.direction_angle) * spawn_offset + offset_dx
+        by = self.world_y + math.sin(self.direction_angle) * spawn_offset + offset_dy
+        spread = math.radians(random.uniform(-self.PISTOL_SPREAD_DEG, self.PISTOL_SPREAD_DEG))
+        aim = self.direction_angle + spread
+        tx = bx + math.cos(aim) * self.PISTOL_RANGE
+        ty = by + math.sin(aim) * self.PISTOL_RANGE
+        bullet = Bullet(bx, by, tx, ty, 15, self.bullet_image,
+                        speed=self.PISTOL_SPEED, max_distance=self.PISTOL_RANGE, damage=self.PISTOL_DAMAGE)
+        bullet.owner = self
+        config.global_enemy_bullets.append(bullet)
+        eject_angle = self.direction_angle + math.radians(90 + random.uniform(-15, 15))
+        vx, vy = math.cos(eject_angle), math.sin(eject_angle)
+        if hasattr(self, "scattered_bullets"):
+            self.scattered_bullets.append(ScatteredBullet(bx, by, vx, vy, self.cartridge_image))
+
+    def _update_drones(self, px, py):
+        # 모든 드론 상태 갱신 및 사망 정리
+        for d in self.drones: d.update(px, py)
+        self.drones = [d for d in self.drones if d.state != "dead"]
+
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 핵심 AI: 선호 거리(중거리 링) 유지 + 근접 시 후퇴사격 + 주기적 소환
+        px = world_x + player_rect.centerx; py = world_y + player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+        self._update_drones(px, py)
+        now = pygame.time.get_ticks()
+        if self._summoning_until > 0:
+            # 캐스팅 중: 제자리 유지, 캐스팅 종료 시점 도달하면 소환
+            if now >= self._summoning_until:
+                if len(self.drones) < self.DRONE_MAX: self._finish_summon()
+                else: self._summoning_until = 0; self.show_alert = False
+            self.goal_pos = (self.world_x, self.world_y)
+            return
+        if (len(self.drones) < self.DRONE_MAX) and (now - self.last_drone_spawn_time >= self.DRONE_SPAWN_CD):
+            # 쿨다운 완료: 캐스팅 시작
+            self._start_summon()
+            self.goal_pos = (self.world_x, self.world_y)
+            return
+        desired = 0.5*(self.KEEP_MIN + self.KEEP_MAX)
+        away = self.direction_angle + math.pi
+        t = (now - self._zigzag_t0)/1000.0
+        perp = self.direction_angle + math.pi/2.0
+        zig = math.sin(t*2.5) * self._zigzag_amp
+        ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+        if dist < self.NEAR_DISTANCE:
+            # 근접: 후퇴 경로(플레이어 반대편)로 이동 + 사격
+            tx, ty = px + math.cos(away)*desired + ox, py + math.sin(away)*desired + oy
+            self.goal_pos = (tx, ty)
+            if self._can_shoot(): self.shoot()
+        elif dist > self.FAR_DISTANCE:
+            # 너무 멀다: 선호 링에 맞춰 재배치(너무 깊지 않게 반대편 보정)
+            tx, ty = px + math.cos(away)*desired + ox, py + math.sin(away)*desired + oy
+            self.goal_pos = (tx, ty)
+        else:
+            # 적정 거리: 소폭 지그재그로 압박 유지
+            self.goal_pos = (self.world_x + ox*0.2, self.world_y + oy*0.2)
+
+    def die(self, blood_effects):
+        if self._already_dropped: return
+        try: self.sound_drone_warning.stop()
+        except: pass
+        for d in self.drones: d.explode(no_damage=True)
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        # 본체/총기/드론 순서로 렌더. 캐스팅 중 경고 아이콘은 draw_alert로 처리
+        if not self.alive: return
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+        self.draw_alert(screen, sx, sy)
+        gx = sx + math.cos(self.direction_angle) * (self.current_distance + self.recoil_offset)
+        gy = sy + math.sin(self.direction_angle) * (self.current_distance + self.recoil_offset)
+        rotated_gun = pygame.transform.rotate(self.gun_image_original, -math.degrees(self.direction_angle) - 90)
+        screen.blit(rotated_gun, rotated_gun.get_rect(center=(gx, gy)))
+        body = pygame.transform.smoothscale(self.image_original,
+                (int(self.image_original.get_width()*PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height()*PLAYER_VIEW_SCALE)))
+        body = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+        screen.blit(body, body.get_rect(center=(sx, sy)))
+        for d in self.drones: d.draw(screen, world_x, world_y)
+
+class Enemy29(AIBase):
+    rank = 3
+    HP = 320
+    BASE_SPEED = 0.0
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    AIM_MS       = 1000
+    CHANNEL_MS   = 3000
+    REST_MS      = 2000
+    TICK_MS      = 300
+    TICK_DAMAGE  = 6
+    AIM_LOS_GRACE_MS = 200
+
+    LOS_SAMPLES       = 24
+    LOS_SAMPLE_RADIUS = int(6 * PLAYER_VIEW_SCALE)
+
+    TRACK_DEG_PER_S  = 120
+    BEAM_RANGE       = int(500 * PLAYER_VIEW_SCALE)
+    BEAM_HIT_RADIUS  = int(18 * PLAYER_VIEW_SCALE)
+
+    BEAM_BASE_W   = max(8, int(10 * PLAYER_VIEW_SCALE))
+    BEAM_SEG_LEN  = 24
+    BEAM_JITTER   = 2.5
+    BEAM_PULSE_MS = 700
+    COL_CORE      = (255, 255, 255, 255)
+    COL_GLOW      = (255, 60, 60, 210)
+    COL_OUTER     = (255, 30, 30, 120)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0, radius=self.RADIUS, push_strength=0.0,
+            alert_duration=self.AIM_MS,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.image_original = images.get("enemy29", None)
+
+        self.snd_lock  = sounds.get("laser_lock")
+        self.snd_loop  = sounds.get("laser_channel_loop")
+        self._loop_playing = False
+
+        self.state = "idle"                 # idle → aim → channel → rest
+        self.aim_until = 0
+        self.channel_until = 0
+        self.rest_until = 0
+        self.next_tick_ms = 0
+        self._los_lost_since = None
+
+        self.beam_angle = 0.0
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._beam_born_ms = pygame.time.get_ticks()
+        self.beam_angle = 0.0
+        self._angle_initialized = False
+
+    # 사운드 유틸
+    def _start_loop(self):
+        # 채널 루프 시작
+        if self.snd_loop and not self._loop_playing:
+            try:
+                self.snd_loop.play(-1)
+                self._loop_playing = True
+            except Exception:
+                self._loop_playing = False
+
+    def _stop_loop(self):
+        # 루프 안전 정지
+        if self.snd_loop and self._loop_playing:
+            try:
+                self.snd_loop.stop()
+            except Exception:
+                pass
+        self._loop_playing = False
+
+    def _stop_lock(self):
+        # 조준 사운드 강제 정지(채널/휴식/유휴/사망 등에서 호출)
+        if self.snd_lock:
+            try:
+                self.snd_lock.stop()
+            except Exception:
+                pass
+
+    # 내부 유틸: LoS/빔/기하
+    def _has_los_to_player(self, px, py):
+        # 토템 중심→플레이어 중심 선분을 균등 샘플링하며 장애물 충돌(원)로 차단 여부 확인
+        om = getattr(config, "obstacle_manager", None)
+        if om is None:
+            return True
+        x1, y1 = self.world_x, self.world_y
+        dx, dy = (px - x1), (py - y1)
+        steps = max(2, int(self.LOS_SAMPLES))
+        for i in range(1, steps):
+            tx = x1 + dx * (i / steps)
+            ty = y1 + dy * (i / steps)
+            if om.check_collision_circle((tx, ty), self.LOS_SAMPLE_RADIUS):
+                return False
+        return True
+
+    def _update_beam_angle(self, px, py, now_ms):
+        # 빔을 플레이어 쪽으로 '제한된 각속도'로만 회전
+        dt_ms = max(1, now_ms - self._last_update_ms)
+        self._last_update_ms = now_ms
+
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+
+        # 각도 차이를 [-pi, pi] 범위로 정규화
+        diff = (desired - self.beam_angle + math.pi) % (2 * math.pi) - math.pi
+
+        # 프레임당 회전 한계(라디안)
+        max_step = math.radians(self.TRACK_DEG_PER_S) * (dt_ms / 1000.0)
+
+        # 허용 범위 내로만 보정
+        if diff > max_step:
+            self.beam_angle += max_step
+        elif diff < -max_step:
+            self.beam_angle -= max_step
+        else:
+            self.beam_angle = desired
+
+    def _beam_end_world(self, angle, px, py):
+        # 빔 길이: 플레이어까지 거리 또는 고정 최대치 중 작은 값
+        dist = math.hypot(px - self.world_x, py - self.world_y)
+        length = min(max(100, dist + 40), self.BEAM_RANGE)
+        ex = self.world_x + math.cos(angle) * length
+        ey = self.world_y + math.sin(angle) * length
+        return ex, ey
+
+    def _dist_point_to_segment(self, x, y, x1, y1, x2, y2):
+        # 점(x,y)과 선분(x1,y1)-(x2,y2) 사이 최소거리
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = x - x1, y - y1
+        seg_len2 = vx * vx + vy * vy
+        if seg_len2 <= 1e-6:
+            return math.hypot(x - x1, y - y1)
+        t = max(0.0, min(1.0, (wx * vx + wy * vy) / seg_len2))
+        px = x1 + t * vx
+        py = y1 + t * vy
+        return math.hypot(x - px, y - py)
+
+    def _player_hit_by_beam(self, px, py, angle):
+        # 빔 선분과 플레이어 중심의 최소거리로 판정
+        ex, ey = self._beam_end_world(angle, px, py)
+        d = self._dist_point_to_segment(px, py, self.world_x, self.world_y, ex, ey)
+        return d <= self.BEAM_HIT_RADIUS
+
+    # 빔 드로잉(폴리라인 레이어)
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
+        # 레이저 폴리라인 포인트 생성: 일정 간격 분절 + 노멀 방향 지글로 유기적 떨림
+        dx, dy = x2 - x1, y2 - y1
+        dist = max(1.0, math.hypot(dx, dy))
+        nx, ny = (-dy / dist, dx / dist)  # 선분에 수직인 단위벡터
+        nseg = max(2, int(dist / seg_len))
+        pts = []
+        for i in range(nseg + 1):
+            t = i / nseg
+            bx = x1 + dx * t
+            by = y1 + dy * t
+            # 시간 기반 지글(가벼운 사인 노이즈)
+            wiggle = math.sin((t * 10.0 + seed) + tsec * 8.0) * jitter_amp
+            pts.append((bx + nx * wiggle, by + ny * wiggle))
+        return pts
+
+    def _draw_polyline(self, surf, pts, color, width):
+        if len(pts) >= 2:
+            pygame.draw.lines(surf, color, False, pts, width)
+
+    def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms, alpha=1.0):
+        # 레이저 3중선(outer/glow/core) + 펄스(살아있는 느낌)
+        now = pygame.time.get_ticks()
+        tsec = (now - born_ms) * 0.001
+        jitter = self.BEAM_JITTER
+        pts = self._beam_points(x1, y1, x2, y2, jitter_amp=jitter, seg_len=self.BEAM_SEG_LEN, tsec=tsec, seed=(born_ms % 997)*0.001)
+        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2 * math.pi / max(60, self.BEAM_PULSE_MS)))
+        core_w  = max(1, int(base_w * (0.55 + 0.15 * pulse)))
+        glow_w  = max(core_w + 2, int(base_w * 1.15))
+        outer_w = max(glow_w + 2, int(base_w * 1.7))
+        # 알파 스케일 적용
+        col_core  = (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  int(self.COL_CORE[3]  * alpha))
+        col_glow  = (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  int(self.COL_GLOW[3]  * alpha))
+        col_outer = (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], int(self.COL_OUTER[3] * alpha))
+        self._draw_polyline(lay, pts, col_outer, outer_w)
+        self._draw_polyline(lay, pts, col_glow,  glow_w)
+        self._draw_polyline(lay, pts, col_core,  core_w)
+
+    def _draw_totem_body(self, screen, sx, sy):
+        # 본체 이미지가 있으면 사용, 없으면 원형 토템 드로잉(외곽/문양)
+        if self.image_original:
+            img = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            rect = img.get_rect(center=(sx, sy))
+            screen.blit(img, rect)
+        else:
+            # 원형 본체
+            base_r = int(34 * PLAYER_VIEW_SCALE)
+            pygame.draw.circle(screen, (40, 10, 10), (sx, sy), base_r)
+            pygame.draw.circle(screen, (220, 40, 40), (sx, sy), base_r, 3)
+            # 문양(십자/룬)
+            arm = int(18 * PLAYER_VIEW_SCALE)
+            pygame.draw.line(screen, (180, 60, 60), (sx - arm, sy), (sx + arm, sy), 3)
+            pygame.draw.line(screen, (180, 60, 60), (sx, sy - arm), (sx, sy + arm), 3)
+
+    def _draw_totem_eye(self, screen, sx, sy, intense=0.0):
+        # 토템 '눈' – 상태에 따라 밝기/크기 변화
+        r = max(3, int(4 + 4 * intense * PLAYER_VIEW_SCALE))
+        glow_r = r + int(5 * PLAYER_VIEW_SCALE)
+        # 글로우
+        glow = pygame.Surface((glow_r * 2 + 2, glow_r * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 60, 60, int(120 + 120 * intense)), (glow_r, glow_r), glow_r)
+        screen.blit(glow, glow.get_rect(center=(sx, sy)))
+        # 코어
+        pygame.draw.circle(screen, (255, 255, 255), (sx, sy), r)
+
+    def _draw_charge_ring(self, screen, sx, sy, phase=0.0):
+        # 채널 중 바닥 차지 링 – 맥동하는 얇은 링 2중
+        rr = int(40 * PLAYER_VIEW_SCALE)
+        rr2 = int(54 * PLAYER_VIEW_SCALE)
+        a = 120 + int(80 * (0.5 + 0.5 * math.sin(phase * 2 * math.pi)))
+        pygame.draw.circle(screen, (255, 60, 60, a), (sx, sy), rr, 2)
+        pygame.draw.circle(screen, (255, 30, 30, int(a * 0.75)), (sx, sy), rr2, 2)
+
+    def _draw_impact_spark(self, lay, x, y):
+        # 임팩트 스파크(간단한 방사형 라인) – 별도 이미지 없이 표현
+        rays = 8
+        max_r = int(12 * PLAYER_VIEW_SCALE)
+        col = (255, 200, 200, 220)
+        for i in range(rays):
+            ang = (2 * math.pi) * (i / rays)
+            x2 = x + math.cos(ang) * max_r
+            y2 = y + math.sin(ang) * max_r
+            pygame.draw.line(lay, col, (x, y), (x2, y2), 2)
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self._stop_loop()
+        self._stop_lock()
+        self.show_alert = False
+
+    def _enter_aim(self):
+        self.state = "aim"
+        self.aim_until = pygame.time.get_ticks() + self.AIM_MS
+        self._los_lost_since = None
+        self.show_alert = True
+        # 조준 사운드(길지만, 채널 진입 시 즉시 정지하여 공격 중에 안 들리게 함)
+        if self.snd_lock:
+            try:
+                self.snd_lock.play()
+            except Exception:
+                pass
+
+    def _enter_channel(self):
+        self.state = "channel"
+        now = pygame.time.get_ticks()
+        self.channel_until = now + self.CHANNEL_MS
+        self.next_tick_ms = now + self.TICK_MS
+        self._beam_born_ms = now
+        self.show_alert = False
+        # 공격 시작: 조준 사운드 즉시 중단, 채널 루프 시작
+        self._stop_lock()
+        self._start_loop()
+
+    def _enter_rest(self):
+        self.state = "rest"
+        self.rest_until = pygame.time.get_ticks() + self.REST_MS
+        self._stop_loop()
+        self._stop_lock()
+        self.show_alert = False
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 이동 목표는 사용하지 않음(고정 토템). 상태 전이/빔 회전/피해 처리만 수행.
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 첫 프레임: 플레이어 방향으로 초기 각도 세팅(초기 튐 방지)
+        if not self._angle_initialized:
+            self.beam_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+
+        # 빔 회전: 플레이어를 즉시 바라보지 않고 제한된 속도로만 보정
+        self._update_beam_angle(px, py, now)
+
+        # LoS 판정(엄폐 시 차단)
+        los = self._has_los_to_player(px, py)
+
+        if self.state == "idle":
+            # LoS 확보되면 조준 시작
+            if los:
+                self._enter_aim()
+
+        elif self.state == "aim":
+            # 조준 중 LoS가 잠깐 끊겨도 AIM_LOS_GRACE_MS 동안은 유지
+            if not los:
+                if self._los_lost_since is None:
+                    self._los_lost_since = now
+                elif now - self._los_lost_since >= self.AIM_LOS_GRACE_MS:
+                    self._enter_idle()
+                    return
+            else:
+                self._los_lost_since = None
+
+            if now >= self.aim_until and los:
+                self._enter_channel()
+
+        elif self.state == "channel":
+            # 채널 중 LoS가 끊기면 즉시 중단 → 휴식
+            if not los:
+                self._enter_rest()
+                return
+            # 주기적 틱 피해: 빔 선분이 실제로 플레이어를 스치고 있어야 함
+            if now >= self.next_tick_ms:
+                if self.damage_player and self._player_hit_by_beam(px, py, self.beam_angle):
+                    self.damage_player(self.TICK_DAMAGE)
+                self.next_tick_ms += self.TICK_MS
+            # 채널 종료
+            if now >= self.channel_until:
+                self._enter_rest()
+
+        elif self.state == "rest":
+            if now >= self.rest_until:
+                # LoS가 있으면 다시 조준, 없으면 유휴
+                self._enter_aim() if los else self._enter_idle()
+
+    # 사망/정리
+    def die(self, blood_effects):
+        # 루프/조준 사운드 잔류 방지 + 드랍
+        self._stop_loop()
+        self._stop_lock()
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 3)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 본체/경고아이콘
+        self.draw_alert(screen, sx, sy)
+        self._draw_totem_body(screen, sx, sy)
+
+        # 플레이어 위치(월드좌표) 및 빔 끝점(월드→스크린)
+        px = config.world_x + config.player_rect.centerx
+        py = config.world_y + config.player_rect.centery
+        ex, ey = self._beam_end_world(self.beam_angle, px, py)
+        x1, y1 = sx, sy
+        x2, y2 = int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y)
+
+        # 레이저 렌더(조준/채널)
+        if self.state in ("aim", "channel"):
+            # 투명 레이어에 그렸다가 합성(알파 포함)
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+
+            if self.state == "aim":
+                # 얇은 조준선(알파 낮음)
+                self._draw_beam_layered(lay, x1, y1, x2, y2,
+                                        base_w=max(3, self.BEAM_BASE_W - 2),
+                                        born_ms=self._beam_born_ms, alpha=0.45)
+                # 눈 밝기 약간 상승
+                self._draw_totem_eye(screen, sx, sy, intense=0.4)
+            else:
+                # 굵은 채널 빔 + 임팩트 + 차지 링 + 강한 눈 발광
+                self._draw_beam_layered(lay, x1, y1, x2, y2,
+                                        base_w=self.BEAM_BASE_W,
+                                        born_ms=self._beam_born_ms, alpha=1.0)
+                self._draw_impact_spark(lay, x2, y2)
+                phase = (pygame.time.get_ticks() % self.BEAM_PULSE_MS) / self.BEAM_PULSE_MS
+                self._draw_charge_ring(screen, sx, sy, phase)
+                self._draw_totem_eye(screen, sx, sy, intense=1.0)
+
+            # 합성
+            screen.blit(lay, (0, 0))
+        else:
+            # 휴식/유휴 – 눈만 약하게
+            self._draw_totem_eye(screen, sx, sy, intense=0.15)
+
+class Enemy30(AIBase):
+    rank = 3
+    HP = 350
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(400 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(600 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(340 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(650 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS   = 600
+    SPRAY_MS       = 1000
+    COOLDOWN_MS    = 2500
+    SPRAY_TICK_MS  = 150
+    SPRAY_TICK_DMG = 4
+    SPRAY_RANGE    = int(300 * PLAYER_VIEW_SCALE)
+    SPRAY_HALF_ANG = math.radians(20.0)
+    WEDGE_SEGMENTS = 18
+
+    PUDDLES_PER_BURST = 2
+    PUDDLE_OFFSET_MIN = int(40 * PLAYER_VIEW_SCALE)
+    PUDDLE_OFFSET_MAX = int(80 * PLAYER_VIEW_SCALE)
+    PUDDLE_RADIUS     = int(70 * PLAYER_VIEW_SCALE)
+    PUDDLE_DURATION   = 2000
+    PUDDLE_TICK_MS    = 500
+    PUDDLE_TICK_DMG   = 6
+
+    LOS_SAMPLES       = 24
+    LOS_SAMPLE_RADIUS = int(6 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.18,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+
+        self.image_original = images.get("enemy30")
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self._flame_pillar_src = images.get("flame_pillar")
+
+        self.snd_charge  = sounds.get("blood_charge")
+        self.snd_puddle  = sounds.get("blood_puddle_sizzle")
+
+        # 상태머신: idle → telegraph → spray → cooldown
+        self.state = "idle"
+        self.telegraph_until = 0
+        self.spray_until = 0
+        self.cooldown_until = 0
+        self._next_spray_tick = 0
+
+        self._zigzag_t0 = pygame.time.get_ticks()
+        self._zigzag_amp = int(60 * PLAYER_VIEW_SCALE)
+
+        self._puddles = []
+
+    # 내부: LoS / 유틸
+    def _has_los_to_point(self, tx, ty):
+        # self→(tx,ty) 선분을 다중 샘플링하여 장애물 충돌로 막히는지 확인
+        om = getattr(config, "obstacle_manager", None)
+        if om is None: return True
+        x1, y1 = self.world_x, self.world_y
+        dx, dy = (tx - x1), (ty - y1)
+        steps = max(2, int(self.LOS_SAMPLES))
+        for i in range(1, steps):
+            sx = x1 + dx * (i / steps)
+            sy = y1 + dy * (i / steps)
+            if om.check_collision_circle((sx, sy), self.LOS_SAMPLE_RADIUS):
+                return False
+        return True
+
+    def _point_in_wedge(self, px, py, dir_angle):
+        # 플레이어가 부채꼴(각도/사거리) 안에 있는가
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        if dist > self.SPRAY_RANGE: return False
+        ang = math.atan2(dy, dx)
+        diff = (ang - dir_angle + math.pi) % (2 * math.pi) - math.pi
+        return abs(diff) <= self.SPRAY_HALF_ANG
+
+    def _build_wedge_poly(self, dir_angle, range_px):
+        # 부채꼴 폴리곤 정점 생성(화면좌표 변환은 draw에서)
+        pts = [(self.world_x, self.world_y)]
+        start = dir_angle - self.SPRAY_HALF_ANG
+        end   = dir_angle + self.SPRAY_HALF_ANG
+        for i in range(self.WEDGE_SEGMENTS + 1):
+            t = i / self.WEDGE_SEGMENTS
+            ang = start + (end - start) * t
+            x = self.world_x + math.cos(ang) * range_px
+            y = self.world_y + math.sin(ang) * range_px
+            pts.append((x, y))
+        return pts
+
+    # 웅덩이 클래스
+    class BloodPuddle:
+        # DOT 웅덩이: 위치/반경/생성시각/다음틱시각/종료시각 + 렌더용 서피스(붉은 틴트)
+        def __init__(self, owner, x, y, radius, duration_ms, tick_ms, tick_damage, src_img, sizzle_sound):
+            self.owner = owner
+            self.x = x; self.y = y
+            self.radius = radius
+            now = pygame.time.get_ticks()
+            self.end_time = now + duration_ms
+            self.next_tick = now + tick_ms
+            self.tick_ms = tick_ms
+            self.tick_damage = tick_damage
+            self._surf = None
+            self._sizzle_played = False
+            # 타일/장애물 위 생성 방지(간단 회피: 3회까진 재배치 시도)
+            self._ensure_valid_position()
+
+            # 렌더용 서피스 준비: flame_pillar 있으면 틴트, 없으면 반투명 원
+            if src_img:
+                base = src_img.copy().convert_alpha()
+                tint = pygame.Surface(base.get_size()).convert_alpha()
+                tint.fill((255, 40, 40))  # RGB만 사용
+                base.blit(tint, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+                self._surf = pygame.transform.smoothscale(base, (self.radius * 2, self.radius * 2))
+            else:
+                s = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+                pygame.draw.circle(s, (200, 20, 20, 130), (self.radius, self.radius), self.radius)
+                self._surf = s
+
+            # 생성음
+            if sizzle_sound:
+                try: sizzle_sound.play()
+                except: pass
+                self._sizzle_played = True
+
+        def _ensure_valid_position(self):
+            om = getattr(config, "obstacle_manager", None)
+            if om is None: return
+            tries = 3
+            while tries > 0 and om.check_collision_circle((self.x, self.y), int(self.radius * 0.8)):
+                # 살짝 밀어내기
+                ang = random.uniform(0, 2 * math.pi)
+                self.x += math.cos(ang) * self.radius * 0.5
+                self.y += math.sin(ang) * self.radius * 0.5
+                tries -= 1
+
+        def update_and_damage(self, px, py):
+            # 시간/데미지 처리
+            now = pygame.time.get_ticks()
+            alive = now < self.end_time
+            if alive and now >= self.next_tick:
+                if math.hypot(px - self.x, py - self.y) <= self.radius:
+                    if self.owner.damage_player:
+                        self.owner.damage_player(self.tick_damage)
+                self.next_tick += self.tick_ms
+            return alive
+
+        def draw(self, screen, world_x, world_y):
+            if not self._surf: return
+            # 약한 펄스로 알파 요동
+            life_ratio = max(0.0, (self.end_time - pygame.time.get_ticks()) / max(1.0, self.owner.PUDDLE_DURATION))
+            alpha = int(210 * (0.6 + 0.4 * life_ratio))
+            surf = self._surf.copy()
+            surf.set_alpha(alpha)
+            rect = surf.get_rect(center=(int(self.x - world_x), int(self.y - world_y)))
+            screen.blit(surf, rect)
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_telegraph(self):
+        self.state = "telegraph"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.show_alert = True
+        if self.snd_charge:
+            try: self.snd_charge.play()
+            except: pass
+
+    def _enter_spray(self):
+        self.state = "spray"
+        now = pygame.time.get_ticks()
+        self.spray_until = now + self.SPRAY_MS
+        self._next_spray_tick = now + self.SPRAY_TICK_MS
+        self.show_alert = False
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.show_alert = False
+
+    # 메인 AI (목표 위치/공격 루프)
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        # 플레이어 월드 좌표
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+
+        # 각도/거리 계산
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        self.direction_angle = math.atan2(dy, dx)
+
+        # 지그재그 보조 이동
+        t = (pygame.time.get_ticks() - self._zigzag_t0) / 1000.0
+        perp = self.direction_angle + math.pi / 2.0
+        zig = math.sin(t * 2.2) * self._zigzag_amp
+        ox, oy = math.cos(perp) * zig, math.sin(perp) * zig
+
+        # 웅덩이 업데이트/정리
+        self._puddles = [p for p in self._puddles if p.update_and_damage(px, py)]
+
+        now = pygame.time.get_ticks()
+
+        # 상태 머신
+        if self.state == "idle":
+            # LoS 확보 시 전조로 진입
+            if self._has_los_to_point(px, py):
+                self._enter_telegraph()
+
+        elif self.state == "telegraph":
+            # LoS가 끊기면 취소하고 유휴로
+            if not self._has_los_to_point(px, py):
+                self._enter_idle()
+            elif now >= self.telegraph_until:
+                self._enter_spray()
+
+        elif self.state == "spray":
+            # 스프레이 틱 피해(부채꼴 안 + LoS)
+            if now >= self._next_spray_tick:
+                if self._point_in_wedge(px, py, self.direction_angle) and self._has_los_to_point(px, py):
+                    if self.damage_player:
+                        self.damage_player(self.SPRAY_TICK_DMG)
+                self._next_spray_tick += self.SPRAY_TICK_MS
+
+            # 분사 종료 → 웅덩이 생성 → 쿨다운
+            if now >= self.spray_until:
+                self._spawn_puddles()
+                self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            if now >= self.cooldown_until:
+                # 다시 LoS면 전조, 아니면 유휴
+                self._enter_telegraph() if self._has_los_to_point(px, py) else self._enter_idle()
+
+        # 거리 운영(목표점)
+        desired = 0.5 * (self.KEEP_MIN + self.KEEP_MAX)
+        away = self.direction_angle + math.pi
+        if dist < self.NEAR_DISTANCE:
+            # 후퇴(플레이어 반대방향) + 지그재그
+            tx, ty = px + math.cos(away) * desired + ox, py + math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        elif dist > self.FAR_DISTANCE:
+            # 접근(너무 멀다)
+            tx, ty = px - math.cos(away) * desired + ox, py - math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        else:
+            # 적정 범위: 소폭 횡이동
+            self.goal_pos = (self.world_x + ox * 0.15, self.world_y + oy * 0.15)
+
+    # 웅덩이 생성
+    def _spawn_puddles(self):
+        # 분사 종료 지점 근방에 2개 생성(40~80px 랜덤 오프셋)
+        base_x = self.world_x + math.cos(self.direction_angle) * self.SPRAY_RANGE
+        base_y = self.world_y + math.sin(self.direction_angle) * self.SPRAY_RANGE
+        for _ in range(self.PUDDLES_PER_BURST):
+            ang = self.direction_angle + random.uniform(-0.6, 0.6)
+            off = random.randint(self.PUDDLE_OFFSET_MIN, self.PUDDLE_OFFSET_MAX)
+            px = base_x + math.cos(ang) * off
+            py = base_y + math.sin(ang) * off
+            self._puddles.append(self.BloodPuddle(
+                self, px, py,
+                radius=self.PUDDLE_RADIUS,
+                duration_ms=self.PUDDLE_DURATION,
+                tick_ms=self.PUDDLE_TICK_MS,
+                tick_damage=self.PUDDLE_TICK_DMG,
+                src_img=self._flame_pillar_src,
+                sizzle_sound=self.snd_puddle,
+            ))
+
+    # 사망/정리
+
+    def die(self, blood_effects):
+        # 웅덩이 정리 + 드랍
+        self._puddles.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 4)
+
+    def stop_sounds_on_remove(self):
+        # 룸 전환 시 남을 수 있는 사운드 없음(전조 1회뿐)이지만 방어적으로 정리
+        try:
+            if self.snd_charge: self.snd_charge.stop()
+        except: pass
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 웅덩이 먼저(바닥) → 본체/전조/스프레이(상단)
+        for p in self._puddles:
+            p.draw(screen, world_x, world_y)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        ) if self.image_original else None
+        if body:
+            rot = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+            screen.blit(rot, rot.get_rect(center=(sx, sy)))
+        else:
+            # 간단 대체 드로잉
+            pygame.draw.circle(screen, (130, 10, 10), (sx, sy), int(28 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (220, 40, 40), (sx, sy), int(28 * PLAYER_VIEW_SCALE), 3)
+
+        # 경고 아이콘
+        self.draw_alert(screen, sx, sy)
+
+        # 전조/스프레이 부채꼴 드로잉(알파 투영)
+        if self.state in ("telegraph", "spray"):
+            wedge_pts_world = self._build_wedge_poly(self.direction_angle, self.SPRAY_RANGE)
+            # 스크린 좌표로 변환
+            wedge_pts_screen = [(int(x - world_x + shake_offset_x), int(y - world_y + shake_offset_y))
+                                for (x, y) in wedge_pts_world]
+            # 전조는 약하게, 스프레이는 강하게
+            if self.state == "telegraph":
+                color = (255, 40, 40, 90)
+            else:
+                color = (255, 30, 30, 150)
+            # 투명 레이어에 그려서 합성
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            # 폴리곤 채우기
+            pygame.draw.polygon(lay, color, wedge_pts_screen)
+            # 가장자리 스트로크(가벼운 테두리)
+            pygame.draw.lines(lay, (255, 100, 100, 160), False, wedge_pts_screen[1:], 2)
+            screen.blit(lay, (0, 0))
+
+class Enemy31(AIBase):
+    rank = 9
+    HP = 700
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.92
+    RADIUS = int(32 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(520 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(720 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(420 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
+
+    POINT_MS           = 800
+    COOLDOWN_MS        = 5000
+    ROCKETS_PER_SALVO  = 5
+    ROCKET_INTERVAL_MS = 90
+
+    TRACK_DEG_PER_S = 160.0
+
+    ROCKET_SPEED     = 9.0 * PLAYER_VIEW_SCALE
+    ROCKET_RANGE     = int(1800 * PLAYER_VIEW_SCALE)
+    ROCKET_RADIUS    = int(80 * PLAYER_VIEW_SCALE)
+    ROCKET_DAMAGE    = 25
+    ROCKET_BODY_RAD  = int(8 * PLAYER_VIEW_SCALE)
+    ROCKET_TTL_MS    = 2600
+
+    LOS_SAMPLES       = 24
+    LOS_SAMPLE_RADIUS = int(6 * PLAYER_VIEW_SCALE)
+
+    POINTER_BASE_W = max(3, int(3 * PLAYER_VIEW_SCALE))
+    POINTER_COL    = (255, 60, 60, 150)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.12,
+            alert_duration=self.POINT_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy31", images.get("enemy4"))
+        self.gun_image = images.get("gun4", images.get("gun1"))
+        _rocket_src = images.get("grenade1", images.get("enemy_bullet"))
+        if _rocket_src:
+            base = _rocket_src.copy().convert_alpha()
+            tint = pygame.Surface(base.get_size()).convert_alpha()
+            tint.fill((255, 80, 80))
+            base.blit(tint, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+            base.set_alpha(200)
+            self.rocket_image = base
+        else:
+            self.rocket_image = None
+        self.explosion_image = images.get("explosion1")
+
+        self.snd_fire = sounds.get("gun4_fire")
+        self.snd_expl = sounds.get("gun4_explosion")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        # 상태: idle → pointing → salvo → cooldown
+        self.state = "idle"
+        self.point_until = 0
+        self.cooldown_until = 0
+
+        self._salvo_index = 0
+        self._salvo_next_time = 0
+
+        self._zigzag_t0 = pygame.time.get_ticks()
+        self._zigzag_amp = int(75 * PLAYER_VIEW_SCALE)
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._rockets = []
+
+    # 내부: 로켓
+    class MiniRocket:
+        def __init__(self, owner, x, y, angle, speed, body_r, ttl_ms, range_px, dmg, radius, img, expl_img, snd):
+            self.owner = owner
+            self.x = x; self.y = y
+            self.vx = math.cos(angle) * speed
+            self.vy = math.sin(angle) * speed
+            self.body_r = body_r
+            self.spawn_ms = pygame.time.get_ticks()
+            self.ttl_ms = ttl_ms
+            self.max_range = range_px
+            self.start_x = x; self.start_y = y
+            self.damage = dmg
+            self.radius = radius
+            self.img = img
+            self.expl_img = expl_img
+            self.snd = snd
+            self.angle = angle
+            self.alive = True
+
+        def _should_explode(self):
+            # TTL, 사거리, 장애물 충돌, 플레이어 근접
+            now = pygame.time.get_ticks()
+            if now - self.spawn_ms >= self.ttl_ms:
+                return True
+            if math.hypot(self.x - self.start_x, self.y - self.start_y) >= self.max_range:
+                return True
+            om = getattr(config, "obstacle_manager", None)
+            if om and om.check_collision_circle((self.x, self.y), self.body_r):
+                return True
+            # 근접 신관: 플레이어
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.radius * 0.9:
+                return True
+            return False
+
+        def update(self):
+            if not self.alive: return
+            self.x += self.vx
+            self.y += self.vy
+            # 비행 방향으로 각도 갱신(항상 바라보게)
+            self.angle = math.atan2(self.vy, self.vx)
+            if self._should_explode():
+                self.explode()
+
+        def explode(self):
+            if not self.alive: return
+            # 시각효과
+            if self.expl_img:
+                config.effects.append(ExplosionEffectPersistent(self.x, self.y, self.expl_img))
+            # 피해
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.radius:
+                if self.owner.damage_player:
+                    self.owner.damage_player(self.damage)
+            # 사운드
+            if self.snd:
+                try: self.snd.play()
+                except: pass
+            self.alive = False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            if self.img:
+                sprite = pygame.transform.rotate(self.img, -math.degrees(self.angle))
+                rect = sprite.get_rect(center=(int(self.x - world_x), int(self.y - world_y)))
+                screen.blit(sprite, rect)
+            else:
+                pygame.draw.circle(screen, (255, 120, 120), (int(self.x - world_x), int(self.y - world_y)), 3)
+
+    # 유틸: LoS/각도/포인터
+    def _has_los_to_point(self, tx, ty):
+        om = getattr(config, "obstacle_manager", None)
+        if om is None: return True
+        x1, y1 = self.world_x, self.world_y
+        dx, dy = (tx - x1), (ty - y1)
+        steps = max(2, int(self.LOS_SAMPLES))
+        for i in range(1, steps):
+            sx = x1 + dx * (i / steps)
+            sy = y1 + dy * (i / steps)
+            if om.check_collision_circle((sx, sy), self.LOS_SAMPLE_RADIUS):
+                return False
+        return True
+
+    def _update_aim_angle(self, px, py, now_ms):
+        # 제한 각속도로만 목표 각도로 수렴
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        dt_ms = max(1, now_ms - self._last_update_ms)
+        self._last_update_ms = now_ms
+        diff = (desired - self.aim_angle + math.pi) % (2 * math.pi) - math.pi
+        max_step = math.radians(self.TRACK_DEG_PER_S) * (dt_ms / 1000.0)
+        if diff > max_step:   self.aim_angle += max_step
+        elif diff < -max_step:self.aim_angle -= max_step
+        else:                 self.aim_angle = desired
+
+    def _muzzle_world(self, offset_forward=30, offset_side=6):
+        # 총구 월드 좌표(총기 이미지 기준 살짝 앞/좌우 보정)
+        off_ang = self.aim_angle + math.radians(90)
+        fx = self.world_x + math.cos(self.aim_angle) * offset_forward + math.cos(off_ang) * offset_side
+        fy = self.world_y + math.sin(self.aim_angle) * offset_forward + math.sin(off_ang) * offset_side
+        return fx, fy
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_pointing(self):
+        self.state = "pointing"
+        self.point_until = pygame.time.get_ticks() + self.POINT_MS
+        self.show_alert = True
+
+    def _enter_salvo(self):
+        # 살보 스케줄러를 '항상' 여기서 초기화 → 첫 사이클 중복 발사 방지
+        self.state = "salvo"
+        now = pygame.time.get_ticks()
+        self._salvo_index = 0
+        self._salvo_next_time = now
+        self.show_alert = False
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.show_alert = False
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 첫 프레임 각도 초기화
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+
+        # 조준 회전 업데이트
+        self._update_aim_angle(px, py, now)
+
+        # 로켓 업데이트/정리
+        for r in self._rockets:
+            r.update()
+        self._rockets = [r for r in self._rockets if r.alive]
+
+        # 상태 머신
+        los = self._has_los_to_point(px, py)
+
+        if self.state == "idle":
+            if los:
+                self._enter_pointing()
+
+        elif self.state == "pointing":
+            # 포인팅 중에는 제자리
+            self.goal_pos = (self.world_x, self.world_y)
+            if not los:
+                self._enter_idle()
+            elif now >= self.point_until:
+                self._enter_salvo()
+
+        elif self.state == "salvo":
+            # 살보 1회: 5발을 ROCKET_INTERVAL_MS 간격으로 순차 발사
+            self.goal_pos = (self.world_x, self.world_y)  # 살보 중 정지
+            if now >= self._salvo_next_time and self._salvo_index < self.ROCKETS_PER_SALVO:
+                self._fire_one(index_in_salvo=self._salvo_index)
+                self._salvo_index += 1
+                if self._salvo_index < self.ROCKETS_PER_SALVO:
+                    self._salvo_next_time = now + self.ROCKET_INTERVAL_MS
+                else:
+                    self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            if now >= self.cooldown_until:
+                self._enter_pointing() if los else self._enter_idle()
+
+        # 거리 운영(포인팅/살보 외에는 이동)
+        if self.state not in ("pointing", "salvo"):
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            away = self.aim_angle + math.pi
+            t = (now - self._zigzag_t0) / 1000.0
+            perp = self.aim_angle + math.pi / 2.0
+            zig = math.sin(t * 2.1) * self._zigzag_amp
+            ox, oy = math.cos(perp) * zig, math.sin(perp) * zig
+
+            desired = 0.5 * (self.KEEP_MIN + self.KEEP_MAX)
+            if dist < self.NEAR_DISTANCE:
+                tx, ty = px + math.cos(away) * desired + ox, py + math.sin(away) * desired + oy
+                self.goal_pos = (tx, ty)
+            elif dist > self.FAR_DISTANCE:
+                tx, ty = px - math.cos(away) * desired + ox, py - math.sin(away) * desired + oy
+                self.goal_pos = (tx, ty)
+            else:
+                self.goal_pos = (self.world_x + ox * 0.2, self.world_y + oy * 0.2)
+        else:
+            # 포인팅/살보 중엔 정지
+            self.goal_pos = (self.world_x, self.world_y)
+
+    # 발사 루틴
+    def _fire_one(self, index_in_salvo: int):
+        # 살보 내부에서 index_in_salvo(0..4)에 해당하는 각도로 1발 발사
+        fx, fy = self._muzzle_world()
+        # 레이저 5갈래와 동일한 부채꼴 각도(도): 중앙 기준 ±12°, ±6°, 0°
+        offsets = (-12.0, -6.0, 0.0, 6.0, 12.0)
+        deg = offsets[max(0, min(index_in_salvo, len(offsets)-1))]
+        jitter = random.uniform(-1.5, 1.5)
+        ang = self.aim_angle + math.radians(deg + jitter)
+
+        rocket = self.MiniRocket(
+            owner=self, x=fx, y=fy, angle=ang,
+            speed=self.ROCKET_SPEED, body_r=self.ROCKET_BODY_RAD,
+            ttl_ms=self.ROCKET_TTL_MS, range_px=self.ROCKET_RANGE,
+            dmg=self.ROCKET_DAMAGE, radius=self.ROCKET_RADIUS,
+            img=self.rocket_image, expl_img=self.explosion_image, snd=self.snd_expl
+        )
+        self._rockets.append(rocket)
+
+        # 발사음
+        if self.snd_fire:
+            try: self.snd_fire.play()
+            except: pass
+
+    # 사망/정리
+    def die(self, blood_effects):
+        # 남은 로켓은 즉시 폭발(피해는 그대로 적용)
+        for r in self._rockets:
+            try: r.explode()
+            except: pass
+        self._rockets.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(6, 6)
+
+    def stop_sounds_on_remove(self):
+        # 루프 사운드 없음. 남은 로켓 정리
+        for r in self._rockets:
+            try: r.explode()
+            except: pass
+        self._rockets.clear()
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 로켓(바닥 위, 본체 아래)
+        for r in self._rockets:
+            r.draw(screen, world_x, world_y)
+
+        # 본체 + 총
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 총기
+        if self.gun_image:
+            gun = pygame.transform.rotate(self.gun_image, -math.degrees(self.aim_angle) - 90)
+            gx = sx + math.cos(self.aim_angle) * 30
+            gy = sy + math.sin(self.aim_angle) * 30
+            screen.blit(gun, gun.get_rect(center=(gx, gy)))
+
+        # 몸통
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+        else:
+            pygame.draw.circle(screen, (80, 80, 80), (sx, sy), int(30 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (255, 0, 0), (sx, sy), int(30 * PLAYER_VIEW_SCALE), 3)
+
+        # 포인팅 레이저(5갈래)
+        if self.state == "pointing":
+            fx, fy = self._muzzle_world()
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            for deg in (-12.0, -6.0, 0.0, 6.0, 12.0):
+                ang = self.aim_angle + math.radians(deg)
+                ex = fx + math.cos(ang) * (self.ROCKET_RANGE * 0.7)
+                ey = fy + math.sin(ang) * (self.ROCKET_RANGE * 0.7)
+                lx1, ly1 = int(fx - world_x + shake_offset_x), int(fy - world_y + shake_offset_y)
+                lx2, ly2 = int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y)
+                pygame.draw.line(lay, self.POINTER_COL, (lx1, ly1), (lx2, ly2), self.POINTER_BASE_W)
+            screen.blit(lay, (0, 0))
+
+        # 경고 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy32(AIBase):
+    rank = 7
+    HP = 600
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.88
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(450 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(700 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(360 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS = 1000
+    LINK_MS      = 3000
+    COOLDOWN_MS  = 3000
+
+    TRACK_DEG_PER_S = 150.0
+
+    FAN_HALF_DEG   = 22.0
+    ORB_SPEED      = 3.6 * PLAYER_VIEW_SCALE
+    ORB_TTL_MS     = LINK_MS
+    ORB_RADIUS     = int(12 * PLAYER_VIEW_SCALE)
+
+    TICK_MS        = 100
+    TICK_DAMAGE    = 15
+    BEAM_HIT_RADIUS= int(18 * PLAYER_VIEW_SCALE)
+
+    BEAM_SEG_LEN = 26
+    BEAM_JITTER  = 3.2
+    BEAM_PULSE_MS= 680
+    COL_CORE   = (255, 240, 255, 255)
+    COL_GLOW   = (180, 90, 255, 210)
+    COL_OUTER  = (120, 40, 200, 120)
+    CORE_W     = max(2, int(3 * PLAYER_VIEW_SCALE))
+    GLOW_W     = max(4, int(6 * PLAYER_VIEW_SCALE))
+    OUTER_W    = max(6, int(9 * PLAYER_VIEW_SCALE))
+
+    PARTICLES_PER_TICK = 2
+    PARTICLE_LIFE_MS   = 450
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.10,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+
+        self.image_original = images.get("enemy32")
+        self.snd_charge = sounds.get("shock_charge")
+        self.snd_burst  = sounds.get("shock_burst")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        # 상태: idle → telegraph → link → cooldown
+        self.state = "idle"
+        self.telegraph_until = 0
+        self.link_until = 0
+        self.cooldown_until = 0
+        self.next_tick_ms = 0
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._orbs = []
+        self._particles = []
+
+    # 내부 클래스: 구체(장애물/벽 관통, 충돌 없음)
+    class FieldOrb:
+        def __init__(self, x, y, vx, vy, ttl_ms, radius):
+            self.x = x; self.y = y
+            self.vx = vx; self.vy = vy
+            self.spawn_ms = pygame.time.get_ticks()
+            self.ttl_ms = ttl_ms
+            self.radius = radius
+            self.alive = True
+
+        def update(self):
+            if not self.alive: return
+            self.x += self.vx
+            self.y += self.vy
+            if pygame.time.get_ticks() - self.spawn_ms >= self.ttl_ms:
+                self.alive = False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            cx = int(self.x - world_x); cy = int(self.y - world_y)
+            r = self.radius
+            # 글로우
+            glow = pygame.Surface((r*4, r*4), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (160, 80, 255, 120), (2*r, 2*r), 2*r)
+            screen.blit(glow, glow.get_rect(center=(cx, cy)))
+            # 본체
+            pygame.draw.circle(screen, (210, 160, 255), (cx, cy), r)
+            pygame.draw.circle(screen, (140, 60, 220), (cx, cy), r, 2)
+
+    # 유틸(기하/빔/파티클)
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        dt_ms = max(1, now_ms - self._last_update_ms)
+        self._last_update_ms = now_ms
+        diff = (desired - self.aim_angle + math.pi) % (2 * math.pi) - math.pi
+        max_step = math.radians(self.TRACK_DEG_PER_S) * (dt_ms / 1000.0)
+        if diff > max_step:   self.aim_angle += max_step
+        elif diff < -max_step:self.aim_angle -= max_step
+        else:                 self.aim_angle = desired
+
+    def _spawn_orb_pair(self):
+        # 총구 위치(몸 앞쪽)
+        off = 28 * PLAYER_VIEW_SCALE
+        ox = self.world_x + math.cos(self.aim_angle) * off
+        oy = self.world_y + math.sin(self.aim_angle) * off
+        # 각도 ±FAN_HALF_DEG
+        d = math.radians(self.FAN_HALF_DEG)
+        v = self.ORB_SPEED
+        o1 = self.FieldOrb(ox, oy, math.cos(self.aim_angle - d)*v, math.sin(self.aim_angle - d)*v, self.ORB_TTL_MS, self.ORB_RADIUS)
+        o2 = self.FieldOrb(ox, oy, math.cos(self.aim_angle + d)*v, math.sin(self.aim_angle + d)*v, self.ORB_TTL_MS, self.ORB_RADIUS)
+        self._orbs = [o1, o2]
+
+    def _dist_point_to_segment(self, x, y, x1, y1, x2, y2):
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = x - x1, y - y1
+        seg2 = vx*vx + vy*vy
+        if seg2 <= 1e-6: return math.hypot(x - x1, y - y1)
+        t = max(0.0, min(1.0, (wx*vx + wy*vy) / seg2))
+        px, py = x1 + t*vx, y1 + t*vy
+        return math.hypot(x - px, y - py)
+
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec):
+        # 직선 사이를 일정 간격으로 나누고, 수직 방향으로 사인 지글을 줌
+        dx, dy = x2 - x1, y2 - y1
+        dist = max(1.0, math.hypot(dx, dy))
+        nx, ny = (-dy / dist, dx / dist)
+        nseg = max(2, int(dist / seg_len))
+        pts = []
+        for i in range(nseg + 1):
+            t = i / nseg
+            bx = x1 + dx * t
+            by = y1 + dy * t
+            wiggle = math.sin((t * 12.0) + tsec * 10.0) * jitter_amp
+            pts.append((bx + nx * wiggle, by + ny * wiggle))
+        return pts
+
+    def _draw_polyline(self, surf, pts, color, width):
+        if len(pts) >= 2:
+            pygame.draw.lines(surf, color, False, pts, width)
+
+    def _draw_link_layered(self, lay, x1, y1, x2, y2, born_ms, alpha=1.0):
+        now = pygame.time.get_ticks()
+        tsec = (now - born_ms) * 0.001
+        # 링크 길이에 비례해 지글을 조금 강화
+        dist = max(1.0, math.hypot(x2 - x1, y2 - y1))
+        jitter = self.BEAM_JITTER * (0.8 + 0.2 * min(2.0, dist / 600.0))
+        pts = self._beam_points(x1, y1, x2, y2, jitter, self.BEAM_SEG_LEN, tsec)
+        # 펄스
+        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2 * math.pi / max(60, self.BEAM_PULSE_MS)))
+        core_w  = max(1, int(self.CORE_W  * (0.8 + 0.3 * pulse)))
+        glow_w  = max(core_w + 2, int(self.GLOW_W * (1.0 + 0.2 * pulse)))
+        outer_w = max(glow_w + 2, int(self.OUTER_W* (1.1 + 0.1 * pulse)))
+        col_core  = (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  int(self.COL_CORE[3]  * alpha))
+        col_glow  = (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  int(self.COL_GLOW[3]  * alpha))
+        col_outer = (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], int(self.COL_OUTER[3] * alpha))
+        self._draw_polyline(lay, pts, col_outer, outer_w)
+        self._draw_polyline(lay, pts, col_glow,  glow_w)
+        self._draw_polyline(lay, pts, col_core,  core_w)
+
+    def _spawn_particles_between(self, x1, y1, x2, y2):
+        # 링크 주변에 작은 보라 파티클
+        for _ in range(self.PARTICLES_PER_TICK):
+            t = random.random()
+            px = x1 + (x2 - x1) * t
+            py = y1 + (y2 - y1) * t
+            ang = random.uniform(0, 2*math.pi)
+            spd = random.uniform(0.5, 1.8)
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            death = pygame.time.get_ticks() + self.PARTICLE_LIFE_MS
+            self._particles.append([px, py, vx, vy, death])
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_telegraph(self):
+        self.state = "telegraph"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.show_alert = True
+        if self.snd_charge:
+            try: self.snd_charge.play()
+            except: pass
+
+    def _enter_link(self):
+        self.state = "link"
+        now = pygame.time.get_ticks()
+        self.link_until = now + self.LINK_MS
+        self.next_tick_ms = now + self.TICK_MS
+        self._spawn_orb_pair()
+        # 발사음
+        if self.snd_burst:
+            try: self.snd_burst.play()
+            except: pass
+        self.show_alert = False
+        self._link_born_ms = now
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.show_alert = False
+        self._orbs.clear()
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 첫 프레임 각도 초기화
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+
+        # 조준 각 업데이트
+        self._update_aim_angle(px, py, now)
+
+        # 파티클 업데이트/정리
+        for p in self._particles:
+            p[0] += p[2]; p[1] += p[3]
+        self._particles = [p for p in self._particles if pygame.time.get_ticks() < p[4]]
+
+        # 상태 머신
+        if self.state == "idle":
+            self._enter_telegraph()
+
+        elif self.state == "telegraph":
+            if now >= self.telegraph_until:
+                self._enter_link()
+
+        elif self.state == "link":
+            # 구체 이동
+            alive_any = False
+            for o in self._orbs:
+                o.update()
+                alive_any = alive_any or o.alive
+            # 링크 틱 대미지
+            if len(self._orbs) == 2 and self._orbs[0].alive and self._orbs[1].alive:
+                x1, y1 = self._orbs[0].x, self._orbs[0].y
+                x2, y2 = self._orbs[1].x, self._orbs[1].y
+                if now >= self.next_tick_ms:
+                    d = self._dist_point_to_segment(px, py, x1, y1, x2, y2)
+                    if d <= self.BEAM_HIT_RADIUS and self.damage_player:
+                        self.damage_player(self.TICK_DAMAGE)
+                    self.next_tick_ms += self.TICK_MS
+                # 파티클 약간
+                self._spawn_particles_between(x1, y1, x2, y2)
+
+            # 링크 종료
+            if now >= self.link_until or not alive_any:
+                self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            if now >= self.cooldown_until:
+                self._enter_telegraph()
+
+        # 거리 운영: 전조/링크 중에는 멈추고, 그 외에는 유지 거리로 이동
+        if self.state in ("telegraph", "link"):
+            self.goal_pos = (self.world_x, self.world_y)
+        else:
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            away = self.aim_angle + math.pi
+            t = (now - self._last_update_ms) / 1000.0
+            perp = self.aim_angle + math.pi/2
+            zig = math.sin(pygame.time.get_ticks()*0.0022) * int(60 * PLAYER_VIEW_SCALE)
+            ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+            desired = 0.5*(self.KEEP_MIN + self.KEEP_MAX)
+            if dist < self.NEAR_DISTANCE:
+                self.goal_pos = (px + math.cos(away)*desired + ox, py + math.sin(away)*desired + oy)
+            elif dist > self.FAR_DISTANCE:
+                self.goal_pos = (px - math.cos(away)*desired + ox, py - math.sin(away)*desired + oy)
+            else:
+                self.goal_pos = (self.world_x + ox*0.15, self.world_y + oy*0.15)
+
+    # 사망/정리
+    def die(self, blood_effects):
+        self._orbs.clear()
+        self._particles.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(7, 7)
+
+    def stop_sounds_on_remove(self):
+        # 루프 사운드 없음. 방어적으로 비움
+        self._orbs.clear()
+        self._particles.clear()
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 바닥 파티클 먼저
+        for p in self._particles:
+            x, y = int(p[0] - world_x), int(p[1] - world_y)
+            pygame.draw.circle(screen, (200, 140, 255), (x, y), 2)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            # 본체는 살짝 조준 각에 맞춰 회전
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+        else:
+            pygame.draw.circle(screen, (60, 20, 60), (sx, sy), int(28 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (180, 80, 220), (sx, sy), int(28 * PLAYER_VIEW_SCALE), 3)
+
+        # 경고 아이콘
+        self.draw_alert(screen, sx, sy)
+
+        # 구체 & 링크
+        if len(self._orbs) == 2 and self._orbs[0].alive and self._orbs[1].alive:
+            # 링크(투명 레이어 합성)
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            x1 = int(self._orbs[0].x - world_x); y1 = int(self._orbs[0].y - world_y)
+            x2 = int(self._orbs[1].x - world_x); y2 = int(self._orbs[1].y - world_y)
+            self._draw_link_layered(lay, x1, y1, x2, y2, getattr(self, "_link_born_ms", pygame.time.get_ticks()), alpha=1.0)
+            screen.blit(lay, (0, 0))
+
+        # 구체 드로잉은 마지막에
+        for o in self._orbs:
+            o.draw(screen, world_x, world_y)
+
+class Enemy33(AIBase):
+    rank = 7
+    HP = 640
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.08
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(430 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(620 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(360 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS = 500
+    COOLDOWN_MS  = 2500
+
+    HARPOON_RANGE = int(2200 * PLAYER_VIEW_SCALE)
+    HARPOON_SPEED = 40 * PLAYER_VIEW_SCALE
+    HARPOON_HIT_RADIUS = int(25 * PLAYER_VIEW_SCALE)
+
+    TETHER_MAX_MS = 3000
+    PULL_SPEED_PX_S = 120.0
+    DOT_TICK_MS = 250
+    DOT_TICK_DMG = 5
+    TETHER_HP_MAX = 120
+    TETHER_CUT_RADIUS = int(12 * PLAYER_VIEW_SCALE)
+
+    MELEE_RANGE = int(160 * PLAYER_VIEW_SCALE)
+    MELEE_WINDUP_MS = 350
+    MELEE_DAMAGE = 20
+
+    TRACK_DEG_PER_S = 190.0
+
+    COL_CORE   = (255, 240, 255, 255)
+    COL_GLOW   = (180, 90, 255, 220)
+    COL_OUTER  = (120, 40, 200, 160)
+    CORE_W     = max(2, int(3 * PLAYER_VIEW_SCALE))
+    GLOW_W     = max(4, int(6 * PLAYER_VIEW_SCALE))
+    OUTER_W    = max(6, int(9 * PLAYER_VIEW_SCALE))
+    BEAM_SEG_LEN = 24
+    BEAM_JITTER  = 2.0
+    BEAM_PULSE_MS= 640
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.18,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images["enemy33"]
+        self.snd_throw = sounds.get("chain_throw")
+        self.snd_drag  = sounds.get("chain_drag")
+        self.snd_hit   = sounds.get("chain_hit")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.state = "idle"
+        self.telegraph_until = 0
+        self.cooldown_until = 0
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self.harpoon = None
+        self.tether = None
+
+        self._melee_windup_until = 0
+
+
+        self._link_born_ms = 0
+        self._particles = []
+
+    # 내부 클래스: 하푼 투사체(발사 중 “줄” 연출 포함)
+    class Harpoon:
+        def __init__(self, owner, x, y, angle, speed, max_range, hit_radius):
+            self.owner = owner
+            self.x = x; self.y = y
+            self.vx = math.cos(angle) * speed
+            self.vy = math.sin(angle) * speed
+            self.start_x = x; self.start_y = y
+            self.max_range = max_range
+            self.hit_radius = hit_radius
+            self.alive = True
+            self.angle = angle
+            self.born_ms = pygame.time.get_ticks()
+
+        def update(self):
+            if not self.alive: return
+            self.x += self.vx
+            self.y += self.vy
+            self.angle = math.atan2(self.vy, self.vx)
+
+            # 사거리 종료
+            if math.hypot(self.x - self.start_x, self.y - self.start_y) >= self.max_range:
+                self.alive = False
+                return
+            # 장애물 충돌 시 실패
+            om = getattr(config, "obstacle_manager", None)
+            if om and om.check_collision_circle((self.x, self.y), self.hit_radius):
+                self.alive = False
+                return
+            # 플레이어 명중
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.hit_radius + max(12, int(16*PLAYER_VIEW_SCALE)):
+                self.owner._attach_tether()
+                self.alive = False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            # 하푼 본체
+            cx = int(self.x - world_x); cy = int(self.y - world_y)
+            dart = pygame.Surface((18, 6), pygame.SRCALPHA)
+            pygame.draw.polygon(dart, (200,120,255), [(0,3),(12,0),(18,3),(12,6)])
+            dart = pygame.transform.rotate(dart, -math.degrees(self.angle))
+            screen.blit(dart, dart.get_rect(center=(cx, cy)))
+            # 하푼-본체 사이 "줄" 연출(보라 로프)
+            sx = int(self.owner.world_x - world_x); sy = int(self.owner.world_y - world_y)
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            self.owner._draw_chain_rope(lay, sx, sy, cx, cy, self.born_ms, alpha=1.0)
+            screen.blit(lay, (0, 0))
+
+    # 내부 클래스: 테더(줄 HP/끌어오기/DoT/절단)
+    class Tether:
+        def __init__(self, owner):
+            self.owner = owner
+            self.hp = owner.TETHER_HP_MAX
+            self.start_ms = pygame.time.get_ticks()
+            self.end_ms = self.start_ms + owner.TETHER_MAX_MS
+            self.next_tick = self.start_ms + owner.DOT_TICK_MS
+            self.alive = True
+
+        def _segment(self):
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            return (self.owner.world_x, self.owner.world_y, px, py)
+
+        def _dist_point_to_segment(self, x, y, x1, y1, x2, y2):
+            vx, vy = x2 - x1, y2 - y1
+            wx, wy = x - x1, y - y1
+            seg2 = vx*vx + vy*vy
+            if seg2 <= 1e-6: return math.hypot(x-x1, y-y1)
+            t = max(0.0, min(1.0, (wx*vx + wy*vy) / seg2))
+            px, py = x1 + t*vx, y1 + t*vy
+            return math.hypot(x - px, y - py)
+
+        def _apply_pull(self):
+            # 플레이어를 적 방향으로 끌어오기
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            dx, dy = self.owner.world_x - px, self.owner.world_y - py
+            dist = max(1.0, math.hypot(dx, dy))
+            ux, uy = dx / dist, dy / dist
+            step = self.owner.PULL_SPEED_PX_S / 60.0
+            try:
+                config.apply_knockback( ux * step*18,  uy * step*18)
+            except Exception:
+                config.player_rect.centerx += int(ux * step*0.2)
+                config.player_rect.centery += int(uy * step*0.2)
+
+        def _tick_damage(self):
+            now = pygame.time.get_ticks()
+            if now >= self.next_tick:
+                if self.owner.damage_player:
+                    self.owner.damage_player(self.owner.DOT_TICK_DMG)
+                self.next_tick += self.owner.DOT_TICK_MS
+
+        def _check_cut_by_bullets(self):
+            bullets = list(getattr(config, "bullets", []))
+            if not bullets: return
+            x1, y1, x2, y2 = self._segment()
+            for b in bullets:
+                bx = getattr(b, "world_x", getattr(b, "x", None))
+                by = getattr(b, "world_y", getattr(b, "y", None))
+                if bx is None or by is None: 
+                    continue
+                d = self._dist_point_to_segment(bx, by, x1, y1, x2, y2)
+                if d <= self.owner.TETHER_CUT_RADIUS:
+                    dmg = getattr(b, "damage", 10)
+                    self.hp -= max(1, int(dmg))
+                    if self.hp <= 0:
+                        self.alive = False
+                        self.owner._on_tether_broken(cut=True)
+                        return
+
+        def update(self):
+            if not self.alive: return
+            now = pygame.time.get_ticks()
+            if now >= self.end_ms:
+                self.alive = False
+                self.owner._on_tether_broken(timeout=True)
+                return
+            self._apply_pull()
+            self._tick_damage()
+            self._check_cut_by_bullets()
+            # 체인 파티클
+            x1,y1,x2,y2 = self._segment()
+            self.owner._spawn_particles_along(x1,y1,x2,y2,count=2)
+
+        def draw(self, screen, world_x, world_y, born_ms, owner):
+            if not self.alive: return
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            x1 = int(owner.world_x - world_x); y1 = int(owner.world_y - world_y)
+            x2 = int(px - world_x);            y2 = int(py - world_y)
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            owner._draw_link_layered(lay, x1, y1, x2, y2, born_ms, alpha=1.0)
+            screen.blit(lay, (0, 0))
+
+    # 파티클 스폰
+    def _spawn_particles_along(self, x1, y1, x2, y2, count=2):
+        for _ in range(count):
+            t = random.random()
+            px = x1 + (x2 - x1) * t
+            py = y1 + (y2 - y1) * t
+            ang = random.uniform(0, 2*math.pi)
+            spd = random.uniform(0.6, 1.6)
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            death = pygame.time.get_ticks() + 450
+            self._particles.append([px, py, vx, vy, death])
+
+    # 유틸(각도/총구/LoS/드로잉)
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        dt_ms = max(1, now_ms - self._last_update_ms)
+        self._last_update_ms = now_ms
+        diff = (desired - self.aim_angle + math.pi) % (2 * math.pi) - math.pi
+        max_step = math.radians(self.TRACK_DEG_PER_S) * (dt_ms / 1000.0)
+        if diff > max_step:   self.aim_angle += max_step
+        elif diff < -max_step:self.aim_angle -= max_step
+        else:                 self.aim_angle = desired
+
+    def _muzzle_world(self, forward=30, side=8):
+        off_ang = self.aim_angle + math.radians(90)
+        fx = self.world_x + math.cos(self.aim_angle) * forward + math.cos(off_ang) * side
+        fy = self.world_y + math.sin(self.aim_angle) * forward + math.sin(off_ang) * side
+        return fx, fy
+
+    def _has_los_to_point(self, tx, ty):
+        om = getattr(config, "obstacle_manager", None)
+        if om is None: return True
+        x1, y1 = self.world_x, self.world_y
+        dx, dy = (tx - x1), (ty - y1)
+        for i in range(1, 24):
+            sx = x1 + dx * (i / 24)
+            sy = y1 + dy * (i / 24)
+            if om.check_collision_circle((sx, sy), int(6 * PLAYER_VIEW_SCALE)):
+                return False
+        return True
+
+    def _attach_tether(self):
+        # 명중 사운드 + 드래그 루프 시작
+        if self.snd_hit:
+            try: self.snd_hit.play()
+            except: pass
+        if self.snd_drag:
+            try: self.snd_drag.play(loops=-1)
+            except: pass
+        self.tether = self.Tether(self)
+        self._link_born_ms = pygame.time.get_ticks()
+        self.harpoon = None
+
+    def _on_tether_broken(self, cut=False, timeout=False):
+        if self.snd_drag:
+            try: self.snd_drag.stop()
+            except: pass
+        self.tether = None
+        self._enter_cooldown()
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_aim(self):
+        self.state = "aim"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.show_alert = True
+
+    def _enter_fire(self):
+        self.state = "fire"
+        self.show_alert = False
+        if self.snd_throw:
+            try: self.snd_throw.play()
+            except: pass
+        fx, fy = self._muzzle_world()
+        ang = self.aim_angle
+        self.harpoon = self.Harpoon(self, fx, fy, ang, self.HARPOON_SPEED, self.HARPOON_RANGE, self.HARPOON_HIT_RADIUS)
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.harpoon = None
+        if self.snd_drag:
+            try: self.snd_drag.stop()
+            except: pass
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 각도 초기화
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+
+        # 조준 갱신
+        self._update_aim_angle(px, py, now)
+
+        # 파티클 업데이트
+        for p in list(self._particles):
+            p[0] += p[2]; p[1] += p[3]
+            if pygame.time.get_ticks() >= p[4]:
+                self._particles.remove(p)
+
+        # 하푼/테더 업데이트
+        h = self.harpoon
+        if h is not None:
+            h.update()
+            # update() 중 명중하면 self.harpoon이 None이 될 수 있음 → 로컬 h로 검사
+            if not h.alive and self.tether is None and self.state == "fire":
+                self._enter_cooldown()
+
+        if self.tether:
+            self.tether.update()
+            # 근접 마무리
+            dx, dy = px - self.world_x, py - self.world_y
+            if self._melee_windup_until == 0 and math.hypot(dx, dy) <= self.MELEE_RANGE:
+                self._melee_windup_until = now + self.MELEE_WINDUP_MS
+            if self._melee_windup_until and now >= self._melee_windup_until:
+                if self.damage_player:
+                    self.damage_player(self.MELEE_DAMAGE)
+                # 약한 넉백
+                try:
+                    ux, uy = math.cos(self.aim_angle), math.sin(self.aim_angle)
+                    config.apply_knockback(ux*60, uy*60)
+                except Exception:
+                    pass
+                self._melee_windup_until = 0
+                self._on_tether_broken()
+
+        # 상태 머신
+        if self.state == "idle":
+            if self._has_los_to_point(px, py):
+                self._enter_aim()
+
+        elif self.state == "aim":
+            if now >= self.telegraph_until:
+                self._enter_fire()
+
+        elif self.state == "fire":
+            pass  # 하푼 업데이트에서 처리
+
+        elif self.state == "cooldown":
+            if now >= self.cooldown_until:
+                self._enter_idle()
+
+        # 이동: 모든 상태에서 약간 “붙는” 성향(aim/fire/tether도 소폭 이동)
+        t = pygame.time.get_ticks() * 0.002
+        perp = self.aim_angle + math.pi/2
+        zig = math.sin(t) * int(70 * PLAYER_VIEW_SCALE)
+        ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+        dist = math.hypot(px - self.world_x, py - self.world_y)
+        desired = 0.5*(self.KEEP_MIN + self.KEEP_MAX)
+        away = self.aim_angle + math.pi
+
+        if self.tether:
+            spd_factor = 0.7
+        elif self.state == "aim":
+            spd_factor = 0.75
+        elif self.state == "fire":
+            spd_factor = 0.55
+        else:
+            spd_factor = 1.0
+
+        self.speed = self.BASE_SPEED * spd_factor
+
+        if dist < self.NEAR_DISTANCE:
+            self.goal_pos = (px + math.cos(away)*desired + ox, py + math.sin(away)*desired + oy)
+        elif dist > self.FAR_DISTANCE:
+            self.goal_pos = (px - math.cos(away)*desired + ox, py - math.sin(away)*desired + oy)
+        else:
+            # 적정 범위: 사소한 횡이동 + 약간 전진(더 공격적으로)
+            fwd = 40 * PLAYER_VIEW_SCALE
+            self.goal_pos = (self.world_x + ox*0.2 + math.cos(self.aim_angle)*fwd*0.1,
+                             self.world_y + oy*0.2 + math.sin(self.aim_angle)*fwd*0.1)
+
+    # 드로잉 유틸 (체인/링크)
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec):
+        dx, dy = x2 - x1, y2 - y1
+        dist = max(1.0, math.hypot(dx, dy))
+        nx, ny = (-dy / dist, dx / dist)
+        nseg = max(2, int(dist / seg_len))
+        pts = []
+        for i in range(nseg + 1):
+            t = i / nseg
+            bx = x1 + dx * t
+            by = y1 + dy * t
+            wiggle = math.sin((t * 12.0) + tsec * 10.0) * jitter_amp
+            pts.append((bx + nx * wiggle, by + ny * wiggle))
+        return pts
+
+    def _draw_polyline(self, surf, pts, color, width):
+        if len(pts) >= 2:
+            pygame.draw.lines(surf, color, False, pts, width)
+
+    def _draw_link_layered(self, lay, x1, y1, x2, y2, born_ms, alpha=1.0):
+        # 테더(플레이어-적) 전류체인(지글 강함)
+        now = pygame.time.get_ticks()
+        tsec = (now - born_ms) * 0.001
+        dist = max(1.0, math.hypot(x2 - x1, y2 - y1))
+        jitter = self.BEAM_JITTER * (0.8 + 0.2 * min(2.0, dist / 600.0))
+        pts = self._beam_points(x1, y1, x2, y2, jitter, self.BEAM_SEG_LEN, tsec)
+        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2 * math.pi / max(60, self.BEAM_PULSE_MS)))
+        core_w  = max(1, int(self.CORE_W  * (0.8 + 0.3 * pulse)))
+        glow_w  = max(core_w + 2, int(self.GLOW_W * (1.0 + 0.2 * pulse)))
+        outer_w = max(glow_w + 2, int(self.OUTER_W* (1.1 + 0.1 * pulse)))
+        col_core  = (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  int(self.COL_CORE[3]  * alpha))
+        col_glow  = (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  int(self.COL_GLOW[3]  * alpha))
+        col_outer = (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], int(self.COL_OUTER[3] * alpha))
+        self._draw_polyline(lay, pts, col_outer, outer_w)
+        self._draw_polyline(lay, pts, col_glow,  glow_w)
+        self._draw_polyline(lay, pts, col_core,  core_w)
+
+    def _draw_chain_rope(self, lay, x1, y1, x2, y2, born_ms, alpha=1.0):
+        # 하푼-본체 사이 “줄” 연출(지글 약함 → 로프 느낌)
+        now = pygame.time.get_ticks()
+        tsec = (now - born_ms) * 0.001
+        jitter = self.BEAM_JITTER * 0.6
+        pts = self._beam_points(x1, y1, x2, y2, jitter, max(18, int(self.BEAM_SEG_LEN*0.8)), tsec)
+        col_core  = (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  int(220 * alpha))
+        col_glow  = (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  int(180 * alpha))
+        col_outer = (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], int(120 * alpha))
+        self._draw_polyline(lay, pts, col_outer, max(4, int(self.OUTER_W*0.6)))
+        self._draw_polyline(lay, pts, col_glow,  max(3, int(self.GLOW_W*0.6)))
+        self._draw_polyline(lay, pts, col_core,  max(2, int(self.CORE_W*0.9)))
+
+    # 드로잉
+    def die(self, blood_effects):
+        if self.snd_drag:
+            try: self.snd_drag.stop()
+            except: pass
+        self.harpoon = None
+        self.tether = None
+        super().die(blood_effects)
+        self.spawn_dropped_items(5, 5)
+
+    def stop_sounds_on_remove(self):
+        if self.snd_drag:
+            try: self.snd_drag.stop()
+            except: pass
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 링크(먼저)
+        if self.tether:
+            self.tether.draw(screen, world_x, world_y, self._link_born_ms, self)
+
+        # 하푼
+        if self.harpoon:
+            self.harpoon.draw(screen, world_x, world_y)
+
+        # 파티클
+        for p in self._particles:
+            x,y = int(p[0]-world_x), int(p[1]-world_y)
+            pygame.draw.circle(screen, (200,140,255), (x,y), 2)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+        screen.blit(body, body.get_rect(center=(sx, sy)))
+
+        # 전조 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy34(AIBase):
+    rank = 7
+    HP = 620
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.98
+    RADIUS = int(28 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(420 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(640 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(360 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS   = 500
+    SMOKE_RADIUS   = int(300 * PLAYER_VIEW_SCALE)
+    SMOKE_DURATION = 5000
+    SMOKE_COOLDOWN = 5000
+    CHOKE_RADIUS   = int(120 * PLAYER_VIEW_SCALE)
+    CHOKE_SLOW     = 0.50
+    CHOKE_TICK_MS  = 500
+    CHOKE_TICK_DMG = 5
+
+    VISION_CONE_DEG = 70
+    VISION_ALPHA     = 220
+
+    THROW_RANGE   = int(720 * PLAYER_VIEW_SCALE)
+    GRENADE_SPEED = 12.0 * PLAYER_VIEW_SCALE
+    GRENADE_HIT_R = int(10 * PLAYER_VIEW_SCALE)
+
+    SELF_SPD_BUFF   = 1.10
+    SELF_DMG_REDUCE = 0.75
+
+    PARTICLES_PER_FRAME = 3
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.14,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images["enemy34"]
+        self.snd_smoke = sounds.get("smoke_explosion")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.state = "idle"
+        self.cooldown_until = 0
+        self.telegraph_until = 0
+
+        self._grenade = None
+        self._smokes  = []
+        self._last_throw_pos = None
+
+        self._particles = []
+
+        self._spawned_effects = []
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._in_own_smoke = False
+
+    # 내부: 연막탄
+    class SmokeGrenade:
+        def __init__(self, owner, sx, sy, tx, ty, speed, hit_r):
+            self.owner = owner
+            self.x, self.y = sx, sy
+            dx, dy = tx - sx, ty - sy
+            dist = max(1.0, math.hypot(dx, dy))
+            self.vx = (dx / dist) * speed
+            self.vy = (dy / dist) * speed
+            self.hit_r = hit_r
+            self.target = (tx, ty)
+            self.alive = True
+            self.born = pygame.time.get_ticks()
+            self.angle = math.atan2(self.vy, self.vx)
+
+        def update(self):
+            if not self.alive: return
+            # 직선 비행 + 약간의 상하 흔들림
+            t = (pygame.time.get_ticks() - self.born) * 0.001
+            self.x += self.vx
+            self.y += self.vy + math.sin(t * 10.0) * 0.2
+
+            # 장애물/목표 도달 체크
+            om = getattr(config, "obstacle_manager", None)
+            if om and om.check_collision_circle((self.x, self.y), self.hit_r):
+                self.explode(); return
+            if math.hypot(self.x - self.target[0], self.y - self.target[1]) <= self.hit_r * 1.2:
+                self.explode(); return
+
+        def explode(self):
+            if not self.alive: return
+            self.alive = False
+            self.owner._spawn_smoke(self.x, self.y)
+            if self.owner.snd_smoke:
+                try: self.owner.snd_smoke.play()
+                except: pass
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            cx = int(self.x - world_x); cy = int(self.y - world_y)
+            # 본체(보라 캡슐)
+            body = pygame.Surface((16, 8), pygame.SRCALPHA)
+            pygame.draw.ellipse(body, (180,120,220), (0,0,16,8))
+            pygame.draw.ellipse(body, (90,40,120),  (0,0,16,8), 2)
+            body = pygame.transform.rotate(body, -math.degrees(self.angle))
+            screen.blit(body, body.get_rect(center=(cx, cy)))
+            # 트레일
+            tail = pygame.Surface((36, 36), pygame.SRCALPHA)
+            pygame.draw.circle(tail, (150,120,200,120), (18,18), 10)
+            screen.blit(tail, tail.get_rect(center=(cx - int(math.cos(self.angle)*8),
+                                                    cy - int(math.sin(self.angle)*8))))
+
+    # 내부: 연막 구름(바닥 드로잉 + 플레이어 시야 차단)
+    class SmokeCloud:
+        def __init__(self, owner, x, y, radius, duration_ms):
+            self.owner = owner
+            self.x, self.y = x, y
+            self.radius = radius
+            self.birth = pygame.time.get_ticks()
+            self.duration = duration_ms
+            self.alive = True
+            self.choke_next = self.birth + owner.CHOKE_TICK_MS
+            # 퍼프 시드(소용돌이 구름)
+            self._puffs = []   # [ox, oy, r, a]
+            for _ in range(18):
+                ox = random.uniform(-radius*0.7, radius*0.7)
+                oy = random.uniform(-radius*0.7, radius*0.7)
+                r  = random.randint(int(radius*0.25), int(radius*0.45))
+                self._puffs.append([ox, oy, r, random.randint(18, 28)])
+
+        def update(self):
+            if not self.alive: return
+            now = pygame.time.get_ticks()
+            if now - self.birth >= self.duration:
+                self.alive = False
+                return
+            # 퍼프 흔들림/알파 서서히 감소
+            tsec = (now - self.birth) * 0.001
+            for p in self._puffs:
+                p[0] += math.sin(tsec * 0.8 + p[2]) * 0.15
+                p[1] += math.cos(tsec * 0.9 + p[2]) * 0.15
+                p[3] = max(6, p[3] - 0.03)
+
+            # 질식 코어: 슬로우 & 약한 DOT
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.owner.CHOKE_RADIUS:
+                try:
+                    now_ms = pygame.time.get_ticks()
+                    config.slow_until_ms = now_ms + 300
+                    # 더 강한 슬로우가 이미 있을 수 있으니 최소값 사용
+                    config.move_slow_factor = min(getattr(config, "move_slow_factor", 1.0), self.owner.CHOKE_SLOW)
+                except Exception:
+                    pass
+                if now >= self.choke_next and self.owner.damage_player:
+                    self.owner.damage_player(self.owner.CHOKE_TICK_DMG)
+                    self.choke_next += self.owner.CHOKE_TICK_MS
+
+        def draw_ground(self, screen, world_x, world_y):
+            # 바닥에 연막 구름 드로잉(그라디언트 + 퍼프)
+            if not self.alive: return
+            cx = int(self.x - world_x); cy = int(self.y - world_y)
+            rad = int(self.radius)
+
+            # 그라디언트 베이스(중심 짙고 외곽 옅음)
+            base = pygame.Surface((rad*2, rad*2), pygame.SRCALPHA)
+            for rr in range(rad, 0, -12):
+                a = int(24 * (rr / rad))
+                pygame.draw.circle(base, (100, 90, 110, a), (rad, rad), rr)
+            screen.blit(base, base.get_rect(center=(cx, cy)))
+
+            # 퍼프(소용돌이)
+            puff_layer = pygame.Surface((rad*2, rad*2), pygame.SRCALPHA)
+            for (ox, oy, r, a) in self._puffs:
+                pygame.draw.circle(puff_layer, (130, 120, 160, int(a*5)), (int(rad+ox), int(rad+oy)), int(r))
+            screen.blit(puff_layer, puff_layer.get_rect(center=(cx, cy)))
+
+        def draw_player_vision_overlay(self, screen):
+            # 플레이어가 연막 내부일 때만 화면 암막 + 시야 콘.
+            if not self.alive: return
+            pxs, pys = config.player_rect.centerx, config.player_rect.centery
+            pxw = config.world_x + pxs
+            pyw = config.world_y + pys
+            if math.hypot(pxw - self.x, pyw - self.y) > self.radius:
+                return
+
+            # 전체 암막
+            overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, self.owner.VISION_ALPHA))
+
+            # 마우스 방향 기준 70° 시야 콘을 "뚫기"
+            mx, my = pygame.mouse.get_pos()
+            ang = math.atan2(my - pys, mx - pxs)  # 화면 기준
+            cone = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            length = int(self.owner.SMOKE_RADIUS * 1.05)
+            half = math.radians(self.owner.VISION_CONE_DEG / 2)
+            pts = [(pxs, pys)]
+            for sign in (+1, -1):
+                theta = ang + sign * half
+                ex = int(pxs + math.cos(theta) * length)
+                ey = int(pys + math.sin(theta) * length)
+                pts.append((ex, ey))
+            pygame.draw.polygon(cone, (0, 0, 0, self.owner.VISION_ALPHA), pts)
+            overlay.blit(cone, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+            screen.blit(overlay, (0, 0))
+
+    # 내부: 플레이어 시야 오버레이 이펙트(Effects 큐용)
+    class SmokeVisionEffect:
+        def __init__(self, cloud):
+            self.cloud = cloud
+            self.alive = True
+
+        def update(self):
+            self.alive = bool(self.cloud and self.cloud.alive)
+
+        def draw(self, screen, world_x, world_y):
+            if self.cloud and self.cloud.alive:
+                self.cloud.draw_player_vision_overlay(screen)
+
+    # 도우미
+    def _spawn_smoke(self, x, y):
+        sc = self.SmokeCloud(self, x, y, self.SMOKE_RADIUS, self.SMOKE_DURATION)
+        self._smokes.append(sc)
+        eff = self.SmokeVisionEffect(sc)
+        config.effects.append(eff)
+        self._spawned_effects.append(eff)
+        return sc
+
+    def _throw_grenade(self, target_x, target_y):
+        fx, fy = self._muzzle_world(forward=22, side=0)
+        self._grenade = self.SmokeGrenade(self, fx, fy, target_x, target_y, self.GRENADE_SPEED, self.GRENADE_HIT_R)
+
+    def _update_particles(self):
+        # 연막 주변 잔 파티클
+        now = pygame.time.get_ticks()
+        for _ in range(self.PARTICLES_PER_FRAME):
+            if not self._smokes:
+                break
+            sc = random.choice(self._smokes)
+            if not sc.alive: continue
+            ang = random.uniform(0, 2*math.pi)
+            r   = random.uniform(sc.radius*0.4, sc.radius*0.95)
+            x   = sc.x + math.cos(ang)*r
+            y   = sc.y + math.sin(ang)*r
+            vx  = random.uniform(-0.3, 0.3)
+            vy  = random.uniform(-0.3, 0.3)
+            death = now + random.randint(350, 650)
+            self._particles.append([x,y,vx,vy,death,random.randint(120,180)])
+
+        # 업데이트/정리
+        for p in list(self._particles):
+            p[0] += p[2]; p[1] += p[3]
+            p[5] = max(0, p[5]-2)
+            if pygame.time.get_ticks() >= p[4] or p[5] <= 0:
+                self._particles.remove(p)
+
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        dt_ms = max(1, now_ms - self._last_update_ms)
+        self._last_update_ms = now_ms
+        diff = (desired - self.aim_angle + math.pi) % (2 * math.pi) - math.pi
+        max_step = math.radians(170.0) * (dt_ms / 1000.0)
+        if diff > max_step:   self.aim_angle += max_step
+        elif diff < -max_step:self.aim_angle -= max_step
+        else:                 self.aim_angle = desired
+
+    def _muzzle_world(self, forward=26, side=6):
+        off_ang = self.aim_angle + math.radians(90)
+        fx = self.world_x + math.cos(self.aim_angle) * forward + math.cos(off_ang) * side
+        fy = self.world_y + math.sin(self.aim_angle) * forward + math.sin(off_ang) * side
+        return fx, fy
+
+    def _inside_own_smoke(self):
+        for sc in self._smokes:
+            if sc.alive and math.hypot(self.world_x - sc.x, self.world_y - sc.y) <= sc.radius:
+                return True
+        return False
+
+    # 피해 처리(자기 버프 적용: 연막 내부면 받피 감소)
+    def hit(self, damage, blood_effects, force=False):
+        if not self.alive or (not config.combat_state and not force):
+            return
+        if self._in_own_smoke:
+            damage = int(math.ceil(damage * self.SELF_DMG_REDUCE))
+        self.hp -= damage
+        if self.hp <= 0:
+            self.die(blood_effects)
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_telegraph(self):
+        self.state = "telegraph"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.show_alert = True
+
+    def _enter_throw(self):
+        self.state = "throw"
+        self.show_alert = False
+        # 목표: 플레이어 근처(±120px 난수) / 최대 사거리 제한
+        px = config.world_x + config.player_rect.centerx
+        py = config.world_y + config.player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        ratio = min(1.0, self.THROW_RANGE / max(1.0, dist))
+        tx = self.world_x + dx * ratio + random.uniform(-120, 120)
+        ty = self.world_y + dy * ratio + random.uniform(-120, 120)
+        self._last_throw_pos = (tx, ty)
+        self._throw_grenade(tx, ty)
+        # 쿨다운 예약
+        self.cooldown_until = pygame.time.get_ticks() + self.SMOKE_COOLDOWN
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 각도 초기화/갱신
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+        self._update_aim_angle(px, py, now)
+
+        # 연막탄/연막 업데이트
+        if self._grenade:
+            self._grenade.update()
+            if not self._grenade.alive:
+                self._grenade = None
+
+        for sc in list(self._smokes):
+            sc.update()
+            if not sc.alive:
+                self._smokes.remove(sc)
+
+        # 시야 오버레이 이펙트 생존 갱신
+        for eff in list(self._spawned_effects):
+            if hasattr(eff, "update"):
+                eff.update()
+            if not getattr(eff, "alive", True):
+                self._spawned_effects.remove(eff)
+
+        # 파티클
+        self._update_particles()
+
+        # 상태 머신
+        if self.state == "idle":
+            if now >= self.cooldown_until:
+                self._enter_telegraph()
+
+        elif self.state == "telegraph":
+            if now >= self.telegraph_until:
+                self._enter_throw()
+
+        elif self.state == "throw":
+            # 연막탄이 터지면 idle로 복귀(쿨타임 경과 후 재시도)
+            if self._grenade is None:
+                self._enter_idle()
+
+        elif self.state == "cooldown":
+            if now >= self.cooldown_until:
+                self._enter_idle()
+
+        # 이동 로직: 연막 가장자리 선호(자기 유리 교전)
+        self._in_own_smoke = self._inside_own_smoke()
+        speed_factor = self.SELF_SPD_BUFF if self._in_own_smoke else 1.0
+        self.speed = self.BASE_SPEED * speed_factor
+
+        target = None
+        nearest_sc = None
+        mind = 1e9
+        for sc in self._smokes:
+            if sc.alive:
+                d = math.hypot(self.world_x - sc.x, self.world_y - sc.y)
+                if d < mind:
+                    mind = d
+                    nearest_sc = sc
+
+        if nearest_sc:
+            # 구름 가장자리 중 플레이어 방향 쪽 잡기
+            toP = math.atan2(py - nearest_sc.y, px - nearest_sc.x)
+            edge_r = nearest_sc.radius * 0.9
+            tx = nearest_sc.x + math.cos(toP) * edge_r
+            ty = nearest_sc.y + math.sin(toP) * edge_r
+            # 너무 붙으면 반대로 짧게 이탈
+            pd = math.hypot(px - self.world_x, py - self.world_y)
+            if pd < self.NEAR_DISTANCE:
+                away = toP + math.pi
+                tx = px + math.cos(away)*self.KEEP_MAX*0.5
+                ty = py + math.sin(away)*self.KEEP_MAX*0.5
+            target = (tx, ty)
+        else:
+            # 일반 유지거리 + 스트레이프
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            away = self.aim_angle + math.pi
+            if dist < self.NEAR_DISTANCE:
+                target = (px + math.cos(away)*self.KEEP_MAX*0.5, py + math.sin(away)*self.KEEP_MAX*0.5)
+            elif dist > self.FAR_DISTANCE:
+                target = (px - math.cos(away)*self.KEEP_MAX*0.5, py - math.sin(away)*self.KEEP_MAX*0.5)
+            else:
+                t = pygame.time.get_ticks() * 0.0021
+                perp = self.aim_angle + math.pi/2
+                zig = math.sin(t) * int(60 * PLAYER_VIEW_SCALE)
+                ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+                target = (self.world_x + ox*0.2, self.world_y + oy*0.2)
+
+        self.goal_pos = target if target else (self.world_x, self.world_y)
+
+    # 사망/정리
+    def die(self, blood_effects):
+        self._grenade = None
+        self._smokes.clear()
+        for eff in self._spawned_effects:
+            try: eff.alive = False
+            except: pass
+        self._spawned_effects.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(7, 7)
+
+    def stop_sounds_on_remove(self):
+        pass
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 바닥 연막 먼저
+        for sc in self._smokes:
+            sc.draw_ground(screen, world_x, world_y)
+
+        # 파티클
+        for p in self._particles:
+            x, y = int(p[0] - world_x), int(p[1] - world_y)
+            pygame.draw.circle(screen, (150,120,200, p[5]), (x, y), 3)
+
+        # 연막탄
+        if self._grenade:
+            self._grenade.draw(screen, world_x, world_y)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+        screen.blit(body, body.get_rect(center=(sx, sy)))
+
+        # 전조 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy35(AIBase):
+    rank = 2
+    HP = 200
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(22 * PLAYER_VIEW_SCALE)
+
+    STANDOFF_DIST = int(140 * PLAYER_VIEW_SCALE)
+    KEEP_MIN = STANDOFF_DIST
+    KEEP_MAX = int(360 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = STANDOFF_DIST
+    FAR_DISTANCE  = int(520 * PLAYER_VIEW_SCALE)
+
+    PUSH_COOLDOWN_MS   = 1500
+    PUSH_WINDUP_MS     = 420
+    PUSH_DAMAGE        = 15
+    PUSH_KNOCKBACK     = 180
+    PUSH_LEN           = int(220 * PLAYER_VIEW_SCALE)
+    PUSH_WID           = int(80  * PLAYER_VIEW_SCALE)
+    PUSH_START_MAX     = int(380 * PLAYER_VIEW_SCALE)
+
+    THORN_LIFETIME_MS = 2000
+    THORN_TICK_MS     = 25
+    THORN_TICK_DMG    = 3
+    THORN_RADIUS      = int(28 * PLAYER_VIEW_SCALE)
+    THORN_STEP_DIST   = int(30 * PLAYER_VIEW_SCALE)
+
+    VINE_CORE_COL  = (90, 170, 90, 235)
+    VINE_EDGE_COL  = (40, 110, 50, 255)
+    VINE_GLOW_COL  = (80, 200, 120, 100)
+    SPIKE_COL      = (40, 150, 60, 240)
+
+    TELE_RED       = (255, 60, 60, 110)
+    TELE_EDGE      = (255, 120, 120, 200)
+
+    DUST_COL       = (120, 200, 140)
+    PARTICLES_PER_SPAWN = 8
+    VANISH_SPARKS        = 10
+    IMPACT_SPARKS        = 14
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.14,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images["enemy35"]
+        self.snd_push = sounds.get("whirl")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._thorns = []
+        self._particles = []
+
+        self._push_state = "idle"     # 'idle' | 'windup'
+        self._push_cool_until = 0
+        self._windup_until = 0
+        self._push_rect_pts = []
+
+        self.goal_pos = (self.world_x, self.world_y)
+        self._last_trail_pos = (self.world_x, self.world_y)
+
+    # 내부 클래스: 가시 흔적 패치
+    class ThornPatch:
+        def __init__(self, owner, x, y, radius, lifetime_ms, tick_ms, tick_dmg):
+            self.owner = owner
+            self.x, self.y = x, y
+            self.radius = radius
+            self.spawn_ms = pygame.time.get_ticks()
+            self.end_ms = self.spawn_ms + lifetime_ms
+            self.next_tick = self.spawn_ms + tick_ms
+            self.tick_ms = tick_ms
+            self.tick_dmg = tick_dmg
+            self.alive = True
+            # 연출 파라미터
+            self.theta = random.uniform(0, 2*math.pi)
+            self.spikes = random.randint(8, 12)
+            self.glow_scale = random.uniform(0.9, 1.1)
+            self.spawn_anim_ms = 140 # 등장 scale-in
+            self.fadeout_ms = 160 # 종료 fade-out
+
+        def update(self):
+            if not self.alive: return
+            now = pygame.time.get_ticks()
+            # 종료 판단
+            if now >= self.end_ms:
+                self.owner._spawn_thorn_vanish(self.x, self.y, self.radius, sparks=self.owner.VANISH_SPARKS)
+                self.alive = False
+                return
+            # DOT 판정
+            px = config.world_x + config.player_rect.centerx
+            py = config.world_y + config.player_rect.centery
+            if math.hypot(px - self.x, py - self.y) <= self.radius:
+                if now >= self.next_tick and self.owner.damage_player:
+                    self.owner.damage_player(self.tick_dmg)
+                    self.next_tick += self.tick_ms
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            cx = int(self.x - world_x); cy = int(self.y - world_y)
+            r  = int(self.radius)
+            now = pygame.time.get_ticks()
+            age = now - self.spawn_ms
+            life_left = max(0, self.end_ms - now)
+
+            # 등장 애니(scale-in)
+            if age < self.spawn_anim_ms:
+                s = 0.6 + 0.4 * (age / self.spawn_anim_ms)
+            else:
+                s = 1.0
+
+            # 종료 직전 페이드
+            alpha_mul = 1.0
+            if life_left < self.fadeout_ms:
+                alpha_mul = max(0.0, life_left / self.fadeout_ms)
+
+            # 바닥 글로우
+            glow = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+            col = (self.owner.VINE_GLOW_COL[0], self.owner.VINE_GLOW_COL[1],
+                   self.owner.VINE_GLOW_COL[2], int(self.owner.VINE_GLOW_COL[3] * alpha_mul))
+            pygame.draw.circle(glow, col, (r, r), int(r * self.glow_scale * s))
+            screen.blit(glow, glow.get_rect(center=(cx, cy)))
+
+            # 본체 원판
+            body = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+            core_col = (self.owner.VINE_CORE_COL[0], self.owner.VINE_CORE_COL[1],
+                        self.owner.VINE_CORE_COL[2], int(self.owner.VINE_CORE_COL[3] * alpha_mul))
+            edge_col = (self.owner.VINE_EDGE_COL[0], self.owner.VINE_EDGE_COL[1],
+                        self.owner.VINE_EDGE_COL[2], int(self.owner.VINE_EDGE_COL[3] * alpha_mul))
+            pygame.draw.circle(body, core_col, (r, r), int(r*0.78*s))
+            pygame.draw.circle(body, edge_col, (r, r), int(r*0.78*s), 3)
+
+            # 뾰족한 가시 폴리곤
+            spike_col = (self.owner.SPIKE_COL[0], self.owner.SPIKE_COL[1],
+                         self.owner.SPIKE_COL[2], int(self.owner.SPIKE_COL[3] * alpha_mul))
+            for i in range(self.spikes):
+                a = self.theta + (2*math.pi) * (i / self.spikes)
+                tip   = (r + math.cos(a) * r*1.05*s,   r + math.sin(a) * r*1.05*s)
+                base1 = (r + math.cos(a - 0.20) * r*0.48*s, r + math.sin(a - 0.20) * r*0.48*s)
+                base2 = (r + math.cos(a + 0.20) * r*0.48*s, r + math.sin(a + 0.20) * r*0.48*s)
+                pygame.draw.polygon(body, spike_col, [base1, tip, base2])
+            screen.blit(body, body.get_rect(center=(cx, cy)))
+
+    # 유틸
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        self.aim_angle = desired
+        self._last_update_ms = now_ms
+
+    def _spawn_thorn_vanish(self, x, y, radius, sparks=10):
+        # 소멸 시 초록 파편 스파크
+        for _ in range(sparks):
+            ang = random.uniform(0, 2*math.pi)
+            spd = random.uniform(0.8, 2.0)
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            death = pygame.time.get_ticks() + random.randint(240, 420)
+            self._particles.append([x, y, vx, vy, death, random.randint(140, 210)])
+
+    def _maybe_spawn_thorn(self):
+        # 이동 거리가 기준 이상이면 가시 패치 생성
+        lx, ly = self._last_trail_pos
+        dx, dy = self.world_x - lx, self.world_y - ly
+        if dx*dx + dy*dy >= self.THORN_STEP_DIST * self.THORN_STEP_DIST:
+            self._last_trail_pos = (self.world_x, self.world_y)
+            patch = self.ThornPatch(
+                owner=self,
+                x=self.world_x, y=self.world_y,
+                radius=self.THORN_RADIUS,
+                lifetime_ms=self.THORN_LIFETIME_MS,
+                tick_ms=self.THORN_TICK_MS,
+                tick_dmg=self.THORN_TICK_DMG
+            )
+            self._thorns.append(patch)
+            # 스폰 파티클
+            for _ in range(self.PARTICLES_PER_SPAWN):
+                ang = random.uniform(0, 2*math.pi)
+                spd = random.uniform(0.6, 1.6)
+                vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+                death = pygame.time.get_ticks() + random.randint(260, 500)
+                self._particles.append([self.world_x, self.world_y, vx, vy, death, random.randint(150, 220)])
+
+    # 밀치기: 텔레그래프 사각형 폴리곤
+    def _build_push_rect(self):
+        # 직사각형은 적의 앞쪽에 위치: 중심은 적 위치에서 전방으로 PUSH_LEN/2 이동한 지점
+        ang = self.aim_angle
+        cx = self.world_x + math.cos(ang) * (self.PUSH_LEN * 0.5)
+        cy = self.world_y + math.sin(ang) * (self.PUSH_LEN * 0.5)
+        hx = math.cos(ang) * (self.PUSH_LEN * 0.5)
+        hy = math.sin(ang) * (self.PUSH_LEN * 0.5)
+        px = -math.sin(ang) * (self.PUSH_WID * 0.5)  # 전방에 수직인 축
+        py =  math.cos(ang) * (self.PUSH_WID * 0.5)
+        # 순서: 좌상 → 우상 → 우하 → 좌하
+        p1 = (cx - hx - px, cy - hy - py)
+        p2 = (cx + hx - px, cy + hy - py)
+        p3 = (cx + hx + px, cy + hy + py)
+        p4 = (cx - hx + px, cy - hy + py)
+        self._push_rect_pts = [p1, p2, p3, p4]
+
+    def _player_in_push_rect(self):
+        # 플레이어 중심점이 직사각형 내에 있는지 검사(로컬 좌표 변환)
+        px = config.world_x + config.player_rect.centerx
+        py = config.world_y + config.player_rect.centery
+        ang = self.aim_angle
+        # 적 위치를 원점으로 하여 전방/수직 축으로 회전 좌표
+        dx, dy = px - self.world_x, py - self.world_y
+        # 전방축(u), 수직축(v)
+        ux, uy = math.cos(ang), math.sin(ang)
+        vx, vy = -math.sin(ang), math.cos(ang)
+        # 직사각형 중심(적 전방으로 PUSH_LEN/2)
+        cx = ux * (self.PUSH_LEN * 0.5)
+        cy = uy * (self.PUSH_LEN * 0.5)
+        # 로컬 좌표
+        du = dx * ux + dy * uy
+        dv = dx * vx + dy * vy
+        # 중심 기준
+        lu = du - (self.PUSH_LEN * 0.5)
+        lv = dv
+        return (abs(lv) <= self.PUSH_WID * 0.5) and (abs(lu) <= self.PUSH_LEN * 0.5)
+
+    def _do_push_impact(self):
+        # 히트 체크 → 피해/넉백 + 임팩트 파편
+        if self._player_in_push_rect():
+            if self.damage_player:
+                self.damage_player(self.PUSH_DAMAGE)
+            # 넉백(적 전방 방향으로 밀어냄)
+            try:
+                ux, uy = math.cos(self.aim_angle), math.sin(self.aim_angle)
+                config.apply_knockback(ux * self.PUSH_KNOCKBACK, uy * self.PUSH_KNOCKBACK)
+            except Exception:
+                pass
+            # 사운드
+            if self.snd_push:
+                try: self.snd_push.play()
+                except: pass
+        # 임팩트 파편(직사각형 가장자리 따라 흩뿌리기)
+        for _ in range(self.IMPACT_SPARKS):
+            t = random.random()
+            # 앞변(피니시 라인) 근처에서 스파크 방출
+            ex = self.world_x + math.cos(self.aim_angle) * (self.PUSH_LEN * 0.9 * t)
+            ey = self.world_y + math.sin(self.aim_angle) * (self.PUSH_LEN * 0.9 * t)
+            ang = self.aim_angle + random.uniform(-0.6, 0.6)
+            spd = random.uniform(0.8, 2.2)
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            death = pygame.time.get_ticks() + random.randint(260, 520)
+            self._particles.append([ex, ey, vx, vy, death, random.randint(150, 220)])
+
+    # 밀치기 상태 전이
+    def _try_start_push(self, px, py, now):
+        if now < self._push_cool_until or self._push_state != "idle":
+            return False
+        # 너무 멀면 굳이 시전하지 않음
+        if math.hypot(px - self.world_x, py - self.world_y) > self.PUSH_START_MAX:
+            return False
+        self._push_state = "windup"
+        self._windup_until = now + self.PUSH_WINDUP_MS
+        self._build_push_rect()
+        return True
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 각도 업데이트
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+        self._update_aim_angle(px, py, now)
+
+        # 기본 속도
+        self.speed = self.BASE_SPEED
+
+        # 상태 머신
+        if self._push_state == "idle":
+            # 스탠드오프 유지 + 추격(너무 붙지 않게)
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            if dist < self.STANDOFF_DIST:
+                # 너무 가까우면 반대로 후퇴
+                away = math.atan2(self.world_y - py, self.world_x - px)
+                self.goal_pos = (px + math.cos(away) * (self.STANDOFF_DIST + 40),
+                                 py + math.sin(away) * (self.STANDOFF_DIST + 40))
+            else:
+                # 적정 범위 내: 살짝 지그재그 추격하되, 스탠드오프 밖에서 유지
+                t = pygame.time.get_ticks() * 0.003
+                perp = self.aim_angle + math.pi/2
+                zig = math.sin(t * 1.7) * int(45 * PLAYER_VIEW_SCALE)
+                ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+                self.goal_pos = (px - math.cos(self.aim_angle) * (self.STANDOFF_DIST*0.2) + ox*0.3,
+                                 py - math.sin(self.aim_angle) * (self.STANDOFF_DIST*0.2) + oy*0.3)
+
+            # 밀치기 시도
+            self._try_start_push(px, py, now)
+
+        elif self._push_state == "windup":
+            # 시전 중엔 제자리(살짝 움찔만)
+            self.goal_pos = (self.world_x, self.world_y)
+            # 계속 플레이어를 바라보며 직사각형 갱신(가독성↑)
+            self._build_push_rect()
+            if now >= self._windup_until:
+                # 임팩트 처리
+                self._do_push_impact()
+                self._push_cool_until = now + self.PUSH_COOLDOWN_MS
+                self._push_state = "idle"
+
+        # 가시 흔적 생성
+        self._maybe_spawn_thorn()
+
+        # 가시/파티클 업데이트
+        for th in list(self._thorns):
+            th.update()
+            if not th.alive:
+                self._thorns.remove(th)
+
+        for p in list(self._particles):
+            p[0] += p[2]; p[1] += p[3]
+            p[5] = max(0, p[5] - 8)
+            if pygame.time.get_ticks() >= p[4] or p[5] <= 0:
+                self._particles.remove(p)
+
+    # 사망/정리
+    def die(self, blood_effects):
+        self._thorns.clear()
+        self._particles.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(2, 3)
+
+    def stop_sounds_on_remove(self):
+        pass
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 바닥: 가시 흔적 먼저
+        for th in self._thorns:
+            th.draw(screen, world_x, world_y)
+
+        # 밀치기 텔레그래프(빨간 반투명 직사각형)
+        if self._push_state == "windup" and self._push_rect_pts:
+            pts = [(int(x - world_x), int(y - world_y)) for (x, y) in self._push_rect_pts]
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            pygame.draw.polygon(lay, self.TELE_RED, pts)
+            pygame.draw.polygon(lay, self.TELE_EDGE, pts, 3)
+            screen.blit(lay, (0, 0))
+
+        # 파티클(초록 잔 먼지)
+        for p in self._particles:
+            x, y = int(p[0] - world_x), int(p[1] - world_y)
+            s = pygame.Surface((8, 8), pygame.SRCALPHA)
+            pygame.draw.circle(s, (*self.DUST_COL, p[5]), (4,4), 3)
+            screen.blit(s, s.get_rect(center=(x, y)))
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+        screen.blit(body, body.get_rect(center=(sx, sy)))
+
+class Enemy36(AIBase):
+    rank = 2
+    HP = 220
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.95
+    RADIUS = int(22 * PLAYER_VIEW_SCALE)
+
+    SCARE_RADIUS     = int(400 * PLAYER_VIEW_SCALE)
+    KEEP_MIN         = int(160 * PLAYER_VIEW_SCALE)
+    KEEP_MAX         = int(380 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE    = KEEP_MIN
+    FAR_DISTANCE     = int(520 * PLAYER_VIEW_SCALE)
+
+    CHARGE_MS        = 500
+    COOLDOWN_MS      = 3500
+    SCREAM_DAMAGE    = 10
+    WOBBLE_MS        = 1500
+    CAM_SHAKE_AMP    = 5.0
+    CAM_SHAKE_FREQ   = 85.0
+
+    WAVE_COL         = (180, 160, 255, 160)
+    WAVE_EDGE_COL    = (220, 210, 255, 220)
+    TELE_INNER_COL   = (150, 140, 220, 45)
+    TELE_EDGE_COL    = (200, 190, 255, 160)
+    GHOST_PARTICLE_COL = (200, 190, 255)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.10,
+            alert_duration=self.CHARGE_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images["enemy36"]
+        self.snd_scream     = sounds.get("scream")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.state = "idle"            # idle → charge → scream(즉발) → idle
+        self.show_alert = False
+        self._charge_until = 0
+        self._cooldown_until = 0
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._particles = []
+
+    # 이펙트: 카메라 셰이크 예약기
+    class VisionWobbleEffect:
+        # 화면을 가리지 않고, 메인 루프의 카메라 셰이크 훅만 사용
+        def __init__(self, duration_ms, cam_amp, cam_freq):
+            self.birth = pygame.time.get_ticks()
+            self.duration = duration_ms
+            self.alive = True
+            # 메인 루프 훅에 셰이크 예약
+            now = self.birth
+            end = now + duration_ms
+            prev_until = getattr(config, "cam_shake_until_ms", 0)
+            config.cam_shake_until_ms = max(prev_until, end)
+            # 진폭/빈도는 더 강한 값으로 덮기
+            config.cam_shake_amp  = max(getattr(config, "cam_shake_amp", 0.0), cam_amp)
+            config.cam_shake_freq = cam_freq
+
+        def update(self):
+            if pygame.time.get_ticks() - self.birth >= self.duration:
+                self.alive = False
+
+        def draw(self, screen, world_x, world_y):
+            return  # 오버레이 드로잉 없음
+
+    # 이펙트: 비명 충격파(바닥 위 링)
+    class ScreamWaveEffect:
+        def __init__(self, x, y, max_r, col_fill, col_edge):
+            self.x = x; self.y = y
+            self.max_r = max_r
+            self.birth = pygame.time.get_ticks()
+            self.duration = 650  # 0.65s
+            self.col_fill = col_fill
+            self.col_edge = col_edge
+            self.alive = True
+
+        def update(self):
+            if pygame.time.get_ticks() - self.birth >= self.duration:
+                self.alive = False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive: return
+            now = pygame.time.get_ticks()
+            t = max(0.0, min(1.0, (now - self.birth) / self.duration))
+            r = int(self.max_r * (0.18 + 0.85 * t))
+            a_mul = 1.0 - t
+            cx, cy = int(self.x - world_x), int(self.y - world_y)
+            s = pygame.Surface((r*2+4, r*2+4), pygame.SRCALPHA)
+            fill = (self.col_fill[0], self.col_fill[1], self.col_fill[2], int(self.col_fill[3]*a_mul))
+            edge = (self.col_edge[0], self.col_edge[1], self.col_edge[2], int(self.col_edge[3]*a_mul))
+            pygame.draw.circle(s, fill, (r+2, r+2), r)
+            pygame.draw.circle(s, edge, (r+2, r+2), r, 3)
+            screen.blit(s, s.get_rect(center=(cx, cy)))
+
+    # 파티클 스폰(유령 잔광)
+    def _spawn_ghost_particles(self, n=14, spread=140):
+        for _ in range(n):
+            ang = random.uniform(0, 2*math.pi)
+            r   = random.uniform(0, spread)
+            x   = self.world_x + math.cos(ang)*r
+            y   = self.world_y + math.sin(ang)*r
+            spd = random.uniform(0.25, 1.1)
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            death = pygame.time.get_ticks() + random.randint(320, 720)
+            self._particles.append([x, y, vx, vy, death, random.randint(120, 200)])
+
+    # 유틸
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        self.aim_angle = desired
+        self._last_update_ms = now_ms
+
+    def _enter_charge(self):
+        self.state = "charge"
+        self.show_alert = True
+        self._charge_until = pygame.time.get_ticks() + self.CHARGE_MS
+
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _do_scream(self):
+        # 사운드
+        if self.snd_scream:
+            try: self.snd_scream.play()
+            except: pass
+
+        # 충격파 연출
+        wave = self.ScreamWaveEffect(self.world_x, self.world_y, self.SCARE_RADIUS,
+                                     self.WAVE_COL, self.WAVE_EDGE_COL)
+        config.effects.append(wave)
+
+        # 유령 파편
+        self._spawn_ghost_particles()
+
+        # 범위 내 플레이어 데미지 + 카메라 흔들림
+        px = config.world_x + config.player_rect.centerx
+        py = config.world_y + config.player_rect.centery
+        if math.hypot(px - self.world_x, py - self.world_y) <= self.SCARE_RADIUS:
+            if self.damage_player:
+                self.damage_player(self.SCREAM_DAMAGE)
+            try:
+                wob = self.VisionWobbleEffect(self.WOBBLE_MS, self.CAM_SHAKE_AMP, self.CAM_SHAKE_FREQ)
+                config.effects.append(wob)
+            except Exception:
+                pass
+
+        # 다음 주기 예약
+        self._cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self._enter_idle()
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 각도 초기화/갱신
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+        self._update_aim_angle(px, py, now)
+
+        # 파티클 업데이트
+        for p in list(self._particles):
+            p[0] += p[2]; p[1] += p[3]
+            p[5] = max(0, p[5] - 3)
+            if pygame.time.get_ticks() >= p[4] or p[5] <= 0:
+                self._particles.remove(p)
+
+        # 상태 머신
+        if self.state == "idle":
+            if now >= self._cooldown_until:
+                self._enter_charge()
+
+        elif self.state == "charge":
+            # 전조 중엔 제자리(범위 예고 표시)
+            self.goal_pos = (self.world_x, self.world_y)
+            if now >= self._charge_until:
+                self._do_scream()
+
+        # 이동 로직(쿨다운 중): 범위 안쪽으로 파고들되 과도 근접 회피
+        if self.state != "charge":
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            if dist < self.KEEP_MIN:
+                away = math.atan2(self.world_y - py, self.world_x - px)
+                self.goal_pos = (px + math.cos(away) * (self.KEEP_MIN + 20),
+                                 py + math.sin(away) * (self.KEEP_MIN + 20))
+            elif dist > self.FAR_DISTANCE:
+                self.goal_pos = (px, py)
+            else:
+                t = pygame.time.get_ticks() * 0.002
+                perp = self.aim_angle + math.pi/2
+                zig = math.sin(t * 2.0) * int(35 * PLAYER_VIEW_SCALE)
+                ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+                self.goal_pos = (self.world_x + ox*0.2, self.world_y + oy*0.2)
+
+    # 사망/정리
+    def die(self, blood_effects):
+        self._particles.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 3)
+
+    def stop_sounds_on_remove(self):
+        pass
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 유령 파편
+        for p in self._particles:
+            x, y = int(p[0] - world_x), int(p[1] - world_y)
+            s = pygame.Surface((8, 8), pygame.SRCALPHA)
+            pygame.draw.circle(s, (*self.GHOST_PARTICLE_COL, p[5]), (4,4), 3)
+            screen.blit(s, s.get_rect(center=(x, y)))
+
+        # 전조 중: 범위 텔레그래프(은은한 내부 + 맥동 테두리)
+        if self.state == "charge":
+            cx, cy = int(self.world_x - world_x), int(self.world_y - world_y)
+            r = self.SCARE_RADIUS
+            lay = pygame.Surface((r*2+6, r*2+6), pygame.SRCALPHA)
+            pygame.draw.circle(lay, self.TELE_INNER_COL, (r+3, r+3), r)
+            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008)
+            edge_alpha = int(self.TELE_EDGE_COL[3] * pulse)
+            pygame.draw.circle(lay, (self.TELE_EDGE_COL[0], self.TELE_EDGE_COL[1], self.TELE_EDGE_COL[2], edge_alpha),
+                               (r+3, r+3), r, 4)
+            screen.blit(lay, lay.get_rect(center=(cx, cy)))
+
+        # 본체(살짝 몽환적인 요동)
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        body = pygame.transform.smoothscale(
+            self.image_original,
+            (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+             int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+        )
+        wob = math.sin(pygame.time.get_ticks() * 0.004) * 4.0
+        body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90 + wob)
+        screen.blit(body, body.get_rect(center=(sx, sy)))
+
+        # 전조 "!" 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy37(AIBase):
+    rank = 4
+    HP = 440
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.02
+    RADIUS = int(26 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN      = int(140 * PLAYER_VIEW_SCALE)
+    KEEP_MAX      = int(420 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = KEEP_MIN
+    FAR_DISTANCE  = int(640 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS     = 300
+    DASH_DIST        = int(500 * PLAYER_VIEW_SCALE)
+    DASH_SPEED       = 28.0 * PLAYER_VIEW_SCALE
+    DASH_COOLDOWN_MS = 2200
+    HIT_DAMAGE       = 20
+    SLOW_MS          = 1500
+    SLOW_FACTOR      = 0.60
+
+    BOX_WIDTH        = int(76 * PLAYER_VIEW_SCALE)
+    BOX_INNER_COL    = (90, 160, 255, 70)
+    BOX_EDGE_COL     = (120, 190, 255, 200)
+
+    SPARKS_PER_FRAME = 8
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.18,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy37", images.get("enemy4"))
+        self.snd_charge = sounds.get("shock_charge")
+        self.snd_dash   = sounds.get("shock_burst")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        # 상태: idle → telegraph → dash → cooldown(idle)
+        self.state = "idle"
+        self.cooldown_until  = 0
+        self.telegraph_until = 0
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._dash_dir = (0.0, 0.0)
+        self._dash_v   = (0.0, 0.0)
+        self._dash_travel = 0.0
+        self._dash_hit_done = False
+        self._dash_start = (self.world_x, self.world_y)
+        self._dash_rect_pts = []
+
+        self._sparks = []
+
+    # 유틸
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        # 근접형이라 빠르게 시선 고정
+        self.aim_angle = desired
+        self._last_update_ms = now_ms
+
+    def _build_dash_rect(self, sx, sy, ux, uy, length, width):
+        # 적의 현재 위치에서 전방으로 length 길이, 폭 width 의 직사각형(월드 좌표의 4점)
+        hx, hy = ux * (length * 0.5), uy * (length * 0.5)
+        # 전방 수직 축
+        px, py = -uy * (width * 0.5), ux * (width * 0.5)
+        cx, cy = sx + ux * (length * 0.5), sy + uy * (length * 0.5)
+        p1 = (cx - hx - px, cy - hy - py)
+        p2 = (cx + hx - px, cy + hy - py)
+        p3 = (cx + hx + px, cy + hy + py)
+        p4 = (cx - hx + px, cy - hy + py)
+        return [p1, p2, p3, p4]
+
+    def _player_in_lane(self, sx, sy, ux, uy, length, width, px, py):
+        # 플레이어 중심이 전방 lane 직사각형 안에 있는지(로컬 좌표로 투영)
+        # 전방/수직 축
+        vx, vy = -uy, ux
+        dx, dy = px - sx, py - sy
+        du = dx*ux + dy*uy   # 전방 성분
+        dv = dx*vx + dy*vy   # 수직 성분
+        return (0 <= du <= length) and (abs(dv) <= width * 0.5)
+
+    def _spawn_tele_sparks(self, sx, sy, ux, uy, length, width):
+        now = pygame.time.get_ticks()
+        for _ in range(self.SPARKS_PER_FRAME):
+            t = random.random()
+            # 직사각형 경계 부근에서 방출
+            ex = sx + ux * (length * t)
+            ey = sy + uy * (length * t)
+            jitter_u = (random.random() - 0.5) * width
+            # 수직 축으로 살짝 흔들린 위치
+            vx, vy = -uy, ux
+            ex += vx * jitter_u * 0.5
+            ey += vy * jitter_u * 0.5
+            ang = self.aim_angle + random.uniform(-0.7, 0.7)
+            spd = random.uniform(0.8, 2.2)
+            self._sparks.append([ex, ey, math.cos(ang)*spd, math.sin(ang)*spd,
+                                 now + random.randint(140, 260), random.randint(120, 220)])
+
+    def _update_sparks(self):
+        now = pygame.time.get_ticks()
+        for p in list(self._sparks):
+            p[0] += p[2]; p[1] += p[3]
+            p[5] = max(0, p[5] - 10)
+            if now >= p[4] or p[5] <= 0:
+                self._sparks.remove(p)
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_telegraph(self, px, py):
+        self.state = "telegraph"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.show_alert = True
+        # 조준 고정 및 대시 벡터 산출
+        ang = math.atan2(py - self.world_y, px - self.world_x)
+        ux, uy = math.cos(ang), math.sin(ang)
+        self.aim_angle = ang
+        self._dash_dir = (ux, uy)
+        self._dash_v   = (ux * self.DASH_SPEED, uy * self.DASH_SPEED)
+        self._dash_travel = 0.0
+        self._dash_hit_done = False
+        self._dash_start = (self.world_x, self.world_y)
+        self._dash_rect_pts = self._build_dash_rect(self.world_x, self.world_y, ux, uy,
+                                                    self.DASH_DIST, self.BOX_WIDTH)
+        if self.snd_charge:
+            try: self.snd_charge.play()
+            except: pass
+
+    def _enter_dash(self):
+        self.state = "dash"
+        self.show_alert = False
+        if self.snd_dash:
+            try: self.snd_dash.play()
+            except: pass
+
+    def _finish_dash(self):
+        self.cooldown_until = pygame.time.get_ticks() + self.DASH_COOLDOWN_MS
+        self._enter_idle()
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 각도 초기화/갱신(대시 중엔 고정)
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+        if self.state != "dash":
+            self._update_aim_angle(px, py, now)
+
+        # 파티클 업데이트
+        self._update_sparks()
+
+        # 장애물 매니저
+        om = getattr(config, "obstacle_manager", None)
+
+        # 상태 머신
+        if self.state == "idle":
+            # 접근/거리 운영
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            if dist < self.KEEP_MIN:
+                away = math.atan2(self.world_y - py, self.world_y - py + 1e-6)  # 단순 회피
+                self.goal_pos = (px + math.cos(self.aim_angle + math.pi) * (self.KEEP_MIN + 30),
+                                 py + math.sin(self.aim_angle + math.pi) * (self.KEEP_MIN + 30))
+            elif dist > self.FAR_DISTANCE:
+                self.goal_pos = (px, py)
+            else:
+                # 살짝 지그재그로 접근
+                t = now * 0.0025
+                perp = self.aim_angle + math.pi/2
+                zig = math.sin(t * 2.2) * int(42 * PLAYER_VIEW_SCALE)
+                self.goal_pos = (px + math.cos(perp)*zig*0.2, py + math.sin(perp)*zig*0.2)
+
+            # 대시 시도(쿨타임 종료 & 대략 사거리 내)
+            if now >= self.cooldown_until:
+                if dist <= self.DASH_DIST + int(120 * PLAYER_VIEW_SCALE):
+                    self._enter_telegraph(px, py)
+
+        elif self.state == "telegraph":
+            # 제자리 유지, 히트박스/스파크 예고
+            self.goal_pos = (self.world_x, self.world_y)
+            # 텔레그래프 중에도 약간의 스파크 연출
+            ux, uy = self._dash_dir
+            self._dash_rect_pts = self._build_dash_rect(self.world_x, self.world_y, ux, uy,
+                                                        self.DASH_DIST, self.BOX_WIDTH)
+            self._spawn_tele_sparks(self.world_x, self.world_y, ux, uy,
+                                    self.DASH_DIST, self.BOX_WIDTH)
+            if now >= self.telegraph_until:
+                self._enter_dash()
+
+        elif self.state == "dash":
+            # 수동 이동(목표 고정)
+            self.goal_pos = (self.world_x, self.world_y)
+            vx, vy = self._dash_v
+            self.world_x += vx
+            self.world_y += vy
+            self._dash_travel += math.hypot(vx, vy)
+
+            # 장애물과 충돌 시 즉시 종료
+            if om and om.check_collision_circle((self.world_x, self.world_y), max(8, self.RADIUS - 4)):
+                self._finish_dash()
+                return
+
+            # 플레이어 명중 판정(직사각형 레인)
+            if not self._dash_hit_done:
+                in_lane = self._player_in_lane(self._dash_start[0], self._dash_start[1],
+                                               self._dash_dir[0], self._dash_dir[1],
+                                               self.DASH_DIST, self.BOX_WIDTH, px, py)
+                if in_lane:
+                    # 피해 + 감전 슬로우 + 넉백 약간
+                    if self.damage_player:
+                        self.damage_player(self.HIT_DAMAGE)
+                    try:
+                        now_ms = pygame.time.get_ticks()
+                        config.slow_until_ms = now_ms + self.SLOW_MS
+                        config.move_slow_factor = min(getattr(config, "move_slow_factor", 1.0),
+                                                      self.SLOW_FACTOR)
+                        # 살짝 넉백(전방으로 밀어내기)
+                        ux, uy = self._dash_dir
+                        if hasattr(config, "apply_knockback"):
+                            config.apply_knockback(ux * 120, uy * 120)
+                    except Exception:
+                        pass
+                    self._dash_hit_done = True
+
+            # 대시 완료
+            if self._dash_travel >= self.DASH_DIST:
+                self._finish_dash()
+
+        # 대시가 아닐 때만 보통 이동 처리
+        if self.state != "dash" and self.state != "telegraph":
+            # 기본 속도 유지
+            self.speed = self.BASE_SPEED
+
+    # 사망/정리
+    def die(self, blood_effects):
+        self._sparks.clear()
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 3)
+
+    def stop_sounds_on_remove(self):
+        pass
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        # 텔레그래프: 파란 히트박스(직사각형) + 스파크
+        if self.state == "telegraph" and self._dash_rect_pts:
+            pts = [(int(x - world_x), int(y - world_y)) for (x, y) in self._dash_rect_pts]
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            pygame.draw.polygon(lay, self.BOX_INNER_COL, pts)
+            pygame.draw.polygon(lay, self.BOX_EDGE_COL,  pts, 3)
+            screen.blit(lay, (0, 0))
+
+        # 스파크 파티클
+        for p in self._sparks:
+            x, y = int(p[0] - world_x), int(p[1] - world_y)
+            s = pygame.Surface((8, 8), pygame.SRCALPHA)
+            pygame.draw.circle(s, (140, 200, 255, p[5]), (4,4), 3)
+            screen.blit(s, s.get_rect(center=(x, y)))
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+        else:
+            pygame.draw.circle(screen, (90, 90, 90), (sx, sy), int(28 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (60, 160, 255), (sx, sy), int(28 * PLAYER_VIEW_SCALE), 3)
+
+        # 전조 "!" 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy38(AIBase):
+    rank = 8
+    HP = 620
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.98
+    RADIUS = int(28 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN      = int(520 * PLAYER_VIEW_SCALE)
+    KEEP_MAX      = int(720 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(480 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(780 * PLAYER_VIEW_SCALE)
+
+    SMG_FIRE_INTERVAL_MS = 900
+    SMG_DAMAGE           = 15
+    SMG_SPREAD_DEG       = 3.5
+    SMG_SPREAD_MOVE_BONUS= 1.5
+    SMG_RANGE            = int(1000 * PLAYER_VIEW_SCALE)
+    SMG_BULLET_SPEED     = 14.0 * PLAYER_VIEW_SCALE
+
+    DECOY_SPAWN_COOLDOWN_MS = 8000
+    DECOYS_PER_WAVE_MIN     = 2
+    DECOYS_PER_WAVE_MAX     = 3
+    DECOY_MAX_ACTIVE        = 6
+    DECOY_LIFETIME_MS       = 10000
+
+    CHROMA_OFFSET_STRONG = int(10 * PLAYER_VIEW_SCALE)
+    CHROMA_OFFSET_WEAK   = int(5 * PLAYER_VIEW_SCALE)
+    CHROMA_ALPHA_STRONG  = 90
+    CHROMA_ALPHA_WEAK    = 40
+
+    ZIGZAG_AMP = int(80 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.12,
+            alert_duration=0,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original = images.get("enemy38")
+        self.gun_image      = images.get("gun2")
+        self.bullet_image   = images.get("enemy_bullet")
+        self.snd_fire       = sounds.get("gun2_fire")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+        self._last_fire_ms = 0
+        self._last_decoy_spawn_ms = 0
+
+        self._zigzag_t0 = pygame.time.get_ticks()
+
+        self._my_decoys = []
+
+    # 내부 클래스: 홀로그램 분신
+    class HoloDecoy(AIBase):
+        rank = 0 # 스폰러가 참조하지 않도록 음수/비표준
+        RADIUS = int(26 * PLAYER_VIEW_SCALE)
+        HP = 1
+        BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.06
+
+        KEEP_MIN = 50
+        KEEP_MAX = int(280 * PLAYER_VIEW_SCALE)
+        NEAR_DISTANCE = 0
+        FAR_DISTANCE  = int(640 * PLAYER_VIEW_SCALE)
+
+        FIRE_INTERVAL_MS = 900
+        RANGE            = int(900 * PLAYER_VIEW_SCALE)
+        BULLET_SPEED     = 14.0 * PLAYER_VIEW_SCALE
+
+        def __init__(self, owner, world_x, world_y, images, sounds,
+                     map_width, map_height, ttl_ms, bullet_image, gun_image):
+            super().__init__(
+                world_x, world_y, images, sounds, map_width, map_height,
+                speed=self.BASE_SPEED,
+                near_threshold=self.NEAR_DISTANCE,
+                far_threshold=self.FAR_DISTANCE,
+                radius=self.RADIUS,
+                push_strength=0.08,
+                alert_duration=0,
+                damage_player_fn=None,
+                rank=self.rank,
+            )
+            self.owner = owner
+            self.image_original = images.get("enemy38")
+            self.bullet_image   = bullet_image
+            self.gun_image      = gun_image
+            self.hp = 1
+            self.max_hp = 1
+
+            self.birth_ms = pygame.time.get_ticks()
+            self.ttl_ms   = ttl_ms
+            self._last_fire_ms = 0
+
+            self.aim_angle = 0.0
+            self._angle_initialized = False
+            self._last_update_ms = pygame.time.get_ticks()
+
+            self._zigzag_t0 = pygame.time.get_ticks()
+
+        def hit(self, damage, blood_effects):
+            self.alive = False
+            try:
+                config.effects.append(self.owner._make_glitch_burst(self.world_x, self.world_y, strong=True))
+            except Exception:
+                pass
+
+        def _update_aim_angle(self, px, py, now_ms):
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._last_update_ms = now_ms
+
+        def _muzzle_world(self, offset_forward=24, offset_side=6):
+            off_ang = self.aim_angle + math.pi/2
+            return (self.world_x + math.cos(self.aim_angle)*offset_forward + math.cos(off_ang)*offset_side,
+                    self.world_y + math.sin(self.aim_angle)*offset_forward + math.sin(off_ang)*offset_side)
+
+        def update_goal(self, world_x, world_y, player_rect, enemies):
+            # TTL 체크
+            if pygame.time.get_ticks() - self.birth_ms >= self.ttl_ms:
+                self.alive = False
+                return
+
+            px = world_x + player_rect.centerx
+            py = world_y + player_rect.centery
+            now = pygame.time.get_ticks()
+
+            if not self._angle_initialized:
+                self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+                self._angle_initialized = True
+                self._last_update_ms = now
+
+            self._update_aim_angle(px, py, now)
+
+            # 플레이어에게 지그재그로 접근
+            dx, dy = px - self.world_x, py - self.world_y
+            dist = math.hypot(dx, dy)
+            perp = self.aim_angle + math.pi/2
+            t = (now - self._zigzag_t0) / 1000.0
+            zig = math.sin(t * 2.4) * int(70 * PLAYER_VIEW_SCALE)
+            ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+            self.goal_pos = (px - math.cos(self.aim_angle) * (self.KEEP_MAX * 0.2) + ox*0.35,
+                             py - math.sin(self.aim_angle) * (self.KEEP_MAX * 0.2) + oy*0.35)
+
+            # 가짜 총알(피해 0, 무음)
+            if now - self._last_fire_ms >= self.FIRE_INTERVAL_MS and dist <= self.RANGE:
+                self._last_fire_ms = now
+                mx, my = self._muzzle_world()
+                tx = mx + math.cos(self.aim_angle) * 2000
+                ty = my + math.sin(self.aim_angle) * 2000
+                from entities import Bullet
+                b = Bullet(mx, my, tx, ty, 0, self.bullet_image,
+                           speed=self.BULLET_SPEED, max_distance=self.RANGE, damage=0)
+                b.owner = self
+                # 시각만 남도록 궤적을 유지(옵션)
+                b.trail_enabled = True
+                config.global_enemy_bullets.append(b)
+
+        def die(self, blood_effects):
+            # 이미 hit에서 처리
+            pass
+
+        def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+            if not self.alive: return
+            sx = int(self.world_x - world_x + shake_offset_x)
+            sy = int(self.world_y - world_y + shake_offset_y)
+
+            # 강한 색수차/왜곡(분신 표식)
+            self.owner._draw_chromatic_outline(
+                screen, sx, sy, self.image_original,
+                offset=self.owner.CHROMA_OFFSET_STRONG,
+                alpha=self.owner.CHROMA_ALPHA_STRONG,
+                rotate_angle=-math.degrees(self.aim_angle) + 90
+            )
+
+            # 총기(시각만, 무음)
+            if self.gun_image:
+                gun = pygame.transform.rotate(self.gun_image, -math.degrees(self.aim_angle) - 90)
+                gx = sx + math.cos(self.aim_angle) * 24
+                gy = sy + math.sin(self.aim_angle) * 24
+                screen.blit(gun, gun.get_rect(center=(gx, gy)))
+
+            # 본체와 동일한 본체 스프라이트(살짝 불투명)
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+
+    # 유틸 / 비주얼 헬퍼
+    def _update_aim_angle(self, px, py, now_ms):
+        desired = math.atan2(py - self.world_y, px - self.world_x)
+        self.aim_angle = desired
+        self._last_update_ms = now_ms
+
+    def _muzzle_world(self, offset_forward=26, offset_side=6):
+        off_ang = self.aim_angle + math.pi/2
+        return (self.world_x + math.cos(self.aim_angle)*offset_forward + math.cos(off_ang)*offset_side,
+                self.world_y + math.sin(self.aim_angle)*offset_forward + math.sin(off_ang)*offset_side)
+
+    def _draw_chromatic_outline(self, screen, sx, sy, base_image, offset, alpha, rotate_angle):
+        # 이미지를 중심으로 RGB 채널을 살짝 어긋나게 블렌딩해서 색수차 표식을 그림.
+        scaled = pygame.transform.smoothscale(
+            base_image,
+            (int(base_image.get_width() * PLAYER_VIEW_SCALE),
+             int(base_image.get_height() * PLAYER_VIEW_SCALE))
+        )
+        rotated = pygame.transform.rotate(scaled, rotate_angle)
+
+        # 채널별 사본 만들기
+        for (dx, dy), tint in (
+            ((-offset, 0),  (255, 60, 60, alpha)),   # R
+            (( offset, 0),  (60, 255, 255, alpha)),  # C(= G+B)
+        ):
+            lay = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
+            lay.blit(rotated, (0, 0))
+            # 색 틴트
+            color = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
+            color.fill(tint)
+            lay.blit(color, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            rect = lay.get_rect(center=(sx + dx, sy + dy))
+            screen.blit(lay, rect)
+
+    def _make_glitch_burst(self, x, y, strong=False):
+        # 분신 사망 시/디코이 테마 이펙트: 짧은 글리치 링.
+        class _GlitchBurst:
+            def __init__(self, x, y, strong):
+                self.x, self.y = x, y
+                self.birth = pygame.time.get_ticks()
+                self.dur = 320 if strong else 240
+                self.alive = True
+            def update(self):
+                if pygame.time.get_ticks() - self.birth >= self.dur:
+                    self.alive = False
+            def draw(self, screen, world_x, world_y):
+                if not self.alive: return
+                t = (pygame.time.get_ticks() - self.birth) / self.dur
+                t = max(0.0, min(1.0, t))
+                r  = int((60 if strong else 40) * PLAYER_VIEW_SCALE * (0.3 + 0.9*t))
+                cx, cy = int(self.x - world_x), int(self.y - world_y)
+                s = pygame.Surface((r*2+4, r*2+4), pygame.SRCALPHA)
+                a = int((120 if strong else 90) * (1.0 - t))
+                pygame.draw.circle(s, (80, 200, 255, a), (r+2, r+2), r, 3)
+                screen.blit(s, s.get_rect(center=(cx, cy)))
+        return _GlitchBurst(x, y, strong)
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+            self._last_update_ms = now
+        self._update_aim_angle(px, py, now)
+
+        # 내 분신 배열 정리(죽은 것 제거)
+        self._my_decoys = [d for d in self._my_decoys if getattr(d, "alive", False)]
+
+        # 거리 운영(중거리 유지 + 지그재그)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        perp = self.aim_angle + math.pi/2
+        t = (now - self._zigzag_t0) / 1000.0
+        zig = math.sin(t * 2.1) * self.ZIGZAG_AMP
+        ox, oy = math.cos(perp)*zig, math.sin(perp)*zig
+
+        desired = 0.5 * (self.KEEP_MIN + self.KEEP_MAX)
+        away = self.aim_angle + math.pi
+        if dist < self.NEAR_DISTANCE:
+            tx, ty = px + math.cos(away) * desired + ox, py + math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        elif dist > self.FAR_DISTANCE:
+            tx, ty = px - math.cos(away) * desired + ox, py - math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        else:
+            self.goal_pos = (self.world_x + ox * 0.2, self.world_y + oy * 0.2)
+
+        # SMG 단발 사격
+        moving = dist < self.NEAR_DISTANCE or dist > self.FAR_DISTANCE
+        spread = self.SMG_SPREAD_DEG + (self.SMG_SPREAD_MOVE_BONUS if moving else 0.0)
+        if now - self._last_fire_ms >= self.SMG_FIRE_INTERVAL_MS and dist <= self.SMG_RANGE:
+            self._last_fire_ms = now
+            mx, my = self._muzzle_world()
+            tx = mx + math.cos(self.aim_angle) * 2000
+            ty = my + math.sin(self.aim_angle) * 2000
+            from entities import Bullet
+            b = Bullet(mx, my, tx, ty, spread, self.bullet_image,
+                       speed=self.SMG_BULLET_SPEED, max_distance=self.SMG_RANGE, damage=self.SMG_DAMAGE)
+            b.owner = self
+            b.trail_enabled = False
+            config.global_enemy_bullets.append(b)
+            if self.snd_fire:
+                try: self.snd_fire.play()
+                except: pass
+
+        # 분신 스폰(무음)
+        if now - self._last_decoy_spawn_ms >= self.DECOY_SPAWN_COOLDOWN_MS:
+            self._last_decoy_spawn_ms = now
+            # 현재 활성 수 체크
+            active_count = sum(1 for e in enemies if isinstance(e, Enemy38.HoloDecoy) and e.alive)
+            to_spawn = min(
+                random.randint(self.DECOYS_PER_WAVE_MIN, self.DECOYS_PER_WAVE_MAX),
+                max(0, self.DECOY_MAX_ACTIVE - active_count)
+            )
+            for i in range(to_spawn):
+                # 본체 주변 원호에 살짝 랜덤 위치로 생성
+                ang = self.aim_angle + random.uniform(-0.9, 0.9)
+                dist_spawn = random.uniform(80, 120) * PLAYER_VIEW_SCALE
+                sx = self.world_x + math.cos(ang) * dist_spawn
+                sy = self.world_y + math.sin(ang) * dist_spawn
+                d = Enemy38.HoloDecoy(
+                    owner=self, world_x=sx, world_y=sy,
+                    images=self.images, sounds=self.sounds,
+                    map_width=self.map_width, map_height=self.map_height,
+                    ttl_ms=self.DECOY_LIFETIME_MS,
+                    bullet_image=self.bullet_image, gun_image=self.gun_image
+                )
+                # 생성 즉시 적 리스트에 합류(플레이어 탄환에 피격되도록)
+                enemies.append(d)
+                self._my_decoys.append(d)
+                # 시각적 글리치 링만(무음)
+                try:
+                    config.effects.append(self._make_glitch_burst(sx, sy, strong=False))
+                except Exception:
+                    pass
+
+    # 사망/정리
+    def die(self, blood_effects):
+        super().die(blood_effects)
+        self.spawn_dropped_items(7, 7)
+    def stop_sounds_on_remove(self):
+        pass
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+
+        # 분신 존재 시: 본체도 약화된 표식(색수차) 적용
+        any_decoy_alive = any(getattr(d, "alive", False) for d in self._my_decoys)
+        if any_decoy_alive:
+            self._draw_chromatic_outline(
+                screen, sx, sy, self.image_original,
+                offset=self.CHROMA_OFFSET_WEAK,
+                alpha=self.CHROMA_ALPHA_WEAK,
+                rotate_angle=-math.degrees(self.aim_angle) + 90
+            )
+
+        # 총기
+        if self.gun_image:
+            gun = pygame.transform.rotate(self.gun_image, -math.degrees(self.aim_angle) - 90)
+            gx = sx + math.cos(self.aim_angle) * 26
+            gy = sy + math.sin(self.aim_angle) * 26
+            screen.blit(gun, gun.get_rect(center=(gx, gy)))
+
+        # 본체 스프라이트
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+        else:
+            pygame.draw.circle(screen, (120,120,120), (sx, sy), int(28 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (30,200,255), (sx, sy), int(28 * PLAYER_VIEW_SCALE), 3)
+
+class Enemy39(AIBase):
+    rank = 6
+    HP = 560
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.94
+    RADIUS = int(28 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN      = int(480 * PLAYER_VIEW_SCALE)
+    KEEP_MAX      = int(700 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(440 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(760 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS   = 600
+    COOLDOWN_MS    = 3500
+
+    BOOM_OUT_DIST   = int(700 * PLAYER_VIEW_SCALE) 
+    BOOM_SIDE_BEND  = int(220 * PLAYER_VIEW_SCALE)
+    BOOM_FLIGHT_MS  = 1200
+    BOOM_RADIUS     = int(22 * PLAYER_VIEW_SCALE)
+    BOOM_SPIN_DEG_S = 1080.0
+
+    TICK_DAMAGE        = 6
+    TICK_INTERVAL_MS   = 100
+    TICK_MAX_PER_THROW = 6
+
+    TELE_COL_PATH   = (240, 230, 200, 140)
+    TELE_COL_EDGE   = (255, 250, 240, 220)
+    TRAIL_ALPHA     = 90
+
+    ORBIT_SPEED_MIN = 0.55
+    ORBIT_SPEED_MAX = 0.95
+    ORBIT_JITTER    = 0.18
+    STRAFE_AMP      = int(90 * PLAYER_VIEW_SCALE)
+    STRAFE_FREQ     = 2.2
+    DESIRED_RADIUS_BIAS = 0.5
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.12,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.image_original   = images.get("enemy39", images.get("enemy4"))
+        self.boom_image       = images.get("bone_boomerang")
+        self.snd_throw        = sounds.get("stab_hit")
+
+        self.hp = self.HP
+        self.max_hp = self.HP
+
+        self.state = "idle" # idle → tele → throw → cooldown
+        self._tele_until = 0
+        self._cool_until = 0
+        self.show_alert = False
+
+        self.aim_angle = 0.0
+        self._angle_initialized = False
+        self._last_update_ms = pygame.time.get_ticks()
+
+        self._locked_aim = None
+        self._locked_pos = None
+
+        self._tele_preview_pts = []
+
+        self._active_boom = None
+
+        self._zigzag_t0 = pygame.time.get_ticks()
+        self._orbit_angle = random.uniform(0, math.tau)
+        sp = random.uniform(self.ORBIT_SPEED_MIN, self.ORBIT_SPEED_MAX)
+        self._orbit_speed = sp if random.random() < 0.5 else -sp
+
+    # 내부: 뼈톱 부메랑(Enemy39 내부 업데이트/드로우, 격추 불가)
+    class BoneBoomerang:
+        # 부메랑: 플레이어/장애물 관통, 격추 불가. Enemy39가 직접 update/draw
+        def __init__(self, owner, start_pos, locked_aim, image, flight_ms, out_dist, side_bend, radius, spin_deg_s):
+            self.owner = owner
+            self.image = image
+            self.start_x, self.start_y = start_pos
+            self.aim = locked_aim
+            self.birth = pygame.time.get_ticks()
+            self.flight_ms = max(400, int(flight_ms))
+            self.out_dist = out_dist
+            self.side_bend = side_bend
+            self.radius = radius
+            self.alive = True
+            self.world_x = self.start_x
+            self.world_y = self.start_y
+            self._t = 0.0
+            self._spin = 0.0
+            self._spin_deg_s = spin_deg_s
+            self._ux = math.cos(self.aim); self._uy = math.sin(self.aim)
+            self._vx = -math.sin(self.aim); self._vy = math.cos(self.aim)
+            self._trail = []
+            self._last_tick_ms = 0
+            self._tick_count = 0
+
+        # 경로 함수: t∈[0,1]에서 원호/타원형 곡선을 따라 출발→복귀
+        #   forward = A * sin(π t), lateral = B * sin(2π t)
+        #   pos = S + u * forward + v * lateral
+        def _path_at(self, t):
+            A = self.out_dist; B = self.side_bend
+            fwd = A * math.sin(math.pi * t)
+            lat = B * math.sin(2 * math.pi * t)
+            x = self.start_x + self._ux * fwd + self._vx * lat
+            y = self.start_y + self._uy * fwd + self._vy * lat
+            return x, y
+
+        def update(self, dt, world_x, world_y, player_rect):
+            if not self.alive: return
+            now = pygame.time.get_ticks()
+            # 진행 파라미터
+            self._t = min(1.0, (now - self.birth) / self.flight_ms)
+            self.world_x, self.world_y = self._path_at(self._t)
+            self._spin += self._spin_deg_s * dt  # deg
+
+            # 트레일(짧게 유지)
+            self._trail.append((self.world_x, self.world_y, now))
+            self._trail = [p for p in self._trail if now - p[2] <= 140]
+
+            # 플레이어 접촉 틱(관통)
+            if self._tick_count < self.owner.TICK_MAX_PER_THROW:
+                px = world_x + player_rect.centerx
+                py = world_y + player_rect.centery
+                if (px - self.world_x) ** 2 + (py - self.world_y) ** 2 <= (self.radius ** 2):
+                    if now - self._last_tick_ms >= self.owner.TICK_INTERVAL_MS:
+                        self._last_tick_ms = now
+                        self._tick_count += 1
+                        if self.owner.damage_player:
+                            self.owner.damage_player(self.owner.TICK_DAMAGE)
+
+            # 왕복 종료
+            if self._t >= 1.0:
+                self.alive = False
+                self._trail.clear()
+
+        def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+            if not self.alive:
+                return
+            # 트레일
+            if self._trail:
+                lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+                pts = [(int(x - world_x + shake_offset_x), int(y - world_y + shake_offset_y))
+                       for (x, y, _) in self._trail]
+                if len(pts) >= 2:
+                    pygame.draw.lines(lay, (245, 240, 230, self.owner.TRAIL_ALPHA), False, pts, 3)
+                screen.blit(lay, (0, 0))
+            # 본체
+            if self.image:
+                img = pygame.transform.smoothscale(
+                    self.image,
+                    (int(self.image.get_width() * PLAYER_VIEW_SCALE),
+                     int(self.image.get_height() * PLAYER_VIEW_SCALE))
+                )
+                img = pygame.transform.rotate(img, -self._spin)
+                rect = img.get_rect(center=(int(self.world_x - world_x + shake_offset_x),
+                                            int(self.world_y - world_y + shake_offset_y)))
+                screen.blit(img, rect)
+            else:
+                pygame.draw.circle(
+                    screen, (240, 232, 210),
+                    (int(self.world_x - world_x + shake_offset_x),
+                     int(self.world_y - world_y + shake_offset_y)),
+                    max(4, int(self.radius * 0.6))
+                )
+
+    # 전조 경로(고정값 기반) 만들기
+    def _build_preview_from_locked(self):
+        # _locked_pos/_locked_aim을 기반으로 전조 라인 샘플 생성
+        self._tele_preview_pts.clear()
+        sx, sy = self._locked_pos
+        ang = self._locked_aim
+        ux, uy = math.cos(ang), math.sin(ang)
+        vx, vy = -math.sin(ang), math.cos(ang)
+        for i in range(0, 26):
+            t = i / 25.0
+            fwd = self.BOOM_OUT_DIST * math.sin(math.pi * t)
+            lat = self.BOOM_SIDE_BEND * math.sin(2 * math.pi * t)
+            x = sx + ux * fwd + vx * lat
+            y = sy + uy * fwd + vy * lat
+            self._tele_preview_pts.append((x, y))
+
+    # 상태 전이
+    def _enter_idle(self):
+        self.state = "idle"
+        self.show_alert = False
+
+    def _enter_tele(self):
+        self._locked_aim = self.aim_angle
+        self._locked_pos = (self.world_x, self.world_y)
+        self.state = "tele"
+        self.show_alert = True
+        self._tele_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self._build_preview_from_locked()
+
+    def _enter_throw(self):
+        self.state = "throw"
+        self.show_alert = False
+        # 사운드
+        if self.snd_throw:
+            try: self.snd_throw.play()
+            except: pass
+        self._active_boom = Enemy39.BoneBoomerang(
+            owner=self,
+            start_pos=self._locked_pos,
+            locked_aim=self._locked_aim,
+            image=self.boom_image,
+            flight_ms=self.BOOM_FLIGHT_MS,
+            out_dist=self.BOOM_OUT_DIST,
+            side_bend=self.BOOM_SIDE_BEND,
+            radius=self.BOOM_RADIUS,
+            spin_deg_s=self.BOOM_SPIN_DEG_S
+        )
+        # 쿨다운 예약
+        self._cool_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+        dt = (now - self._last_update_ms) / 1000.0 if self._last_update_ms else 0.016
+        self._last_update_ms = now
+
+        # 각도 갱신(전조 중엔 고정 유지)
+        if not self._angle_initialized:
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self._angle_initialized = True
+        elif self.state != "tele":  # ✔ 전조 중엔 조준 갱신 금지
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+
+        # 부메랑 업데이트(내부 관리)
+        if self._active_boom:
+            self._active_boom.update(dt, world_x, world_y, player_rect)
+            if not self._active_boom.alive:
+                self._active_boom = None
+
+        # 이동 로직
+        # 기준 반지름: KEEP_MIN~KEEP_MAX의 중간값을 약간 가변
+        base_r = int((1 - self.DESIRED_RADIUS_BIAS) * self.KEEP_MIN + self.DESIRED_RADIUS_BIAS * self.KEEP_MAX)
+        # 거리에 따라 미세 보정(너무 가깝/멀면 반지름 키우거나 줄임)
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        if dist < self.NEAR_DISTANCE:
+            base_r = min(self.KEEP_MAX, base_r + int(60 * PLAYER_VIEW_SCALE))
+        elif dist > self.FAR_DISTANCE:
+            base_r = max(self.KEEP_MIN, base_r - int(60 * PLAYER_VIEW_SCALE))
+
+        # 원형 궤도 각속도(불규칙 약간)
+        jitter = (random.random() - 0.5) * 2.0 * self.ORBIT_JITTER * dt
+        self._orbit_angle += (self._orbit_speed * dt + jitter)
+
+        # 궤도 좌표(플레이어 기준)
+        ox = px + math.cos(self._orbit_angle) * base_r
+        oy = py + math.sin(self._orbit_angle) * base_r
+
+        # 지그재그 스트레이프(궤도 접선 방향으로 흔들기)
+        tangent = self._orbit_angle + math.pi / 2.0
+        zig = math.sin((now - self._zigzag_t0) * 0.001 * (self.STRAFE_FREQ * 6.28318)) * self.STRAFE_AMP
+        sx = ox + math.cos(tangent) * zig * 0.35
+        sy = oy + math.sin(tangent) * zig * 0.35
+
+        # 상태별 목표
+        if self.state == "idle":
+            self.goal_pos = (sx, sy)
+            # 던질 타이밍
+            if now >= self._cool_until and self._active_boom is None:
+                self._enter_tele()
+
+        elif self.state == "tele":
+            # 전조 중엔 제자리/조준 고정(미리보기=실제 유지)
+            self.goal_pos = (self.world_x, self.world_y)
+            if now >= self._tele_until:
+                self._enter_throw()
+                self.state = "cooldown"
+
+        elif self.state == "throw":
+            # 즉시 쿨다운으로 넘어가는 구조라 보통 도달하지 않음
+            self.state = "cooldown"
+
+        elif self.state == "cooldown":
+            # 쿨다운 중에도 계속 이동
+            self.goal_pos = (sx, sy)
+            if now >= self._cool_until:
+                self._enter_idle()
+
+    # 사망/정리
+    def die(self, blood_effects):
+        # 부메랑 정리
+        if self._active_boom:
+            self._active_boom.alive = False
+            self._active_boom._trail.clear()
+            self._active_boom = None
+        super().die(blood_effects)
+        self.spawn_dropped_items(5, 6)
+
+    def stop_sounds_on_remove(self):
+        if self._active_boom:
+            self._active_boom.alive = False
+            self._active_boom._trail.clear()
+            self._active_boom = None
+
+    # 드로잉
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        if self.state == "tele" and self._tele_preview_pts:
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            pts = [(int(x - world_x + shake_offset_x), int(y - world_y + shake_offset_y)) for (x, y) in self._tele_preview_pts]
+            if len(pts) >= 2:
+                pygame.draw.lines(lay, self.TELE_COL_PATH, False, pts, 3)
+                pygame.draw.circle(lay, self.TELE_COL_EDGE, pts[0], 5)
+                mid = pts[len(pts)//2]
+                pygame.draw.circle(lay, self.TELE_COL_EDGE, mid, 5)
+                pygame.draw.circle(lay, self.TELE_COL_EDGE, pts[-1], 5)
+            screen.blit(lay, (0, 0))
+
+        # 부메랑(내부 관리)
+        if self._active_boom:
+            self._active_boom.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.aim_angle) + 90)
+            screen.blit(body, body.get_rect(center=(sx, sy)))
+        else:
+            pygame.draw.circle(screen, (110, 110, 110), (sx, sy), int(28 * PLAYER_VIEW_SCALE))
+            pygame.draw.circle(screen, (245, 240, 230), (sx, sy), int(28 * PLAYER_VIEW_SCALE), 3)
+
+        # 전조 "!" 아이콘
+        self.draw_alert(screen, sx, sy)
+
+class Enemy40(AIBase):
+    rank = 6
+
+    HP = 520
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
+    RADIUS = int(32 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(420 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(620 * PLAYER_VIEW_SCALE)
+    NEAR_DISTANCE = int(360 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE  = int(820 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS = 700
+    FIRE_MS      = 1300
+    COOLDOWN_MS  = 2400
+    TICK_MS      = 100
+    TICK_DAMAGE  = 8
+
+    PILE_DIST      = int(140 * PLAYER_VIEW_SCALE)
+    PILE_FADE_MS   = 350
+    PILE_SCALE_MIN = 0.65
+    PILE_SCALE_MAX = 1.00
+    GLOW_BASE_R    = int(34 * PLAYER_VIEW_SCALE)
+
+    COL_CORE   = (200, 240, 255, 255)
+    COL_GLOW   = ( 80, 180, 255, 220)
+    COL_OUTER  = ( 30, 120, 220, 160)
+    OUTER_W    = max(6, int(9 * PLAYER_VIEW_SCALE))
+    BEAM_SEG_LEN   = 22
+    BEAM_JITTER    = 2.2
+    BEAM_PULSE_MS  = 560
+    BEAM_HIT_RADIUS= int(14 * PLAYER_VIEW_SCALE)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.NEAR_DISTANCE,
+            far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS,
+            push_strength=0.20,
+            alert_duration=900,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images["enemy40"]
+
+        self.snd_pile   = sounds.get("reaver_slam")
+        self.snd_charge = sounds.get("shock_charge")
+        self.snd_burst  = sounds.get("shock_burst")
+
+        # 상태 머신: idle → telegraph → fire → cooldown
+        self.state = "idle"
+        self.telegraph_until = 0
+        self.fire_until = 0
+        self.cooldown_until = 0
+        self.next_tick_ms = 0
+        self._beam_born_ms = pygame.time.get_ticks()
+
+        self._piles = []
+
+        self._zigzag_t0 = pygame.time.get_ticks()
+        self._zigzag_amp = 18 * PLAYER_VIEW_SCALE
+
+    # 유틸: 플레이어 월드좌표
+    def _player_world(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    # 점-선분 최소거리
+    def _dist_point_to_segment(self, x, y, x1, y1, x2, y2):
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = x - x1, y - y1
+        seg_len2 = vx * vx + vy * vy
+        if seg_len2 <= 1e-6:
+            return math.hypot(x - x1, y - y1)
+        t = max(0.0, min(1.0, (wx * vx + wy * vy) / seg_len2))
+        px = x1 + t * vx
+        py = y1 + t * vy
+        return math.hypot(x - px, y - py)
+
+    # 전기 빔 포인트 계산(지글)
+    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
+        dx, dy = x2 - x1, y2 - y1
+        dist = max(1.0, math.hypot(dx, dy))
+        nx, ny = (-dy / dist, dx / dist)   # 수직 단위벡터
+        nseg = max(2, int(dist / seg_len))
+        pts = []
+        r = random.Random(12345 + int(seed * 997))
+        for i in range(nseg + 1):
+            t = i / nseg
+            bx = x1 + dx * t
+            by = y1 + dy * t
+            jitter = (math.sin((t + tsec) * 6.283) * 0.5 + r.uniform(-0.5, 0.5)) * jitter_amp
+            pts.append((bx + nx * jitter, by + ny * jitter))
+        return pts
+
+    def _draw_beam_layered(self, surf, x1, y1, x2, y2, base_w, born_ms, alpha=1.0):
+        tsec = ((pygame.time.get_ticks() - born_ms) % self.BEAM_PULSE_MS) / self.BEAM_PULSE_MS
+        pts = self._beam_points(x1, y1, x2, y2, self.BEAM_JITTER, self.BEAM_SEG_LEN, tsec)
+        def polyline(s, pts, w, col):
+            if len(pts) < 2: return
+            for i in range(len(pts) - 1):
+                pygame.draw.line(s, col, pts[i], pts[i+1], w)
+        a1 = int(self.COL_OUTER[3] * 0.85 * alpha)
+        a2 = int(self.COL_GLOW[3]  * 0.90 * alpha)
+        a3 = int(self.COL_CORE[3]  * 1.00 * alpha)
+        polyline(surf, pts, base_w + 4, (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], a1))
+        polyline(surf, pts, base_w + 2, (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  a2))
+        polyline(surf, pts, base_w,     (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  a3))
+
+    # 말뚝 3개 배치 및 사운드
+    def _spawn_piles(self, px, py):
+        self._piles.clear()
+        base = random.random() * (2 * math.pi)
+        angs = [base + math.radians(a) for a in (0, 120, 240)]
+        now = pygame.time.get_ticks()
+        for a in angs:
+            x = px + math.cos(a) * self.PILE_DIST
+            y = py + math.sin(a) * self.PILE_DIST
+            self._piles.append({"x": x, "y": y, "born": now, "vanish": None})
+        if self.snd_pile:
+            try: self.snd_pile.play()
+            except: pass
+
+    # 상태 전이
+    def _enter_telegraph(self):
+        self.state = "telegraph"
+        self.telegraph_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self._beam_born_ms = pygame.time.get_ticks()
+        if self.snd_charge:
+            try: self.snd_charge.play()
+            except: pass
+
+    def _enter_fire(self):
+        self.state = "fire"
+        now = pygame.time.get_ticks()
+        self.fire_until = now + self.FIRE_MS
+        self.next_tick_ms = now + self.TICK_MS
+        if self.snd_burst:
+            try: self.snd_burst.play()
+            except: pass
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.cooldown_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        # 자연스러운 소멸 시작
+        now = pygame.time.get_ticks()
+        for p in self._piles:
+            if p["vanish"] is None:
+                p["vanish"] = now
+
+    # 중거리 유지 + 항상 플레이어를 바라보기(각도 갱신) + 약한 횡이동
+    def _keep_midrange(self, px, py):
+        dx, dy = px - self.world_x, py - self.world_y
+        self.direction_angle = math.atan2(dy, dx)
+
+        dist = math.hypot(dx, dy)
+        t = (pygame.time.get_ticks() - self._zigzag_t0) / 1000.0
+        perp = self.direction_angle + math.pi / 2.0
+        zig = math.sin(t * 2.0) * self._zigzag_amp
+        ox, oy = math.cos(perp) * zig, math.sin(perp) * zig
+
+        want = max(self.KEEP_MIN, min(self.KEEP_MAX, dist))
+        gx = px - math.cos(self.direction_angle) * want + ox
+        gy = py - math.sin(self.direction_angle) * want + oy
+        self.goal_pos = (gx, gy)
+
+    # 메인 로직
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        px, py = self._player_world(world_x, world_y, player_rect)
+        now = pygame.time.get_ticks()
+
+        # 항상 플레이어를 바라보며 중거리 유지
+        self._keep_midrange(px, py)
+
+        # 상태 머신
+        if self.state == "idle":
+            if math.hypot(self.world_x - px, self.world_y - py) <= self.FAR_DISTANCE:
+                self._spawn_piles(px, py)
+                self._enter_telegraph()
+
+        elif self.state == "telegraph":
+            if now >= self.telegraph_until:
+                self._enter_fire()
+
+        elif self.state == "fire":
+            # 틱 피해
+            if now >= self.next_tick_ms and len(self._piles) == 3 and self.damage_player:
+                piles = self._piles
+                segs = [((piles[0]["x"], piles[0]["y"]), (piles[1]["x"], piles[1]["y"])),
+                        ((piles[1]["x"], piles[1]["y"]), (piles[2]["x"], piles[2]["y"])),
+                        ((piles[2]["x"], piles[2]["y"]), (piles[0]["x"], piles[0]["y"]))]
+                pxw, pyw = px, py
+                hit = False
+                for (x1, y1), (x2, y2) in segs:
+                    if self._dist_point_to_segment(pxw, pyw, x1, y1, x2, y2) <= self.BEAM_HIT_RADIUS:
+                        hit = True
+                        break
+                if hit:
+                    self.damage_player(self.TICK_DAMAGE)
+                self.next_tick_ms += self.TICK_MS
+
+            if now >= self.fire_until:
+                self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            # 모든 말뚝이 소멸 완료되면 정지
+            all_vanished = True
+            now = pygame.time.get_ticks()
+            for p in self._piles:
+                if p["vanish"] is None or now - p["vanish"] < self.PILE_FADE_MS:
+                    all_vanished = False
+                    break
+            if all_vanished:
+                self._piles.clear()
+                self.state = "idle"
+
+    # 말뚝 렌더 시 알파/스케일 계산
+    def _pile_alpha_scale(self, p):
+        now = pygame.time.get_ticks()
+        a = 1.0
+        s = self.PILE_SCALE_MAX
+        # 등장
+        dt_born = now - p["born"]
+        if dt_born < self.PILE_FADE_MS:
+            t = max(0.0, min(1.0, dt_born / self.PILE_FADE_MS))
+            a = t
+            s = self.PILE_SCALE_MIN + (self.PILE_SCALE_MAX - self.PILE_SCALE_MIN) * (0.8 + 0.2 * math.sin(t * math.pi))
+        # 소멸
+        if p["vanish"] is not None:
+            dt_v = now - p["vanish"]
+            if dt_v < self.PILE_FADE_MS:
+                t = max(0.0, min(1.0, dt_v / self.PILE_FADE_MS))
+                a *= (1.0 - t)
+                s *= (1.0 - 0.4 * t)
+            else:
+                a = 0.0
+                s = 0.0
+        return a, max(0.0, s)
+
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(5, 6)
+
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        # 본체는 항상 플레이어를 바라보도록 회전
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+        self.draw_alert(screen, screen_x, screen_y)
+
+        scaled_img = pygame.transform.smoothscale(
+            self.image_original,
+            (
+                int(self.image_original.get_width()  * PLAYER_VIEW_SCALE),
+                int(self.image_original.get_height() * PLAYER_VIEW_SCALE),
+            )
+        )
+        rotated_img = pygame.transform.rotate(
+            scaled_img, -math.degrees(self.direction_angle) + 90
+        )
+        rect = rotated_img.get_rect(center=(screen_x, screen_y))
+        screen.blit(rotated_img, rect)
+
+        # 시전/발사 중 – 말뚝과 레이저
+        if self.state in ("telegraph", "fire") and len(self._piles) == 3:
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+
+            pile_img = self.images.get("thunder_pile")
+            now = pygame.time.get_ticks()
+            pulse = 0.5 + 0.5 * math.sin((now % 700) / 700 * 2 * math.pi)
+
+            # 말뚝 + 글로우(등장/소멸 애니메이션 포함)
+            for p in self._piles:
+                psx = int(p["x"] - world_x + shake_offset_x)
+                psy = int(p["y"] - world_y + shake_offset_y)
+                alpha, scale = self._pile_alpha_scale(p)
+                if alpha <= 0.0 or scale <= 0.0:
+                    continue
+
+                if pile_img:
+                    pw = int(pile_img.get_width() * scale)
+                    ph = int(pile_img.get_height() * scale)
+                    if pw > 1 and ph > 1:
+                        scaled_pile = pygame.transform.smoothscale(pile_img, (pw, ph))
+                        pile_rect = scaled_pile.get_rect(center=(psx, psy))
+                        # 알파 적용
+                        temp = pygame.Surface(scaled_pile.get_size(), pygame.SRCALPHA)
+                        temp.blit(scaled_pile, (0,0))
+                        temp.fill((255,255,255,int(255*alpha)), special_flags=pygame.BLEND_RGBA_MULT)
+                        screen.blit(temp, pile_rect)
+
+                # 글로우
+                glow_r = int(self.GLOW_BASE_R + 8 * pulse) * max(1, int(scale*1.0))
+                g = pygame.Surface((glow_r*2+2, glow_r*2+2), pygame.SRCALPHA)
+                pygame.draw.circle(g, (80, 180, 255, int(90 * alpha)), (glow_r, glow_r), glow_r)
+                lay.blit(g, g.get_rect(center=(psx, psy)))
+
+            # 레이저 3변(시전 중엔 반투명)
+            p1 = self._piles[0]; p2 = self._piles[1]; p3 = self._piles[2]
+            s1 = (int(p1["x"] - world_x + shake_offset_x), int(p1["y"] - world_y + shake_offset_y))
+            s2 = (int(p2["x"] - world_x + shake_offset_x), int(p2["y"] - world_y + shake_offset_y))
+            s3 = (int(p3["x"] - world_x + shake_offset_x), int(p3["y"] - world_y + shake_offset_y))
+            alpha = 0.45 if self.state == "telegraph" else 1.0
+            born  = self._beam_born_ms
+            self._draw_beam_layered(lay, s1[0], s1[1], s2[0], s2[1], base_w=self.OUTER_W, born_ms=born, alpha=alpha)
+            self._draw_beam_layered(lay, s2[0], s2[1], s3[0], s3[1], base_w=self.OUTER_W, born_ms=born, alpha=alpha)
+            self._draw_beam_layered(lay, s3[0], s3[1], s1[0], s1[1], base_w=self.OUTER_W, born_ms=born, alpha=alpha)
+
+            screen.blit(lay, (0, 0))
+
+class Enemy41(AIBase):
+    rank = 1
+
+    HP = 160
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(24 * PLAYER_VIEW_SCALE)
+
+    AVOID_MIN       = int(220 * PLAYER_VIEW_SCALE)
+    ORBIT_RADIUS    = int(260 * PLAYER_VIEW_SCALE)
+    ORBIT_SPEED     = 1.7
+
+    TRIGGER_DIST    = int(600 * PLAYER_VIEW_SCALE)
+    WINDUP_MS       = 220
+    DASH_LEN        = int(240 * PLAYER_VIEW_SCALE)
+    DASH_SPEED_MULT = 2.35
+    DASH_MAX_MS     = 300
+    COOLDOWN_MS     = 1100
+
+    HIT_DAMAGE      = 15
+    KNOCKBACK_PX    = int(120 * PLAYER_VIEW_SCALE)
+
+    PREVIEW_W       = int(68 * PLAYER_VIEW_SCALE)
+    PREVIEW_OFFSET  = int(16 * PLAYER_VIEW_SCALE)
+    PREVIEW_FILL    = (255, 80, 80, 70)
+    PREVIEW_EDGE    = (255, 120, 120, 150)
+
+    TRAIL_KEEP      = 10
+    SPARK_PER_FRAME = 3
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=0.10,
+            alert_duration=600,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images.get("enemy41", images.get("enemy1"))
+        self.snd_hit = sounds.get("stab_hit")
+
+        self.aim_angle = 0.0
+        self.state = "idle"     # idle → windup → dash → cooldown
+        self.state_until = 0
+        self._dash_started = 0
+        self._dash_hit_applied = False
+        self._dash_dir = (0.0, 0.0)
+        self._dash_target = (world_x, world_y)
+
+        self._trail = []
+        self._sparks = []
+
+        self._orbit_t0 = pygame.time.get_ticks()
+
+    # 유틸
+    def _player_world(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    @staticmethod
+    def _norm(x, y, eps=1e-6):
+        d = math.hypot(x, y)
+        if d < eps: return (0.0, 0.0)
+        return (x/d, y/d)
+
+    # 플레이어를 항상 바라보고, 최소 이격을 유지하며 오비트
+    def _keep_distance_orbit(self, px, py):
+        self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+        self.direction_angle = self.aim_angle
+
+        dx, dy = self.world_x - px, self.world_y - py
+        dist = math.hypot(dx, dy)
+        nx, ny = self._norm(dx, dy)  # 플레이어→적 외향 단위벡터
+
+        now = pygame.time.get_ticks()
+        orbit_ang = (now - self._orbit_t0) / 1000.0 * self.ORBIT_SPEED
+        tx, ty = -ny, nx  # 접선 단위벡터
+
+        want_r = max(self.AVOID_MIN, self.ORBIT_RADIUS)
+        base_x = px + nx * want_r
+        base_y = py + ny * want_r
+        wobble = int(28 * PLAYER_VIEW_SCALE)
+        gx = base_x + tx * wobble * math.cos(orbit_ang)
+        gy = base_y + ty * wobble * math.sin(orbit_ang)
+        self.goal_pos = (gx, gy)
+
+    # 잔상/스파크
+    def _update_trail(self):
+        now = pygame.time.get_ticks()
+        self._trail = [(x, y, born) for (x, y, born) in self._trail if now - born < 220]
+        self._trail.append((self.world_x, self.world_y, now))
+        if len(self._trail) > self.TRAIL_KEEP:
+            self._trail.pop(0)
+
+    def _emit_sparks(self, ox, oy, base_ang):
+        now = pygame.time.get_ticks()
+        for _ in range(self.SPARK_PER_FRAME):
+            ang = base_ang + random.uniform(-0.9, 0.9)
+            spd = random.uniform(1.2, 2.2)
+            life = random.randint(120, 220)
+            self._sparks.append([ox, oy, math.cos(ang)*spd, math.sin(ang)*spd, now+life, random.randint(140, 220)])
+
+    def _update_sparks(self):
+        now = pygame.time.get_ticks()
+        for p in list(self._sparks):
+            p[0] += p[2]; p[1] += p[3]
+            p[5] = max(0, p[5] - 10)
+            if now >= p[4] or p[5] <= 0:
+                try: self._sparks.remove(p)
+                except: pass
+
+    # 돌진 준비/시작/종료
+    def _enter_windup(self, px, py):
+        self.state = "windup"
+        self.state_until = pygame.time.get_ticks() + self.WINDUP_MS
+        vx, vy = px - self.world_x, py - self.world_y
+        nx, ny = self._norm(vx, vy)
+        self._dash_dir = (nx, ny)
+        self._dash_target = (self.world_x + nx * self.DASH_LEN,
+                             self.world_y + ny * self.DASH_LEN)
+        self._dash_hit_applied = False
+
+    def _enter_dash(self):
+        self.state = "dash"
+        self._dash_started = pygame.time.get_ticks()
+        self.speed = self.BASE_SPEED * self.DASH_SPEED_MULT
+        self.goal_pos = self._dash_target
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.state_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.speed = self.BASE_SPEED
+        self.goal_pos = None
+
+    # 직사각형 히트박스 판정(돌진 중)
+    def _rect_hit_player(self, px, py, cx, cy, ang, start_off, end_off, half_w, pad=0.0):
+        # 플레이어를 적 로컬 좌표계로 회전 변환(전방 x축 정렬)
+        dx, dy = px - cx, py - cy
+        cos_a, sin_a = math.cos(ang), math.sin(ang)
+        local_x =  dx * cos_a + dy * sin_a
+        local_y = -dx * sin_a + dy * cos_a
+        if local_x < start_off - pad or local_x > end_off + pad:
+            return False
+        if abs(local_y) > (half_w + pad):
+            return False
+        return True
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+
+        px, py = self._player_world(world_x, world_y, player_rect)
+        now = pygame.time.get_ticks()
+        self._update_sparks()
+
+        if self.state == "idle":
+            # 최소 이격 유지하며 오비트 이동
+            self._keep_distance_orbit(px, py)
+            # 발동 범위면 돌진 준비
+            if math.hypot(px - self.world_x, py - self.world_y) <= self.TRIGGER_DIST:
+                self._enter_windup(px, py)
+
+        elif self.state == "windup":
+            # 제자리 유지 + 시선 고정
+            self.goal_pos = (self.world_x, self.world_y)
+            self.aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+            self.direction_angle = self.aim_angle
+            if now >= self.state_until:
+                self._enter_dash()
+
+        elif self.state == "dash":
+            # 잔상/스파크
+            self._update_trail()
+            self._emit_sparks(self.world_x, self.world_y, self.aim_angle + math.pi)
+
+            # 전방 직사각형에 들어오면 데미지+넉백
+            if not self._dash_hit_applied:
+                start_off = self.PREVIEW_OFFSET
+                end_off   = self.PREVIEW_OFFSET + self.DASH_LEN
+                half_w    = self.PREVIEW_W * 0.5
+                if self._rect_hit_player(px, py, self.world_x, self.world_y, self.aim_angle, start_off, end_off, half_w, pad=4*PLAYER_VIEW_SCALE):
+                    try:
+                        if self.damage_player:
+                            self.damage_player(int(self.HIT_DAMAGE))
+                        else:
+                            config.damage_player(int(self.HIT_DAMAGE))
+                    except Exception:
+                        pass
+                    # 넉백
+                    if hasattr(config, "apply_knockback"):
+                        nx, ny = self._norm(px - self.world_x, py - self.world_y)
+                        config.apply_knockback(nx * self.KNOCKBACK_PX, ny * self.KNOCKBACK_PX)
+                    # 타격음
+                    try:
+                        if self.snd_hit: self.snd_hit.play()
+                    except: pass
+                    self._dash_hit_applied = True
+
+            # 종료: 목표 도달 or 타임아웃
+            reached = math.hypot(self._dash_target[0] - self.world_x, self._dash_target[1] - self.world_y) <= int(14 * PLAYER_VIEW_SCALE)
+            timeout = (now - self._dash_started) >= self.DASH_MAX_MS
+            if reached or timeout:
+                self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            # 쿨다운 중에도 최소 이격 유지
+            self._keep_distance_orbit(px, py)
+            if now >= self.state_until:
+                self.state = "idle"
+
+    # 드랍
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(2, 2)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+
+        # 예열(텔레그래프) – 전방 직사각형(반투명 빨강)
+        if self.state == "windup":
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            ang = self.aim_angle
+            fx, fy = math.cos(ang), math.sin(ang)
+            pxv, pyv = -fy, fx
+            w = self.PREVIEW_W
+            l = self.DASH_LEN
+            off = self.PREVIEW_OFFSET
+            a = (sx + fx*off + pxv*(w*0.5), sy + fy*off + pyv*(w*0.5))
+            b = (sx + fx*off - pxv*(w*0.5), sy + fy*off - pyv*(w*0.5))
+            d = (sx + fx*(off+l) + pxv*(w*0.5), sy + fy*(off+l) + pyv*(w*0.5))
+            e = (sx + fx*(off+l) - pxv*(w*0.5), sy + fy*(off+l) - pyv*(w*0.5))
+            pygame.draw.polygon(lay, self.PREVIEW_FILL, [a, d, e, b])
+            pygame.draw.lines(lay, self.PREVIEW_EDGE, True, [a, d, e, b], 2)
+            screen.blit(lay, (0, 0))
+
+        # 돌진 잔상/스파크
+        if self.state == "dash":
+            for p in self._sparks:
+                x, y = int(p[0] - world_x), int(p[1] - world_y)
+                s = pygame.Surface((6, 6), pygame.SRCALPHA)
+                s.fill((200, 230, 255, p[5]))
+                screen.blit(s, (x-3, y-3))
+            now = pygame.time.get_ticks()
+            for (tx, ty, born_ms) in self._trail:
+                age = now - born_ms
+                a = max(0, 180 - int(age * 0.9))
+                r = max(2, int(8 * PLAYER_VIEW_SCALE - age * 0.02))
+                if a > 0 and r > 1:
+                    surf = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
+                    pygame.draw.circle(surf, (120, 200, 255, a), (r, r), r)
+                    screen.blit(surf, (tx - world_x - r, ty - world_y - r))
+
+        # 본체(항상 시선 고정)
+        if self.image_original:
+            scaled_img = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width()  * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            rotated = pygame.transform.rotate(scaled_img, -math.degrees(self.aim_angle) + 90)
+            rect = rotated.get_rect(center=(int(sx), int(sy)))
+            screen.blit(rotated, rect)
+
+class Enemy42(AIBase):
+    rank = 4
+
+    HP = 340
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.92
+    RADIUS = int(26 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(520 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(780 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE = int(1200 * PLAYER_VIEW_SCALE)
+
+    AIM_MS         = 700
+    RELOAD_MS      = 2100
+    EXP_RADIUS     = 140
+    DMG_MAX        = 32
+    DMG_MIN        = 10
+    PROJ_SPEED     = 12.0
+    TICKS_PER_SEC  = 60.0
+
+    MUZZLE_OFFSET  = int(34 * PLAYER_VIEW_SCALE)
+    BARREL_LIFT    = int(6 * PLAYER_VIEW_SCALE)
+    GUN_SWAY       = 2.0
+
+    PREVIEW_COL_FILL = (255, 180, 80, 40)
+    PREVIEW_COL_EDGE = (255, 210, 110, 150)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=0, far_threshold=0,
+            radius=self.RADIUS,
+            push_strength=0.16,
+            alert_duration=900,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images.get("enemy42", images.get("enemy18"))
+        self.gun_image_original = images.get("gun4")
+        self.grenade_image = images.get("grenade1", images.get("grenade"))
+        self.explosion_image = images.get("explosion1", images.get("explosion"))
+
+        self.snd_fire = sounds.get("gun4_fire")
+        self.snd_expl = sounds.get("gun4_explosion")
+
+        self.state = "idle"    # idle -> aim -> reload
+        self.state_until = 0
+        self.fixed_aim_angle = None
+        self.aim_target_pos = None
+        self.explosion_delay_ms = 600 
+        self._flash_until = 0
+
+        self._sway_t0 = pygame.time.get_ticks()
+
+    # 유틸
+    def _player_world(self, world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    @staticmethod
+    def _norm(x, y, eps=1e-6):
+        d = math.hypot(x, y)
+        if d < eps: return (0.0, 0.0)
+        return (x/d, y/d)
+
+    def _keep_midrange(self, px, py):
+        # 항상 플레이어를 바라보고, 중거리 유지
+        dx, dy = px - self.world_x, py - self.world_y
+        self.direction_angle = math.atan2(dy, dx)
+
+        dist = math.hypot(dx, dy)
+        want = max(self.KEEP_MIN, min(self.KEEP_MAX, dist))
+        gx = px - math.cos(self.direction_angle) * want
+        gy = py - math.sin(self.direction_angle) * want
+
+        # 좌우 스웨이로 자연스러운 호흡감
+        t = (pygame.time.get_ticks() - self._sway_t0) / 1000.0
+        perp = self.direction_angle + math.pi / 2.0
+        sway = math.sin(t * 1.6) * (12 * PLAYER_VIEW_SCALE)
+        gx += math.cos(perp) * sway * 0.15
+        gy += math.sin(perp) * sway * 0.15
+
+        self.goal_pos = (gx, gy)
+
+    def _muzzle_world(self):
+        # 총구 위치(월드 좌표)
+        ang = self.direction_angle
+        ox = math.cos(ang) * self.MUZZLE_OFFSET
+        oy = math.sin(ang) * self.MUZZLE_OFFSET
+        # 살짝 위로(총이 몸과 겹치지 않게)
+        side = ang + math.radians(90)
+        ox += math.cos(side) * self.BARREL_LIFT
+        oy += math.sin(side) * self.BARREL_LIFT
+        return (self.world_x + ox, self.world_y + oy)
+
+    def _enter_aim(self, px, py):
+        self.state = "aim"
+        self.state_until = pygame.time.get_ticks() + self.AIM_MS
+
+        # 조준 각/방향 고정
+        self.fixed_aim_angle = math.atan2(py - self.world_y, px - self.world_x)
+        self.direction_angle = self.fixed_aim_angle
+
+        # 실제 폭발 지점 예측(속도·지연시간 기반)
+        mx, my = self._muzzle_world()
+        vx, vy = math.cos(self.fixed_aim_angle), math.sin(self.fixed_aim_angle)
+
+        # 플레이어까지의 직선 거리
+        dist_to_player = math.hypot(px - mx, py - my)
+
+        # 틱당 이동(px) = PROJ_SPEED * PLAYER_VIEW_SCALE
+        step = self.PROJ_SPEED * PLAYER_VIEW_SCALE
+        # 목표 거리 = 플레이어까지 직선거리(충돌로 더 일찍 폭발할 수 있음)
+        target_dist = dist_to_player
+        # 필요한 틱 수
+        ticks_needed = max(1.0, target_dist / max(1e-6, step))
+        # 지연(ms) = 틱 * (1000/60)
+        delay_ms = int(ticks_needed * (1000.0 / self.TICKS_PER_SEC))
+        # 너무 짧으면 총구에서 바로 터지는 것처럼 보이니 하한/상한 설정
+        delay_ms = max(280, min(2000, delay_ms))
+        self.explosion_delay_ms = delay_ms
+
+        # 위 지연/속도로 실제 도달할 지점(프리뷰용)
+        travel = step * (self.explosion_delay_ms / 1000.0) * self.TICKS_PER_SEC
+        self.aim_target_pos = (mx + vx * travel, my + vy * travel)
+
+    def _fire(self):
+        # 유탄 1발 발사 + 사운드 + 무즐 플래시
+        from entities import GrenadeProjectile
+        ang = self.fixed_aim_angle if self.fixed_aim_angle is not None else self.direction_angle
+        mx, my = self._muzzle_world()
+        vx, vy = math.cos(ang), math.sin(ang)
+
+        warhead_img = self.grenade_image or self.gun_image_original
+        if warhead_img is not None:
+            warhead_img = pygame.transform.rotate(warhead_img, -90)
+
+        proj = GrenadeProjectile(
+            x=mx, y=my,
+            vx=vx, vy=vy,
+            speed=self.PROJ_SPEED,
+            image=warhead_img,
+            explosion_radius=self.EXP_RADIUS,
+            max_damage=self.DMG_MAX,
+            min_damage=self.DMG_MIN,
+            explosion_image=self.explosion_image or (self.grenade_image if self.grenade_image else self.image_original),
+            explosion_sound=self.snd_expl or self.sounds.get("gun4_explosion"),
+            explosion_delay=self.explosion_delay_ms,
+            owner=self
+        )
+
+        # 적 발사체 풀에 등록(메인 루프에서 플레이어 충돌/업데이트 관리)
+        config.global_enemy_bullets.append(proj)
+
+        if self.snd_fire:
+            try: self.snd_fire.play()
+            except: pass
+        self._flash_until = pygame.time.get_ticks() + 60  # 짧은 플래시
+
+    def _enter_reload(self):
+        self.state = "reload"
+        self.state_until = pygame.time.get_ticks() + self.RELOAD_MS
+        self.fixed_aim_angle = None
+        self.aim_target_pos = None
+
+    # 메인 AI
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive:
+            return
+        px, py = self._player_world(world_x, world_y, player_rect)
+        now = pygame.time.get_ticks()
+
+        # 포지셔닝
+        self._keep_midrange(px, py)
+
+        # 상태 머신
+        if self.state == "idle":
+            if math.hypot(px - self.world_x, py - self.world_y) <= self.FAR_DISTANCE:
+                self._enter_aim(px, py)
+
+        elif self.state == "aim":
+            # 에임 중엔 제자리 유지 & 각도 고정
+            self.goal_pos = (self.world_x, self.world_y)
+            self.direction_angle = self.fixed_aim_angle
+            if now >= self.state_until:
+                self._fire()
+                self._enter_reload()
+
+        elif self.state == "reload":
+            if now >= self.state_until:
+                self.state = "idle"
+
+    # 드랍
+    def die(self, blood_effects):
+        if self._already_dropped:
+            return
+        super().die(blood_effects)
+        self.spawn_dropped_items(4, 5)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+        self.draw_alert(screen, sx, sy)
+
+        # 조준 프리뷰(폭심지 원 + 총구→폭심지 라인) — 실제 폭발 지점과 일치
+        if self.state == "aim" and self.aim_target_pos is not None:
+            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            tx = int(self.aim_target_pos[0] - world_x + shake_offset_x)
+            ty = int(self.aim_target_pos[1] - world_y + shake_offset_y)
+            r = int(self.EXP_RADIUS)
+            t = (pygame.time.get_ticks() % 700) / 700
+            alpha = int(40 + 30 * math.sin(t * 2 * math.pi))
+            pygame.draw.circle(lay, (self.PREVIEW_COL_FILL[0], self.PREVIEW_COL_FILL[1], self.PREVIEW_COL_FILL[2], alpha), (tx, ty), r)
+            pygame.draw.circle(lay, self.PREVIEW_COL_EDGE, (tx, ty), r, 2)
+            # 총구-목표 라인
+            mx, my = self._muzzle_world()
+            msx, msy = int(mx - world_x + shake_offset_x), int(my - world_y + shake_offset_y)
+            pygame.draw.line(lay, (255, 200, 130, 120), (msx, msy), (tx, ty), 2)
+            screen.blit(lay, (0, 0))
+
+        # 무즐 플래시 (총 먼저)
+        if pygame.time.get_ticks() < self._flash_until:
+            mx, my = self._muzzle_world()
+            msx, msy = int(mx - world_x + shake_offset_x), int(my - world_y + shake_offset_y)
+            flash = pygame.Surface((20, 20), pygame.SRCALPHA)
+            pygame.draw.circle(flash, (255, 240, 180, 200), (10, 10), 10)
+            screen.blit(flash, (msx - 10, msy - 10))
+
+        # 총
+        if self.gun_image_original:
+            t = (pygame.time.get_ticks() % 1000) / 1000.0
+            sway = (math.sin(t * 2 * math.pi) * self.GUN_SWAY) * PLAYER_VIEW_SCALE
+            offset = self.MUZZLE_OFFSET - 10 * PLAYER_VIEW_SCALE + sway
+
+            gx = sx + math.cos(self.direction_angle) * offset
+            gy = sy + math.sin(self.direction_angle) * offset
+            side = self.direction_angle + math.radians(90)
+            gx += math.cos(side) * (self.BARREL_LIFT * 0.6)
+            gy += math.sin(side) * (self.BARREL_LIFT * 0.6)
+
+            rotated_gun = pygame.transform.rotate(
+                self.gun_image_original, -math.degrees(self.direction_angle) - 90
+            )
+            gun_rect = rotated_gun.get_rect(center=(int(gx), int(gy)))
+            screen.blit(rotated_gun, gun_rect)
+
+        # 본체
+        if self.image_original:
+            scaled = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            rotated = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+            rect = rotated.get_rect(center=(int(sx), int(sy)))
+            screen.blit(rotated, rect)
+
+class Enemy43(AIBase):
+    rank = 5
+
+    HP = 420
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
+    RADIUS = int(26 * PLAYER_VIEW_SCALE)
+
+    KEEP_MIN = int(560 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(840 * PLAYER_VIEW_SCALE)
+    FAR_DISTANCE = int(1400 * PLAYER_VIEW_SCALE)
+
+    MARK_COUNT        = 4
+    MARK_INTERVAL_MS  = 300
+    ARM_MS            = 500
+    EXPLO_STAGGER_MS  = 100
+    BLAST_RADIUS      = int(100 * PLAYER_VIEW_SCALE)
+    DAMAGE_PER_HIT    = 25
+    KNOCKBACK_FORCE   = 150
+    COOLDOWN_MS       = 2200
+
+    PREVIEW_FILL   = (255, 80, 80, 70)
+    PREVIEW_EDGE   = (255, 140, 140, 160)
+    PREVIEW_PULSE_MS = 900
+
+    EXPL_LIFE_MS   = 280
+    EXPL_CORE_COL  = (255, 230, 180, 220)
+    EXPL_RING_COL  = (255, 120, 80, 200)
+    EXPL_SMOKE_COL = (120, 120, 120, 140)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED,
+            near_threshold=self.KEEP_MIN, far_threshold=self.FAR_DISTANCE,
+            radius=self.RADIUS, push_strength=0.16, alert_duration=1000,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images.get("enemy43")
+        self.snd_call  = sounds.get("call_bomb")
+        self.snd_expl  = sounds.get("drone_explosion")
+
+        # 상태: idle → designate(4곳 표시) → arm(짧은 딜레이) → strike(폭발) → cooldown
+        self.state = "idle"
+        self.state_until = 0
+
+        self.marks = []
+        self.next_mark_at = 0
+        self.explosion_queue = []
+        self.explosions = []
+
+        self.direction_angle = 0.0
+
+    @staticmethod
+    def _player_world(world_x, world_y, player_rect):
+        return (world_x + player_rect.centerx, world_y + player_rect.centery)
+
+    @staticmethod
+    def _dist(a, b, x, y):
+        return math.hypot(a - x, b - y)
+
+    def _keep_midrange(self, px, py):
+        dx, dy = px - self.world_x, py - self.world_y
+        self.direction_angle = math.atan2(dy, dx)
+
+        dist = math.hypot(dx, dy)
+        want = max(self.KEEP_MIN, min(self.KEEP_MAX, dist))
+        gx = px - math.cos(self.direction_angle) * want
+        gy = py - math.sin(self.direction_angle) * want
+
+        # 단순 보간 이동
+        k = 0.08
+        self.world_x += (gx - self.world_x) * k
+        self.world_y += (gy - self.world_y) * k
+
+    # 상태 전이
+    def _enter_designate(self, px, py):
+        self.state = "designate"
+        now = pygame.time.get_ticks()
+        self.marks.clear()
+        self.explosion_queue.clear()
+        self.next_mark_at = now  # 바로 첫 표식
+        self.state_until = 0
+        try:
+            if self.snd_call: self.snd_call.play()   # 표식 시작 1회 재생
+        except: pass
+
+    def _enter_arm(self):
+        self.state = "arm"
+        self.state_until = pygame.time.get_ticks() + self.ARM_MS
+
+    def _enter_strike(self):
+        self.state = "strike"
+        base = pygame.time.get_ticks()
+        self.explosion_queue = []
+        for i, (mx, my, _) in enumerate(self.marks):
+            self.explosion_queue.append((mx, my, base + i*self.EXPLO_STAGGER_MS))
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.state_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.marks.clear()
+        self.explosion_queue.clear()
+
+    # 메인 로직
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive: return
+
+        px, py = self._player_world(world_x, world_y, player_rect)
+        now = pygame.time.get_ticks()
+
+        # 포지셔닝
+        self._keep_midrange(px, py)
+
+        if self.state == "idle":
+            if self._dist(self.world_x, self.world_y, px, py) <= self.FAR_DISTANCE:
+                self._enter_designate(px, py)
+
+        elif self.state == "designate":
+            # 시간 간격에 맞춰 플레이어 '그때' 위치를 고정 표식으로 4회 저장
+            if now >= self.next_mark_at and len(self.marks) < self.MARK_COUNT:
+                self.marks.append((px, py, now))
+                self.next_mark_at = now + self.MARK_INTERVAL_MS
+                if len(self.marks) >= self.MARK_COUNT:
+                    self._enter_arm()
+
+        elif self.state == "arm":
+            if now >= self.state_until:
+                self._enter_strike()
+
+        elif self.state == "strike":
+            # 예정 시각이 된 폭발 실행
+            for (mx, my, t) in list(self.explosion_queue):
+                if now >= t:
+                    self._do_explosion(mx, my)
+                    self.explosion_queue.remove((mx, my, t))
+            # 모두 폭발했고 이펙트가 끝났으면 쿨다운
+            if not self.explosion_queue:
+                if not self.explosions:
+                    self._enter_cooldown()
+                else:
+                    if all(now - e["t0"] >= self.EXPL_LIFE_MS for e in self.explosions):
+                        self.explosions.clear()
+                        self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            if now >= self.state_until:
+                self.state = "idle"
+
+        # 폭발 이펙트 정리
+        self._update_explosions()
+
+        # 피해 판정용 플레이어 월드좌표 저장(폭발 판정 정확도 ↑)
+        self.last_player_pos = (px, py)
+
+    # 폭발 처리(피해/넉백/사운드/이펙트 등록)
+    def _do_explosion(self, x, y):
+        if hasattr(self, "last_player_pos"):
+            px, py = self.last_player_pos
+            if self._dist(px, py, x, y) <= self.BLAST_RADIUS:
+                try:
+                    if self.damage_player: self.damage_player(self.DAMAGE_PER_HIT)
+                    else: config.damage_player(self.DAMAGE_PER_HIT)
+                except Exception:
+                    pass
+                # 넉백 적용
+                try:
+                    self._add_knockback(px, py, x, y, self.KNOCKBACK_FORCE)
+                except Exception:
+                    pass
+        try:
+            if self.snd_expl: self.snd_expl.play()
+        except: pass
+        self.explosions.append({"pos": (x, y), "t0": pygame.time.get_ticks()})
+
+    def _update_explosions(self):
+        now = pygame.time.get_ticks()
+        self.explosions = [e for e in self.explosions if now - e["t0"] < self.EXPL_LIFE_MS]
+
+    def die(self, particles):
+        if not self.alive: return
+        super().die(particles)
+        self.spawn_dropped_items(5, 6)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+        self.draw_alert(screen, sx, sy)
+
+        now = pygame.time.get_ticks()
+
+        # 고정된 낙하지점(프리뷰)
+        if self.state in ("designate", "arm"):
+            pulse = (now % self.PREVIEW_PULSE_MS) / self.PREVIEW_PULSE_MS
+            alpha = int(50 + 40 * math.sin(pulse * 2 * math.pi))
+            fill = (self.PREVIEW_FILL[0], self.PREVIEW_FILL[1], self.PREVIEW_FILL[2], alpha)
+            for (mx, my, _) in self.marks:
+                tx = int(mx - world_x + shake_offset_x)
+                ty = int(my - world_y + shake_offset_y)
+                lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+                pygame.draw.circle(lay, fill, (tx, ty), self.BLAST_RADIUS)
+                pygame.draw.circle(lay, self.PREVIEW_EDGE, (tx, ty), self.BLAST_RADIUS, 2)
+                screen.blit(lay, (0, 0))
+
+        # 폭발 이펙트
+        for e in self.explosions:
+            ex, ey = e["pos"]
+            t  = (now - e["t0"]) / self.EXPL_LIFE_MS
+            if t < 0 or t > 1: continue
+
+            # 코어
+            core_r = int(self.BLAST_RADIUS * (0.25 + 0.4 * (1.0 - t)))
+            core_a = int(self.EXPL_CORE_COL[3] * (1.0 - t))
+            if core_a > 0 and core_r > 2:
+                core = pygame.Surface((core_r*2+2, core_r*2+2), pygame.SRCALPHA)
+                pygame.draw.circle(core, (self.EXPL_CORE_COL[0], self.EXPL_CORE_COL[1], self.EXPL_CORE_COL[2], core_a), (core_r, core_r), core_r)
+                screen.blit(core, core.get_rect(center=(int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y))))
+
+            # 링
+            ring_r = int(self.BLAST_RADIUS * (0.7 + 0.5 * t))
+            ring_a = int(self.EXPL_RING_COL[3] * (1.0 - t))
+            if ring_a > 0 and ring_r > 3:
+                ring = pygame.Surface((ring_r*2+2, ring_r*2+2), pygame.SRCALPHA)
+                pygame.draw.circle(ring, (self.EXPL_RING_COL[0], self.EXPL_RING_COL[1], self.EXPL_RING_COL[2], ring_a), (ring_r, ring_r), 3)
+                screen.blit(ring, ring.get_rect(center=(int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y))))
+
+            # 연기
+            smoke_r = int(self.BLAST_RADIUS * (0.6 + 0.8 * t))
+            smoke_a = int(self.EXPL_SMOKE_COL[3] * (1.0 - t))
+            if smoke_a > 0 and smoke_r > 3:
+                smoke = pygame.Surface((smoke_r*2+2, smoke_r*2+2), pygame.SRCALPHA)
+                pygame.draw.circle(smoke, (self.EXPL_SMOKE_COL[0], self.EXPL_SMOKE_COL[1], self.EXPL_SMOKE_COL[2], smoke_a), (smoke_r, smoke_r), smoke_r)
+                screen.blit(smoke, smoke.get_rect(center=(int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y))))
+
+        # 본체
+        if self.image_original:
+            scaled = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            rotated = pygame.transform.rotate(scaled, -math.degrees(self.direction_angle) + 90)
+            rect = rotated.get_rect(center=(int(sx), int(sy)))
+            screen.blit(rotated, rect)
+
+class Enemy44(AIBase):
+    rank = 8
+
+    HP = 600
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.95
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    PRESSURE_DIST = int(420 * PLAYER_VIEW_SCALE)
+    TRIGGER_DIST  = int(700 * PLAYER_VIEW_SCALE)
+
+    TELEGRAPH_MS    = 400
+    DASH_MS         = 240
+    COOLDOWN_MS     = 1200
+
+    DASH_RANGE        = int(480 * PLAYER_VIEW_SCALE)
+    TELEGRAPH_LANE_W  = int(64  * PLAYER_VIEW_SCALE)
+    PLAYER_HIT_R      = int(24  * PLAYER_VIEW_SCALE)
+    DASH_DAMAGE       = 35
+    DASH_KNOCK        = 250
+
+    WAVE_RANGE    = int(2200 * PLAYER_VIEW_SCALE)
+    WAVE_SPEED    = int(6    * PLAYER_VIEW_SCALE)
+    WAVE_THICK    = int(40   * PLAYER_VIEW_SCALE)
+    WAVE_DAMAGE   = 10
+    WAVE_KNOCK    = 100
+
+    TEL_RECT_FILL = (255, 70, 70, 90)
+    TEL_RECT_EDGE = (255, 120, 120, 170)
+    TRAIL_FADE_MS = 180
+    CRES_GLOW_COL = (160, 150, 255, 85)
+    CRES_CORE_COL = (255, 250, 255, 220)
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
+            radius=self.RADIUS, push_strength=0.12, alert_duration=800,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images.get("enemy44", images.get("enemy20"))
+        self.snd_whirl = sounds.get("whirl")
+        self.snd_slam  = sounds.get("reaver_slam")
+
+        self.state = "weave"        # 'weave' | 'telegraph' | 'dash' | 'recover'
+        self.state_until = 0
+        self.locked_angle = 0.0
+
+        self._dash_t0 = 0
+        self._dash_start = (self.world_x, self.world_y)
+        self._tele_anchor = (self.world_x, self.world_y)
+        self._dash_trails = []
+
+        self._waves = []
+
+        self.facing_angle = 0.0
+        self._weave_t = random.random() * 1000.0
+
+    # 유틸
+    @staticmethod
+    def _norm(dx, dy):
+        d = math.hypot(dx, dy) or 1.0
+        return (dx/d, dy/d)
+
+    @staticmethod
+    def _pt_seg_dist(px, py, x1, y1, x2, y2):
+        # 점-선분 거리
+        vx, vy = x2-x1, y2-y1
+        wx, wy = px-x1, py-y1
+        vv = vx*vx + vy*vy or 1.0
+        t = max(0.0, min(1.0, (wx*vx + wy*vy) / vv))
+        cx, cy = x1 + vx*t, y1 + vy*t
+        return math.hypot(px-cx, py-cy)
+
+    # 넉백 보조: 각도로 강제 방향 적용
+    def _knockback_by_angle(self, px, py, angle_rad, strength):
+        # 행동 각(angle_rad) 기준으로 항상 유효한 넉백 방향을 적용
+        nx, ny = math.cos(angle_rad), math.sin(angle_rad)
+        # 플레이어 바로 근처에 가상 소스점(반대쪽 8px) 생성 → 항상 (nx,ny)≠(0,0)
+        src_x = px - nx * 8.0
+        src_y = py - ny * 8.0
+        try:
+            self._add_knockback(px, py, src_x, src_y, strength)
+        except Exception:
+            # 혹시라도 _add_knockback이 실패하면 직접 임펄스 누적(백업)
+            if not hasattr(config, "knockback_impulse_x"): config.knockback_impulse_x = 0.0
+            if not hasattr(config, "knockback_impulse_y"): config.knockback_impulse_y = 0.0
+            config.knockback_impulse_x = max(-30.0, min(30.0, config.knockback_impulse_x + nx*strength))
+            config.knockback_impulse_y = max(-30.0, min(30.0, config.knockback_impulse_y + ny*strength))
+
+    # 상태 전이
+    def _enter_telegraph(self, aim_angle):
+        self.state = "telegraph"
+        self.state_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        self.locked_angle = aim_angle
+        self._tele_anchor = (self.world_x, self.world_y)
+
+    def _enter_dash(self):
+        self.state = "dash"
+        self._dash_t0 = pygame.time.get_ticks()
+        self._dash_start = (self.world_x, self.world_y)
+        try:
+            if self.snd_whirl: self.snd_whirl.play()
+        except: pass
+
+    def _fire_wave(self, x, y, ang, immediate_hit_pos=None, already_hit=False):
+        # U자형 검격 생성 + (선택) 발사 즉시 판정
+        w = {'x': x, 'y': y, 'ang': ang, 'gone': 0, 'hit': already_hit}
+        self._waves.append(w)
+        try:
+            if self.snd_slam: self.snd_slam.play()
+        except: pass
+
+        if (immediate_hit_pos is not None) and (not w['hit']):
+            px, py = immediate_hit_pos
+            # 근접 발사점에서의 원형 판정(빠른 즉시체크)
+            if math.hypot(px - x, py - y) <= self.WAVE_THICK * 0.9:
+                # 넉백은 파동 각도로 강제
+                self._knockback_by_angle(px, py, ang, self.WAVE_KNOCK)
+                try:
+                    (self.damage_player or config.damage_player)(int(self.WAVE_DAMAGE))
+                except Exception:
+                    pass
+                w['hit'] = True
+
+    def _enter_recover(self):
+        self.state = "recover"
+        self.state_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+
+    # 업데이트
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive: return
+
+        # 플레이어 좌표
+        px, py = world_x + player_rect.centerx, world_y + player_rect.centery
+        now = pygame.time.get_ticks()
+
+        # 검격 진행/충돌
+        self._update_waves(px, py)
+
+        # 조준 각(항상 갱신)
+        dx, dy = px - self.world_x, py - self.world_y
+        self.facing_angle = math.atan2(dy, dx)
+
+        if self.state == "weave":
+            # 접근
+            target = self.PRESSURE_DIST
+            dist = math.hypot(dx, dy)
+            nx, ny = self._norm(dx, dy)
+            pxn, pyn = -ny, nx
+            wiggle = math.sin(now * 0.006 + self._weave_t * 0.0023)
+            stride = int(120 * PLAYER_VIEW_SCALE) * wiggle
+            gx = px - nx*target + pxn*stride
+            gy = py - ny*target + pyn*stride
+            k = 0.08
+            self.world_x += (gx - self.world_x) * k
+            self.world_y += (gy - self.world_y) * k
+            if dist <= self.TRIGGER_DIST and now >= self.state_until:
+                self._enter_telegraph(self.facing_angle)
+
+        elif self.state == "telegraph":
+            # 제자리 고정
+            self.world_x, self.world_y = self._tele_anchor
+            self.locked_angle = self.facing_angle  # 예고 동안 방향만 추적
+            if now >= self.state_until:
+                self._enter_dash()
+
+        elif self.state == "dash":
+            # 시작점→고정거리 보간(거리 480px)
+            t = (now - self._dash_t0) / self.DASH_MS
+            if t >= 1.0: t = 1.0
+            nx, ny = math.cos(self.locked_angle), math.sin(self.locked_angle)
+
+            prev_x, prev_y = self.world_x, self.world_y
+            tx = self._dash_start[0] + nx * self.DASH_RANGE * t
+            ty = self._dash_start[1] + ny * self.DASH_RANGE * t
+            self.world_x, self.world_y = tx, ty
+
+            # 잔상
+            self._dash_trails.append((self.world_x, self.world_y, now))
+            self._dash_trails = [(x,y,t0) for (x,y,t0) in self._dash_trails if now - t0 <= self.TRAIL_FADE_MS]
+
+            # ★ 대시 접촉: 확정 데미지+넉백(대시 각도로) → 검격 생성(중복 방지) → 회복상태
+            if Enemy44._pt_seg_dist(px, py, prev_x, prev_y, tx, ty) <= (self.RADIUS + self.PLAYER_HIT_R):
+                # 넉백: 대시 진행 각도로 강제
+                self._knockback_by_angle(px, py, self.locked_angle, self.DASH_KNOCK)
+                # 데미지
+                try:
+                    (self.damage_player or config.damage_player)(int(self.DASH_DAMAGE))
+                except Exception:
+                    pass
+                # 검격 생성(이미 맞았으므로 already_hit=True)
+                self._fire_wave(self.world_x, self.world_y, self.locked_angle,
+                                immediate_hit_pos=None, already_hit=True)
+                self._enter_recover()
+                return
+
+            # 끝점 도달 시에도 검격 → 빈틈
+            if t >= 1.0:
+                self._fire_wave(self.world_x, self.world_y, self.locked_angle,
+                                immediate_hit_pos=(px, py), already_hit=False)
+                self._enter_recover()
+
+        elif self.state == "recover":
+            nx, ny = self._norm(dx, dy)
+            pxn, pyn = -ny, nx
+            stride = int(80 * PLAYER_VIEW_SCALE) * math.sin(now * 0.008)
+            gx = px - nx*self.PRESSURE_DIST + pxn*stride
+            gy = py - ny*self.PRESSURE_DIST + pyn*stride
+            k = 0.05
+            self.world_x += (gx - self.world_x) * k
+            self.world_y += (gy - self.world_y) * k
+            if now >= self.state_until:
+                self.state = "weave"
+                self.state_until = now + random.randint(200, 450)
+
+        self.draw_alert_requested = True
+
+    def _update_waves(self, px, py):
+        # 느리고 긴 U자(초승달) 검격 이동/충돌/삭제
+        for w in list(self._waves):
+            if w['gone'] >= self.WAVE_RANGE:
+                self._waves.remove(w)
+                continue
+
+            # 이전 위치
+            x1, y1 = w['x'], w['y']
+
+            # 이동
+            nx, ny = math.cos(w['ang']), math.sin(w['ang'])
+            step = self.WAVE_SPEED
+            w['x'] += nx * step
+            w['y'] += ny * step
+            w['gone'] += step
+
+            x2, y2 = w['x'], w['y']
+
+            # 선분-점 거리로 판정(프레임당 1회)
+            if not w['hit']:
+                d = Enemy44._pt_seg_dist(px, py, x1, y1, x2, y2)
+                if d <= self.WAVE_THICK * 0.80:
+                    # 넉백: 검격 진행 각도로 강제
+                    self._knockback_by_angle(px, py, w['ang'], self.WAVE_KNOCK)
+                    # 데미지
+                    try:
+                        (self.damage_player or config.damage_player)(int(self.WAVE_DAMAGE))
+                    except Exception:
+                        pass
+                    w['hit'] = True
+
+    def die(self, blood_effects):
+        if not self.alive: return
+        super().die(blood_effects)
+        self.spawn_dropped_items(7, 7)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+        now = pygame.time.get_ticks()
+
+        # 경고 아이콘
+        self.draw_alert(screen, sx, sy)
+
+        # 텔레그래프: 적 '중앙'에서 진행 방향으로 뻗는 빨간 직사각형(월드 폴리곤)
+        if self.state == "telegraph":
+            self._draw_telegraph_rect(screen, world_x, world_y)
+
+        # 돌진 잔상
+        if self.state == "dash" or self._dash_trails:
+            body = self._render_body()
+            for (tx, ty, t0) in self._dash_trails:
+                alpha = max(0, 180 - int(180 * (now - t0) / self.TRAIL_FADE_MS))
+                if alpha <= 0: continue
+                ghost = body.copy(); ghost.set_alpha(alpha)
+                screen.blit(ghost, ghost.get_rect(center=(int(tx - world_x + shake_offset_x),
+                                                          int(ty - world_y + shake_offset_y))))
+
+        # U자형(초승달) 검격 이펙트
+        for w in self._waves:
+            self._draw_crescent_long(screen, w['x'] - world_x + shake_offset_x,
+                                             w['y'] - world_y + shake_offset_y, w['ang'])
+
+        # 본체
+        body = self._render_body()
+        screen.blit(body, body.get_rect(center=(int(sx), int(sy))))
+
+    def _draw_telegraph_rect(self, screen, world_x, world_y):
+        # 돌진 경로를 월드좌표 폴리곤으로 정확 표시(시작은 '적 중심')
+        cx, cy = self._tele_anchor  # 텔레그래프 동안은 anchor가 곧 적 위치
+        nx, ny = math.cos(self.locked_angle), math.sin(self.locked_angle)
+        px, py = -ny, nx  # 수직 벡터
+
+        L = self.DASH_RANGE
+        W = self.TELEGRAPH_LANE_W / 2
+
+        sL = (cx + px*W, cy + py*W)
+        sR = (cx - px*W, cy - py*W)
+        eL = (cx + nx*L + px*W, cy + ny*L + py*W)
+        eR = (cx + nx*L - px*W, cy + ny*L - py*W)
+
+        pts = [
+            (int(sL[0] - world_x), int(sL[1] - world_y)),
+            (int(sR[0] - world_x), int(sR[1] - world_y)),
+            (int(eR[0] - world_x), int(eR[1] - world_y)),
+            (int(eL[0] - world_x), int(eL[1] - world_y)),
+        ]
+
+        lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        pygame.draw.polygon(lay, self.TEL_RECT_FILL, pts)
+        pygame.draw.polygon(lay, self.TEL_RECT_EDGE, pts, width=3)
+        screen.blit(lay, (0, 0))
+
+    def _draw_crescent_long(self, screen, x, y, ang):
+        # 길고 느린 U자(초승달) 아크 이펙트
+        # 가로 길게 보이도록 타원 아크
+        w = max(self.WAVE_THICK * 8, 200)
+        h = max(self.WAVE_THICK * 4, 110)
+        surf = pygame.Surface((w, h), pygame.SRCALPHA)
+
+        rect = pygame.Rect(0, 0, w, h)
+        start, end = -0.95, 0.95  # 넓은 U 범위
+
+        # 글로우
+        glow_w = max(6, int(self.WAVE_THICK * 0.7))
+        pygame.draw.arc(surf, self.CRES_GLOW_COL, rect, start, end, glow_w)
+
+        # 코어(내부 얇은 아크)
+        inner = rect.inflate(-int(self.WAVE_THICK * 0.7), -int(self.WAVE_THICK * 0.7))
+        core_w = max(4, int(self.WAVE_THICK * 0.5))
+        pygame.draw.arc(surf, self.CRES_CORE_COL, inner, start, end, core_w)
+
+        # 회전/렌더
+        surf = pygame.transform.rotate(surf, -math.degrees(ang))
+        screen.blit(surf, surf.get_rect(center=(int(x), int(y))))
+
+    def _render_body(self):
+        img = self.image_original
+        if img is None:
+            return pygame.Surface((1,1), pygame.SRCALPHA)
+        scaled = pygame.transform.smoothscale(
+            img,
+            (int(img.get_width() * PLAYER_VIEW_SCALE),
+             int(img.get_height() * PLAYER_VIEW_SCALE))
+        )
+        return pygame.transform.rotate(scaled, -math.degrees(self.facing_angle) + 90)
+
+class Enemy45(AIBase):
+    rank = 9
+
+    HP = 700
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.92
+    RADIUS = int(30 * PLAYER_VIEW_SCALE)
+
+    KEEP_DIST = int(560 * PLAYER_VIEW_SCALE)
+    TRIGGER_DIST = int(1400 * PLAYER_VIEW_SCALE)
+
+    SUMMON_MS     = 500
+    TELEGRAPH_MS  = 1000
+    BEAM_MS       = 1500
+    COOLDOWN_MS   = 1800
+
+    PORTAL_CNT       = 4
+    PORTAL_MARGIN    = int(160 * PLAYER_VIEW_SCALE)
+    PORTAL_MIN_D_BET = int(280 * PLAYER_VIEW_SCALE)
+    PORTAL_MIN_D_PLY = int(220 * PLAYER_VIEW_SCALE)
+
+    BEAM_PREVIEW_W   = 5
+    BEAM_WIDTH       = int(18 * PLAYER_VIEW_SCALE)
+    BEAM_GLOW_W      = int(30 * PLAYER_VIEW_SCALE)
+
+    BEAM_TICK_MS     = 120
+    BEAM_TICK_DMG    = 7
+
+    PORTAL_CORE_COL  = (190, 120, 255, 220)
+    PORTAL_RING_COL  = (255, 220, 255, 130)
+    PORTAL_SMOKE_COL = (120, 80, 160, 90)
+
+    PTC_OPEN_CNT   = 16
+    PTC_CLOSE_CNT  = 18
+    PTC_SPEED_MIN  = 1.2
+    PTC_SPEED_MAX  = 3.2
+    PTC_LIFE_MS    = 600
+
+    def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
+                 damage_player_fn=None, kill_callback=None, rank=rank):
+        super().__init__(
+            world_x, world_y, images, sounds, map_width, map_height,
+            speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
+            radius=self.RADIUS, push_strength=0.12, alert_duration=900,
+            damage_player_fn=damage_player_fn, rank=rank
+        )
+        self.hp = self.HP
+        self.max_hp = self.HP
+        self.kill_callback = kill_callback
+
+        self.image_original = images.get("enemy45", images.get("enemy24"))
+        self.snd_spawn  = sounds.get("spawn_charge")
+        self.snd_charge = sounds.get("shock_charged")
+        self.snd_burst  = sounds.get("shock_burst")
+
+        # 상태: idle → summon → telegraph → beam → despawn → cooldown
+        self.state = "idle"
+        self.state_until = 0
+
+        self.facing_angle = 0.0
+        self._weave_t = random.random() * 1000.0
+
+        self.portals = []
+        self.beams = []
+        self._beam_next_tick = 0
+
+        self._particles = []
+
+    # 유틸
+    @staticmethod
+    def _pt_seg_dist(px, py, x1, y1, x2, y2):
+        vx, vy = x2 - x1, y2 - y1
+        wx, wy = px - x1, py - y1
+        vv = vx*vx + vy*vy or 1.0
+        t = max(0.0, min(1.0, (wx*vx + wy*vy) / vv))
+        cx, cy = x1 + vx*t, y1 + vy*t
+        return math.hypot(px - cx, py - cy)
+
+    def _rand_portal_pos(self, px, py):
+        # 맵 안쪽 무작위 + 플레이어/다른 포탈과 최소 거리 보장
+        for _ in range(200):
+            x = random.randint(self.PORTAL_MARGIN, self.map_width  - self.PORTAL_MARGIN)
+            y = random.randint(self.PORTAL_MARGIN, self.map_height - self.PORTAL_MARGIN)
+            if math.hypot(x - px, y - py) < self.PORTAL_MIN_D_PLY:
+                continue
+            ok = True
+            for p in self.portals:
+                if math.hypot(x - p['x'], y - p['y']) < self.PORTAL_MIN_D_BET:
+                    ok = False; break
+            if ok:
+                return x, y
+        # 실패 시 마지막 후보라도 반환
+        return x, y
+
+    def _spawn_particles(self, x, y, count):
+        now = pygame.time.get_ticks()
+        for _ in range(count):
+            ang = random.random() * math.tau
+            spd = random.uniform(self.PTC_SPEED_MIN, self.PTC_SPEED_MAX) * PLAYER_VIEW_SCALE
+            vx, vy = math.cos(ang)*spd, math.sin(ang)*spd
+            col = (200+random.randint(-20,20), 150+random.randint(-20,20), 255, 255)
+            self._particles.append({'x':x, 'y':y, 'vx':vx, 'vy':vy, 't0':now, 'life':self.PTC_LIFE_MS, 'col':col})
+
+    def _update_particles(self):
+        now = pygame.time.get_ticks()
+        nxt = []
+        for p in self._particles:
+            t = now - p['t0']
+            if t > p['life']: continue
+            p['x'] += p['vx']
+            p['y'] += p['vy']
+            # 감쇠
+            p['vx'] *= 0.98
+            p['vy'] *= 0.98
+            nxt.append(p)
+        self._particles = nxt
+
+    # 상태 전이
+    def _enter_summon(self, px, py):
+        self.state = "summon"
+        self.state_until = pygame.time.get_ticks() + self.SUMMON_MS
+        self.portals = []
+        # 위치 선정
+        for _ in range(self.PORTAL_CNT):
+            x, y = self._rand_portal_pos(px, py)
+            self.portals.append({'x':x, 'y':y, 't0':pygame.time.get_ticks()})
+            self._spawn_particles(x, y, self.PTC_OPEN_CNT)
+        # 사운드
+        try:
+            if self.snd_spawn: self.snd_spawn.play()
+        except: pass
+
+    def _enter_telegraph(self):
+        self.state = "telegraph"
+        self.state_until = pygame.time.get_ticks() + self.TELEGRAPH_MS
+        # 모든 포탈 쌍 준비
+        self.beams = [(0,1),(0,2),(0,3),(1,2),(1,3),(2,3)]
+        self._beam_next_tick = 0
+        try:
+            if self.snd_charge: self.snd_charge.play()
+        except: pass
+
+    def _enter_beam(self):
+        self.state = "beam"
+        self.state_until = pygame.time.get_ticks() + self.BEAM_MS
+        self._beam_next_tick = 0
+        try:
+            if self.snd_burst: self.snd_burst.play()
+        except: pass
+
+    def _enter_despawn(self):
+        self.state = "despawn"
+        self.state_until = pygame.time.get_ticks() + 200
+        # 소멸 파티클
+        for p in self.portals:
+            self._spawn_particles(p['x'], p['y'], self.PTC_CLOSE_CNT)
+
+    def _enter_cooldown(self):
+        self.state = "cooldown"
+        self.state_until = pygame.time.get_ticks() + self.COOLDOWN_MS
+        self.portals.clear()
+        self.beams.clear()
+
+    # 메인 업데이트
+    def update_goal(self, world_x, world_y, player_rect, enemies):
+        if not self.alive: return
+
+        now = pygame.time.get_ticks()
+        px, py = world_x + player_rect.centerx, world_y + player_rect.centery
+
+        # 무빙(항상 수행)
+        self._weave_move(px, py)
+
+        # 상태 머신
+        if self.state == "idle":
+            # 플레이어가 충분히 가까우면 패턴 시작
+            if math.hypot(self.world_x - px, self.world_y - py) <= self.TRIGGER_DIST:
+                self._enter_summon(px, py)
+
+        elif self.state == "summon":
+            if now >= self.state_until:
+                self._enter_telegraph()
+
+        elif self.state == "telegraph":
+            if now >= self.state_until:
+                self._enter_beam()
+
+        elif self.state == "beam":
+            # 빔 판정(틱 데미지)
+            self._apply_beam_damage(px, py)
+            if now >= self.state_until:
+                self._enter_despawn()
+
+        elif self.state == "despawn":
+            if now >= self.state_until:
+                self._enter_cooldown()
+
+        elif self.state == "cooldown":
+            if now >= self.state_until:
+                self.state = "idle"
+
+        # 파티클 갱신
+        self._update_particles()
+
+        # 시선
+        dx, dy = px - self.world_x, py - self.world_y
+        self.facing_angle = math.atan2(dy, dx)
+
+        # 경고 아이콘 켜두기
+        self.draw_alert_requested = True
+
+    # 보조 로직
+    def _weave_move(self, px, py):
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
+        nx, ny = (dx/(dist or 1.0), dy/(dist or 1.0))
+        # 목표 지점: 플레이어에서 KEEP_DIST 떨어진 곳 + 좌우 흔들림
+        self._weave_t += 0.016 * 1000.0
+        wiggle = math.sin(pygame.time.get_ticks() * 0.006 + self._weave_t * 0.0023)
+        pxn, pyn = -ny, nx
+        stride = int(140 * PLAYER_VIEW_SCALE) * wiggle
+        gx = px - nx*self.KEEP_DIST + pxn*stride
+        gy = py - ny*self.KEEP_DIST + pyn*stride
+        k = 0.08
+        self.world_x += (gx - self.world_x) * k
+        self.world_y += (gy - self.world_y) * k
+
+    def _apply_beam_damage(self, px, py):
+        now = pygame.time.get_ticks()
+        if now < self._beam_next_tick:
+            return
+        # 어느 한 빔이라도 닿으면 1틱 피해 적용
+        hit = False
+        for (i, j) in self.beams:
+            a = self.portals[i]; b = self.portals[j]
+            d = self._pt_seg_dist(px, py, a['x'], a['y'], b['x'], b['y'])
+            if d <= self.BEAM_WIDTH:
+                hit = True; break
+        if hit:
+            try:
+                (self.damage_player or config.damage_player)(int(self.BEAM_TICK_DMG))
+            except Exception:
+                pass
+            self._beam_next_tick = now + self.BEAM_TICK_MS
+
+    def die(self, blood_effects):
+        if not self.alive: return
+        super().die(blood_effects)
+        self.spawn_dropped_items(8, 8)
+
+    # 렌더링
+    def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive: return
+
+        sx = self.world_x - world_x + shake_offset_x
+        sy = self.world_y - world_y + shake_offset_y
+
+        # 경고 표시
+        self.draw_alert(screen, sx, sy)
+
+        # 포탈/빔 비주얼
+        if self.state in ("summon", "telegraph", "beam", "despawn"):
+            self._draw_portals(screen, world_x, world_y)
+        if self.state == "telegraph":
+            self._draw_beam_preview(screen, world_x, world_y)
+        if self.state == "beam":
+            self._draw_beams(screen, world_x, world_y)
+
+        # 파티클
+        self._draw_particles(screen, world_x, world_y)
+
+        # 본체
+        body = self._render_body()
+        screen.blit(body, body.get_rect(center=(int(sx), int(sy))))
+
+    def _draw_portals(self, screen, world_x, world_y):
+        now = pygame.time.get_ticks()
+        for p in self.portals:
+            x = int(p['x'] - world_x)
+            y = int(p['y'] - world_y)
+            phase = (now - p['t0']) * 0.01
+            r_base = int(26 * PLAYER_VIEW_SCALE)
+            r1 = int(r_base + 6 * math.sin(phase))
+            r2 = int(r_base * 1.6 + 8 * math.sin(phase * 0.8 + 1.2))
+            # 코어
+            core = pygame.Surface((r1*2+2, r1*2+2), pygame.SRCALPHA)
+            pygame.draw.circle(core, self.PORTAL_CORE_COL, (r1, r1), r1)
+            screen.blit(core, core.get_rect(center=(x, y)))
+            # 링
+            ring = pygame.Surface((r2*2+2, r2*2+2), pygame.SRCALPHA)
+            pygame.draw.circle(ring, self.PORTAL_RING_COL, (r2, r2), r2, width=4)
+            screen.blit(ring, ring.get_rect(center=(x, y)))
+            # 스모크
+            smoke_r = int(r_base*2.0)
+            smoke = pygame.Surface((smoke_r*2+2, smoke_r*2+2), pygame.SRCALPHA)
+            smoke_a = max(0, 90 - int((math.sin(phase*0.7)+1)*25))
+            pygame.draw.circle(smoke, (self.PORTAL_SMOKE_COL[0], self.PORTAL_SMOKE_COL[1], self.PORTAL_SMOKE_COL[2], smoke_a),
+                               (smoke_r, smoke_r), smoke_r, width=smoke_r)
+            screen.blit(smoke, smoke.get_rect(center=(x, y)))
+
+    def _draw_beam_preview(self, screen, world_x, world_y):
+        lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        for (i, j) in self.beams:
+            a = self.portals[i]; b = self.portals[j]
+            ax, ay = int(a['x'] - world_x), int(a['y'] - world_y)
+            bx, by = int(b['x'] - world_x), int(b['y'] - world_y)
+            pygame.draw.line(lay, (180, 200, 255, 130), (ax, ay), (bx, by), self.BEAM_PREVIEW_W)
+        screen.blit(lay, (0, 0))
+
+    def _draw_beams(self, screen, world_x, world_y):
+        # 글로우 레이어
+        glow = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        # 코어 레이어
+        core = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        for (i, j) in self.beams:
+            a = self.portals[i]; b = self.portals[j]
+            ax, ay = int(a['x'] - world_x), int(a['y'] - world_y)
+            bx, by = int(b['x'] - world_x), int(b['y'] - world_y)
+            pygame.draw.line(glow, (190, 180, 255, 110), (ax, ay), (bx, by), self.BEAM_GLOW_W)
+            pygame.draw.line(core, (255, 250, 255, 230), (ax, ay), (bx, by), max(3, self.BEAM_WIDTH//2))
+        screen.blit(glow, (0, 0))
+        screen.blit(core, (0, 0))
+
+    def _draw_particles(self, screen, world_x, world_y):
+        now = pygame.time.get_ticks()
+        for p in self._particles:
+            t = now - p['t0']
+            life = max(1, p['life'])
+            a = max(0, 255 - int(255 * (t / life)))
+            r = 2 + int(2 * (1 - t / life))
+            col = (p['col'][0], p['col'][1], p['col'][2], a)
+            dot = pygame.Surface((r*2+2, r*2+2), pygame.SRCALPHA)
+            pygame.draw.circle(dot, col, (r, r), r)
+            screen.blit(dot, dot.get_rect(center=(int(p['x'] - world_x), int(p['y'] - world_y))))
+
+    def _render_body(self):
+        img = self.image_original
+        if img is None:
+            return pygame.Surface((1,1), pygame.SRCALPHA)
+        scaled = pygame.transform.smoothscale(
+            img,
+            (int(img.get_width() * PLAYER_VIEW_SCALE),
+             int(img.get_height() * PLAYER_VIEW_SCALE))
+        )
+        return pygame.transform.rotate(scaled, -math.degrees(self.facing_angle) + 90)
+
 class Boss1(AIBase):
     rank=10
 
@@ -7349,16 +13453,16 @@ class Boss2(AIBase):
     ORB_DROP_ON_HALF_HP_RATIO = 0.5
     GUN1_DAMAGE = 70
     GUN1_RADIUS = 110
-    GUN1_COOLDOWN = 2000
+    GUN1_COOLDOWN = 1500
     GUN2_DAMAGE = 10
-    GUN2_COOLDOWN = 2000
-    DRONE_SPEED = 4 * PLAYER_VIEW_SCALE
+    GUN2_COOLDOWN = 1500
+    DRONE_SPEED = 7 * PLAYER_VIEW_SCALE
     DRONE_DAMAGE = 150
     DRONE_RADIUS = int(70 * 1.2)
     DRONE_KNOCKBACK = 150
     DRONE_WARNING_TIME = 500
-    DRONE_RESPAWN_TIME = 5000
-    DRONE_RESPAWN_TIME_LOW_HP = 3000
+    DRONE_RESPAWN_TIME = 3500
+    DRONE_RESPAWN_TIME_LOW_HP = 2500
     INITIAL_DRONES = 2
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
@@ -8712,7 +14816,7 @@ class Boss5(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.10, alert_duration=0,
+            radius=self.RADIUS, push_strength=0.18, alert_duration=0,
             damage_player_fn=damage_player_fn, rank=rank
         )
         self.image_original = images["boss5"]
@@ -9255,7 +15359,7 @@ class Boss6(AIBase):
         import pygame
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
-                         radius=self.RADIUS, push_strength=0.10, alert_duration=0,
+                         radius=self.RADIUS, push_strength=0.18, alert_duration=0,
                          damage_player_fn=damage_player_fn, rank=rank)
 
         self.image_original = images["boss6"]

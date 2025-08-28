@@ -433,6 +433,60 @@ def load_images():
     enemy27_img = pygame.image.load(path_image("Image", "character", "Enemy27.png")).convert_alpha()
     enemy27_img = pygame.transform.smoothscale(enemy27_img, (90, 90))
 
+    enemy28_img = pygame.image.load(path_image("Image", "character", "Enemy28.png")).convert_alpha()
+    enemy28_img = pygame.transform.smoothscale(enemy28_img, (90, 90))
+
+    enemy29_img = pygame.image.load(path_image("Image", "character", "Enemy29.png")).convert_alpha()
+    enemy29_img = pygame.transform.smoothscale(enemy29_img, (90, 90))
+
+    enemy30_img = pygame.image.load(path_image("Image", "character", "Enemy30.png")).convert_alpha()
+    enemy30_img = pygame.transform.smoothscale(enemy30_img, (90, 90))
+
+    enemy31_img = pygame.image.load(path_image("Image", "character", "Enemy31.png")).convert_alpha()
+    enemy31_img = pygame.transform.smoothscale(enemy31_img, (90, 90))
+
+    enemy32_img = pygame.image.load(path_image("Image", "character", "Enemy32.png")).convert_alpha()
+    enemy32_img = pygame.transform.smoothscale(enemy32_img, (90, 90))
+
+    enemy33_img = pygame.image.load(path_image("Image", "character", "Enemy33.png")).convert_alpha()
+    enemy33_img = pygame.transform.smoothscale(enemy33_img, (90, 90))
+
+    enemy34_img = pygame.image.load(path_image("Image", "character", "Enemy34.png")).convert_alpha()
+    enemy34_img = pygame.transform.smoothscale(enemy34_img, (90, 90))
+
+    enemy35_img = pygame.image.load(path_image("Image", "character", "Enemy35.png")).convert_alpha()
+    enemy35_img = pygame.transform.smoothscale(enemy35_img, (90, 90))
+
+    enemy36_img = pygame.image.load(path_image("Image", "character", "Enemy36.png")).convert_alpha()
+    enemy36_img = pygame.transform.smoothscale(enemy36_img, (90, 90))
+
+    enemy37_img = pygame.image.load(path_image("Image", "character", "Enemy37.png")).convert_alpha()
+    enemy37_img = pygame.transform.smoothscale(enemy37_img, (90, 90))
+
+    enemy38_img = pygame.image.load(path_image("Image", "character", "Enemy38.png")).convert_alpha()
+    enemy38_img = pygame.transform.smoothscale(enemy38_img, (90, 90))
+
+    enemy39_img = pygame.image.load(path_image("Image", "character", "Enemy39.png")).convert_alpha()
+    enemy39_img = pygame.transform.smoothscale(enemy39_img, (90, 90))
+
+    enemy40_img = pygame.image.load(path_image("Image", "character", "Enemy40.png")).convert_alpha()
+    enemy40_img = pygame.transform.smoothscale(enemy40_img, (90, 90))
+
+    enemy41_img = pygame.image.load(path_image("Image", "character", "Enemy41.png")).convert_alpha()
+    enemy41_img = pygame.transform.smoothscale(enemy41_img, (90, 90))
+
+    enemy42_img = pygame.image.load(path_image("Image", "character", "Enemy42.png")).convert_alpha()
+    enemy42_img = pygame.transform.smoothscale(enemy42_img, (90, 90))
+
+    enemy43_img = pygame.image.load(path_image("Image", "character", "Enemy43.png")).convert_alpha()
+    enemy43_img = pygame.transform.smoothscale(enemy43_img, (90, 90))
+
+    enemy44_img = pygame.image.load(path_image("Image", "character", "Enemy44.png")).convert_alpha()
+    enemy44_img = pygame.transform.smoothscale(enemy44_img, (90, 90))
+
+    enemy45_img = pygame.image.load(path_image("Image", "character", "Enemy45.png")).convert_alpha()
+    enemy45_img = pygame.transform.smoothscale(enemy45_img, (90, 90))
+
     boss1_img = pygame.image.load(path_image("Image", "character", "Boss1.png")).convert_alpha()
     boss1_img = pygame.transform.smoothscale(boss1_img, (120, 120))
 
@@ -477,6 +531,12 @@ def load_images():
 
     acid_pool_img = flame_pillar_img.copy()
     acid_pool_img.fill((0, 100, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
+    bone_boomerang_img = pygame.image.load(path_image("Image", "entity", "BoneBoomerang.png")).convert_alpha()
+    bone_boomerang_img = pygame.transform.smoothscale(bone_boomerang_img, (60, 60))
+
+    thunder_pile_img = pygame.image.load(path_image("Image", "entity", "ThunderPile.png")).convert_alpha()
+    thunder_pile_img = pygame.transform.smoothscale(thunder_pile_img, (60, 60))
 
     ammo_gauge_up_img = pygame.image.load(path_image("Image", "AmmoGaugeUp.png")).convert_alpha()
     ammo_gauge_up_img = pygame.transform.smoothscale(ammo_gauge_up_img, (16, 16))
@@ -586,6 +646,24 @@ def load_images():
         "enemy25": enemy25_img,
         "enemy26": enemy26_img,
         "enemy27": enemy27_img,
+        "enemy28": enemy28_img,
+        "enemy29": enemy29_img,
+        "enemy30": enemy30_img,
+        "enemy31": enemy31_img,
+        "enemy32": enemy32_img,
+        "enemy33": enemy33_img,
+        "enemy34": enemy34_img,
+        "enemy35": enemy35_img,
+        "enemy36": enemy36_img,
+        "enemy37": enemy37_img,
+        "enemy38": enemy38_img,
+        "enemy39": enemy39_img,
+        "enemy40": enemy40_img,
+        "enemy41": enemy41_img,
+        "enemy42": enemy42_img,
+        "enemy43": enemy43_img,
+        "enemy44": enemy44_img,
+        "enemy45": enemy45_img,
         "boss1": boss1_img,
         "boss2": boss2_img,
         "boss3": boss3_img,
@@ -602,6 +680,8 @@ def load_images():
         "acid_projectile": acid_projectile_img,
         "acid_pool": acid_pool_img,
         "mine": mine_img,
+        "bone_boomerang": bone_boomerang_img,
+        "thunder_pile": thunder_pile_img,
         "ammo_gauge_up": ammo_gauge_up_img,
         "health_up": health_up_img,
         "cursor": cursor_img,

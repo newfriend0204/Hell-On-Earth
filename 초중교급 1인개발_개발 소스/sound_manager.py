@@ -150,7 +150,13 @@ def load_sounds():
         "boss7_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockCharge.mp3")),
         "boss7_fire": pygame.mixer.Sound(path_sound("Sound", "Entity", "ShockBurst.mp3")),
         "spawn_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "SpawnCharge.mp3")),
-        "spawn_burst": pygame.mixer.Sound(path_sound("Sound", "Entity", "DroneExplosion.mp3")),
+        "laser_channel_loop": pygame.mixer.Sound(path_sound("Sound", "Entity", "LaserChannelLoop.mp3")),
+        "laser_lock": pygame.mixer.Sound(path_sound("Sound", "Entity", "LaserLock.mp3")),
+        "blood_puddle_sizzle": pygame.mixer.Sound(path_sound("Sound", "Entity", "BloodPuddleSizzle.mp3")),
+        "blood_charge": pygame.mixer.Sound(path_sound("Sound", "Entity", "BloodCharge.mp3")),
+        "smoke_explosion": pygame.mixer.Sound(path_sound("Sound", "Entity", "SmokeExplosion.mp3")),
+        "scream": pygame.mixer.Sound(path_sound("Sound", "Entity", "Scream.mp3")),
+        "call_bomb": pygame.mixer.Sound(path_sound("Sound", "Entity", "CallBomb.mp3")),
     }
 
     weapon_sounds["gun5_overheat"].set_volume(0.5)

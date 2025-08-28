@@ -128,7 +128,7 @@ def get_stage_price_mult(stage=None):
 
 # 1회 업그레이드 증가량
 DRONE_HP_MAX_STEP = 20
-DRONE_AMMO_MAX_STEP = 20
+DRONE_AMMO_MAX_STEP = 40
 # 시작 비용(악의 정수), 업그레이드할수록 성장률로 증가
 DRONE_HP_UP_BASE_COST = 20
 DRONE_AMMO_UP_BASE_COST = 20
@@ -148,10 +148,10 @@ TIER_PRICES = {
 
 #상점에서의 등급 확률 증가/감소
 SHOP_TIER_WEIGHT_BIAS = {
-    1: 0.5,
-    2: 1.0,
-    3: 1.8,
-    4: 3.0,
+    1: 0.3,
+    2: 0.8,
+    3: 1.5,
+    4: 2.5,
     5: 4.0,
 }
 
