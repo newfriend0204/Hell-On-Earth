@@ -2,6 +2,72 @@ import pygame
 import os
 from config import ASSET_DIR
 
+_SFX_MUTED = False
+_SFX_ALLOWLIST = {"knife_kill", "button_click", "button_select"}  # muted 상태에서도 허용할 SFX 키
+
+class SafeSound:
+    # pygame.mixer.Sound 를 감싸서 전역 mute 플래그를 체크하는 래퍼
+    __slots__ = ("_key", "_snd")
+    def __init__(self, key: str, snd):
+        self._key = key
+        self._snd = snd
+    def play(self, *args, **kwargs):
+        # 전역 mute 상태면 허용 리스트 외에는 무시
+        if _SFX_MUTED and self._key not in _SFX_ALLOWLIST:
+            return None
+        try:
+            return self._snd.play(*args, **kwargs)
+        except Exception:
+            return None
+    def set_volume(self, vol):
+        try:
+            self._snd.set_volume(vol)
+        except Exception:
+            pass
+    def get_volume(self):
+        try:
+            return self._snd.get_volume()
+        except Exception:
+            return 0.0
+    def fadeout(self, ms):
+        try:
+            self._snd.fadeout(ms)
+        except Exception:
+            pass
+    def __getattr__(self, name):
+        # 나머지 속성은 원본 Sound 에 위임
+        return getattr(self._snd, name)
+
+
+def sfx_set_muted(muted: bool):
+    # 모든 효과음을 전역으로 뮤트/해제 (새로운 재생 호출 억제)
+    global _SFX_MUTED
+    _SFX_MUTED = bool(muted)
+
+
+def stop_all_sfx(fade_ms: int = 120):
+    # 현재 재생 중인 모든 채널(효과음)을 페이드아웃 후 정지
+    try:
+        n = pygame.mixer.get_num_channels()
+        for i in range(n):
+            try:
+                ch = pygame.mixer.Channel(i)
+                ch.fadeout(max(0, int(fade_ms)))
+            except Exception:
+                pass
+    except Exception:
+        # 호환성용: 실패 시 강제 정지
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
+
+
+def panic_mute_all_sfx(fade_ms: int = 120):
+    # 즉시 전체 SFX를 멈추고, 향후 재생도 막음
+    stop_all_sfx(fade_ms=fade_ms)
+    sfx_set_muted(True)
+
 def load_sounds():
     # 게임에서 사용할 모든 사운드 로드 및 볼륨 설정
     path_sound = lambda *paths: os.path.join(ASSET_DIR, *paths)
@@ -196,7 +262,7 @@ def load_sounds():
     entity_sounds["flame_pillar"].set_volume(0.5)
     entity_sounds["acid"].set_volume(0.2)
 
-    return {
+    raw = {
         # 모든 사운드 딕셔너리 반환
         "enemy_die": enemy_die_sound,
         "room_move": room_move_sound,
@@ -208,6 +274,8 @@ def load_sounds():
         **weapon_sounds,
         **entity_sounds
     }
+
+    return {k: SafeSound(k, v) for k, v in raw.items()}
 
 _BGM_IDLE_VOL = 0.7
 _BGM_COMBAT_VOL = 0.3

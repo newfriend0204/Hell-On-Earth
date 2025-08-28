@@ -2,11 +2,11 @@ import pygame
 import config
 import os
 import re
-import pygame
+import math
 from config import ASSET_DIR
 from text_data import weapon_stats
 from text_data import (
-    STATUS_EVAL_TEMPLATES, HP_BUCKET_LABELS, AMMO_BUCKET_LABELS, STAGE_ORDER,
+    STATUS_EVAL_TEMPLATES, HP_BUCKET_LABELS, AMMO_BUCKET_LABELS,
     HP_BUCKET_SENTENCES, AMMO_BUCKET_SENTENCES, STAGE_DESCRIPTIONS,
     WEAPON_COUNT_SENTENCES,
     KILL_THRESHOLDS, KILL_SENTENCES,
@@ -16,6 +16,10 @@ from text_data import (
 )
 
 pygame.init()
+
+_hover_once_keys = set()
+_BTN_SELECT = pygame.mixer.Sound(os.path.join(ASSET_DIR, "Sound", "UI", "ButtonSelect.wav"))
+_BTN_SELECT.set_volume(0.6)
 
 BASE_DIR = os.path.dirname(__file__)
 ASSET_DIR = os.path.join(BASE_DIR, "Asset")
@@ -52,6 +56,19 @@ RANK_LABELS = {
     "5": "5(전설)",
 }
 
+def _sfx_hover(_unused_sounds, key, hovered):
+    global _hover_once_keys
+    if hovered:
+        if key not in _hover_once_keys:
+            try:
+                if _BTN_SELECT: _BTN_SELECT.play()
+            except Exception:
+                pass
+            _hover_once_keys.add(key)
+    else:
+        if key in _hover_once_keys:
+            _hover_once_keys.remove(key)
+
 def _fit_image(img, max_w, max_h, upscale=False):
     # 안전 스케일러: (max_w, max_h) 박스 안으로 비율 유지 스케일.
     iw, ih = img.get_width(), img.get_height()
@@ -81,22 +98,37 @@ def _ui_draw_center_panel(surface, w, h):
     surface.blit(panel, rect)
     return rect
 
-def _ui_draw_chip(surface, text, center_xy, active=False):
+def _ui_draw_chip(surface, text, center_xy, active=False, sounds=None, hover_key=None):
     font = KOREAN_FONT_25
     pad_x, pad_y = 18, 8
     label = font.render(text, True, (230,230,230))
     w = label.get_width() + pad_x*2
     h = label.get_height() + pad_y*2
     chip = pygame.Surface((w,h), pygame.SRCALPHA)
-    bg = (34,34,34,230) if not active else (60,60,60,240)
-    pygame.draw.rect(chip, bg, (0,0,w,h), border_radius=999)
+    base_bg = (34,34,34,230) if not active else (60,60,60,240)
+    pygame.draw.rect(chip, base_bg, (0,0,w,h), border_radius=999)
     pygame.draw.rect(chip, (200,200,200,90), (0,0,w,h), width=2, border_radius=999)
     chip.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
     rect = chip.get_rect(center=center_xy)
-    surface.blit(chip, rect)
+    hovered = rect.collidepoint(pygame.mouse.get_pos())
+    if hovered and not active:
+        hover_chip = pygame.Surface((w,h), pygame.SRCALPHA)
+        bg = (48,48,48,240)
+        pygame.draw.rect(hover_chip, bg, (0,0,w,h), border_radius=999)
+        pygame.draw.rect(hover_chip, (220,220,220,120), (0,0,w,h), width=2, border_radius=999)
+        hover_chip.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
+        scale = 1.06
+        sw, sh = int(w*scale), int(h*scale)
+        hover_chip = pygame.transform.smoothscale(hover_chip, (sw, sh))
+        rect = hover_chip.get_rect(center=center_xy)
+        surface.blit(hover_chip, rect)
+    else:
+        surface.blit(chip, rect)
+    if hover_key is not None:
+        _sfx_hover(sounds, hover_key, hovered)
     return rect
 
-def _ui_draw_button(surface, text, center_xy):
+def _ui_draw_button(surface, text, center_xy, hover_key=None, sounds=None):
     font = KOREAN_FONT_25
     label = font.render(text, True, (230,230,230))
     w, h = max(160, label.get_width()+48), label.get_height()+28
@@ -105,7 +137,23 @@ def _ui_draw_button(surface, text, center_xy):
     pygame.draw.rect(btn, (200,200,200,90), (0,0,w,h), width=2, border_radius=16)
     btn.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
     rect = btn.get_rect(center=center_xy)
-    surface.blit(btn, rect)
+    hovered = rect.collidepoint(pygame.mouse.get_pos())
+    if hovered:
+        hover_btn = pygame.Surface((w,h), pygame.SRCALPHA)
+        # 밝아진 배경/외곽선
+        pygame.draw.rect(hover_btn, (30,30,30,235), (0,0,w,h), border_radius=14)
+        pygame.draw.rect(hover_btn, (220,220,220,120), (0,0,w,h), width=2, border_radius=16)
+        hover_btn.blit(label, ((w-label.get_width())//2, (h-label.get_height())//2))
+        # 자연스러운 확대
+        scale = 1.06
+        sw, sh = int(w*scale), int(h*scale)
+        hover_btn = pygame.transform.smoothscale(hover_btn, (sw, sh))
+        rect = hover_btn.get_rect(center=center_xy)
+        surface.blit(hover_btn, rect)
+    else:
+        surface.blit(btn, rect)
+    if hover_key is not None:
+        _sfx_hover(sounds, hover_key, hovered)
     return rect
 
 def _ui_draw_divider(surface, x1, y1, x2, y2, color=(90,90,90), width=2):
@@ -152,13 +200,14 @@ def draw_weapon_gallery_modal(screen, images, weapon_assets, weapon_stats, tier,
     rect = _ui_draw_center_panel(screen, 980, 660)
     title = KOREAN_FONT_BOLD_28.render("무기 도감", True, (235,235,235))
     screen.blit(title, ((screen.get_width()-title.get_width())//2, rect.y+18))
+    mouse_pos = pygame.mouse.get_pos()
 
     chip_rects = []
     cx = screen.get_width()//2
     gap = 140
     top = rect.y + 18 + title.get_height() + 8
     for i,t in enumerate([1,2,3,4,5]):
-        cr = _ui_draw_chip(screen, RANK_LABELS.get(str(t), str(t)), (cx + (i-2)*gap, top+18), active=(t==tier))
+        cr = _ui_draw_chip(screen, RANK_LABELS.get(str(t), str(t)), (cx + (i-2)*gap, top+18), active=(t==tier), hover_key=f'wep_tier_{t}')
         chip_rects.append((cr, t))
 
     grid_top = top + 58
@@ -220,13 +269,29 @@ def draw_weapon_gallery_modal(screen, images, weapon_assets, weapon_stats, tier,
                 label2 = font.render(line2, True, (230,230,230))
                 card.blit(label2, ((card_w - label2.get_width())//2, y0 + font.get_height()))
         r = card.get_rect(topleft=(x,y))
-        screen.blit(card, r)
+        hovered = r.collidepoint(mouse_pos)
+        if hovered:
+            _sfx_hover(None, f"wep_card_{wid}", True)
+            # 밝아진 카드로 재그림 후 확대
+            hover_card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+            pygame.draw.rect(hover_card, (26,26,26,235), (0,0,card_w,card_h), border_radius=12)
+            pygame.draw.rect(hover_card, (220,220,220,100), (0,0,card_w,card_h), width=2, border_radius=12)
+            hover_card.blit(thumb, ((card_w - thumb.get_width())//2, 12))
+            name2 = weapon_stats[wid].get("name", wid.upper())
+            nl = font.render(name2, True, (230,230,230))
+            hover_card.blit(nl, ((card_w - nl.get_width())//2, card_h - nl.get_height() - 14))
+            scaled = pygame.transform.smoothscale(hover_card, (int(card_w*1.05), int(card_h*1.05)))
+            r2 = scaled.get_rect(center=r.center)
+            screen.blit(scaled, r2)
+        else:
+            _sfx_hover(None, f"wep_card_{wid}", False)
+            screen.blit(card, r)
         item_rects.append((r, wid))
 
     total_rows = (len(ids)+cols-1)//cols
     total_h = total_rows*(card_h+16)
     max_scroll = max(0, total_h - (grid_bottom-grid_top))
-    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36))
+    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36), hover_key="wep_close")
     return {"chip_rects": chip_rects, "item_rects": item_rects, "close_rect": close_rect, "max_scroll": max_scroll}
 
 def draw_weapon_detail_modal(screen, weapon_assets, weapon_stats, wid):
@@ -307,7 +372,7 @@ def draw_weapon_detail_modal(screen, weapon_assets, weapon_stats, wid):
     screen.blit(cap, (x, y)); y += cap.get_height() + 6
     _ = _ui_draw_wrapped_text(screen, stat.get("usage",""), small, (220,220,220), x, y, right_w-12)
 
-    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36))
+    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36), hover_key="wep_back")
     return back_rect
 
 def draw_enemy_gallery_modal(screen, images, enemy_book, rank, scroll):
@@ -315,15 +380,18 @@ def draw_enemy_gallery_modal(screen, images, enemy_book, rank, scroll):
     rect = _ui_draw_center_panel(screen, 980, 660)
     title = KOREAN_FONT_BOLD_28.render("적 도감", True, (235,235,235))
     screen.blit(title, ((screen.get_width()-title.get_width())//2, rect.y+18))
+    mouse_pos = pygame.mouse.get_pos()
 
     chip_rects = []
     cx = screen.get_width()//2
     gap = 110
     top = rect.y + 18 + title.get_height() + 8
     for i,rk in enumerate([1,2,3,4,5]):
-        chip_rects.append((_ui_draw_chip(screen, f"{rk}", (cx + (i-2)*gap, top+14), active=(rk==rank)), rk))
+        label = f"{rk}티어"
+        chip_rects.append((_ui_draw_chip(screen, label, (cx + (i-2)*gap, top+14), active=(rk==rank), hover_key=f'enemy_tier_{rk}'), rk))
     for i,rk in enumerate([6,7,8,9,10]):
-        chip_rects.append((_ui_draw_chip(screen, f"{rk}", (cx + (i-2)*gap, top+14+48), active=(rk==rank)), rk))
+        label = ("보스" if rk==10 else f"{rk}티어")
+        chip_rects.append((_ui_draw_chip(screen, label, (cx + (i-2)*gap, top+14+48), active=(rk==rank), hover_key=f'enemy_tier_{rk}'), rk))
 
     grid_top = top + 100
     grid_left = rect.x + 40
@@ -379,13 +447,29 @@ def draw_enemy_gallery_modal(screen, images, enemy_book, rank, scroll):
                 label2 = font.render(line2, True, (230,230,230))
                 card.blit(label2, ((card_w - label2.get_width())//2, y0 + font.get_height()))
         r = card.get_rect(topleft=(x,y))
-        screen.blit(card, r)
+        hovered = r.collidepoint(mouse_pos)
+        if hovered:
+            _sfx_hover(None, f"enemy_card_{eid}", True)
+            # 밝아진 카드로 재그림 후 확대
+            hover_card = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+            pygame.draw.rect(hover_card, (26,26,26,235), (0,0,card_w,card_h), border_radius=12)
+            pygame.draw.rect(hover_card, (220,220,220,100), (0,0,card_w,card_h), width=2, border_radius=12)
+            hover_card.blit(thumb, ((card_w - thumb.get_width())//2, 10))
+            name2 = enemy_book[eid].get("name", eid.upper())
+            nl = font.render(name2, True, (230,230,230))
+            hover_card.blit(nl, ((card_w - nl.get_width())//2, card_h - nl.get_height() - 12))
+            scaled = pygame.transform.smoothscale(hover_card, (int(card_w*1.05), int(card_h*1.05)))
+            r2 = scaled.get_rect(center=r.center)
+            screen.blit(scaled, r2)
+        else:
+            _sfx_hover(None, f"enemy_card_{eid}", False)
+            screen.blit(card, r)
         item_rects.append((r, eid))
 
     total_rows = (len(ids)+cols-1)//cols
     total_h = total_rows*(card_h+16)
     max_scroll = max(0, total_h - (grid_bottom-grid_top))
-    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36))
+    close_rect = _ui_draw_button(screen, "닫기", (screen.get_width()//2, rect.bottom - 36), hover_key="enemy_close")
     return {"chip_rects": chip_rects, "item_rects": item_rects, "close_rect": close_rect, "max_scroll": max_scroll}
 
 def draw_enemy_detail_modal(screen, images, enemy_book, eid):
@@ -437,7 +521,7 @@ def draw_enemy_detail_modal(screen, images, enemy_book, eid):
     screen.blit(cap, (right_x, y)); y += cap.get_height() + 6
     _ = _ui_draw_wrapped_text(screen, data.get("tips","준비중"), small, (220,220,220), right_x, y, right_w-12)
 
-    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36))
+    back_rect = _ui_draw_button(screen, "뒤로", (screen.get_width()//2, rect.bottom - 36), hover_key="enemy_back")
     return back_rect
 
 def wrap_text_2lines(text, font, max_width):
@@ -1149,3 +1233,76 @@ def draw_shock_overlay(screen, intensity: float):
     surf.blit(hole, ((w - ell_w)//2, (h - ell_h)//2), special_flags=pygame.BLEND_RGBA_SUB)
 
     screen.blit(surf, (0, 0))
+
+def draw_lowhp_overlay(screen, hp_ratio: float, t_sec: float):
+    # HP가 낮을 때 붉은 비네트가 호흡하듯 펄스
+    if hp_ratio >= 0.40:
+        return
+    w, h = screen.get_size()
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    # 단계별 강도/주기
+    if hp_ratio >= 0.25:
+        base = 30    # ≤40%
+        period = 0.70
+    elif hp_ratio >= 0.10:
+        base = 40   # ≤25%
+        period = 0.55
+    else:
+        base = 50   # ≤10%
+        period = 0.45
+    pulse = 0.35 + 0.25 * (0.5 + 0.5 * math.sin(2*math.pi * (t_sec/period)))
+    alpha = int(min(255, base * pulse))
+    color = (180, 40, 40, alpha)
+    surf.fill(color)
+    # 중앙 시야 구멍(HP 낮을수록 시야 좁아짐)
+    ell_w, ell_h = int(w * 0.86), int(h * 0.78)
+    hole = pygame.Surface((ell_w, ell_h), pygame.SRCALPHA)
+    pygame.draw.ellipse(hole, (0,0,0,0), hole.get_rect())
+    inset = 0 if hp_ratio >= 0.25 else (10 if hp_ratio >= 0.10 else 18)
+    surf.blit(hole, ((w - ell_w)//2, (h - ell_h)//2 - inset), special_flags=pygame.BLEND_RGBA_SUB)
+    screen.blit(surf, (0, 0))
+
+
+def draw_lowhp_crosshair_hint(screen, hp_ratio: float, t_sec: float, pos=None):
+    # 조준점 경고 링
+    if hp_ratio >= 0.25:
+        return
+    if pos is None:
+        pos = pygame.mouse.get_pos()
+    x, y = pos
+
+    period = 0.8 if hp_ratio >= 0.10 else 0.6
+    phase = (math.sin(2*math.pi * (t_sec/period)) + 1.0) * 0.5
+    r_base = 16
+    r = int(r_base + 6 * phase)
+    alpha = int(130 + 100 * phase)
+    ring = pygame.Surface((r*2+6, r*2+6), pygame.SRCALPHA)
+    pygame.draw.circle(ring, (220, 60, 60, alpha), (r+3, r+3), r, width=3)
+    screen.blit(ring, (x - r - 3, y - r - 3))
+
+def draw_alert_banner(screen, text: str, progress: float):
+    # 상단 경고 배너(슬라이드 인/아웃). progress: 0→1.
+    sw, sh = screen.get_size()
+    banner_w = min(int(sw * 0.8), 560)
+    banner_h = 64
+    x = (sw - banner_w) // 2
+    # 들어오고(0~0.2) 유지(0.2~0.8) 나감(0.8~1.0)
+    if progress < 0.2:
+        t = progress / 0.2
+        y = int(-banner_h + (60 + banner_h) * t)
+    elif progress > 0.8:
+        t = (progress - 0.8) / 0.2
+        y = int(60 + (-banner_h - 60) * t)
+    else:
+        y = 60
+    panel = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
+    pygame.draw.rect(panel, (200, 40, 40, 220), panel.get_rect(), border_radius=14)
+    pygame.draw.rect(panel, (255, 120, 120), panel.get_rect(), width=2, border_radius=14)
+    screen.blit(panel, (x, y))
+    try:
+        font = KOREAN_FONT_BOLD_28
+    except Exception:
+        font = pygame.font.Font(None, 32)
+    surf = font.render(text, True, (255,255,255))
+    screen.blit(surf, (x + (banner_w - surf.get_width()) // 2,
+                       y + (banner_h - surf.get_height()) // 2))

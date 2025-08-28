@@ -62,17 +62,6 @@ def reveal_neighbors(x, y, grid):
         elif grid[ny][nx] == 'F' and room_states[ny][nx] == 4:
             room_states[ny][nx] = 5   # F 미발견(4) → F 발견(5)
 
-    # A(획득방): '반경 2칸(맨해튼 거리 ≤ 2)'까지 발견
-    # 맵 크기가 작으므로 전체 탐색으로 간단히 처리
-    for ty in range(HEIGHT):
-        for tx in range(WIDTH):
-            if (tx, ty) == (x, y):
-                continue
-            # manhattan((x,y),(tx,ty))는 world.py에 이미 정의됨
-            if manhattan((x, y), (tx, ty)) <= 2:
-                if grid[ty][tx] == 'A' and room_states[ty][tx] == 7:
-                    room_states[ty][tx] = 8  # A 미발견(7) → A 발견(8)
-
 def manhattan(p1, p2):
     # 맨해튼 거리 계산 (대각선 무시, x+y 차이의 절댓값 합)
     return abs(p1[0]-p2[0]) + abs(p1[1]-p2[1])
@@ -601,7 +590,7 @@ class World:
         top_wall_height,
         hole_width,
         hole_height,
-        wall_thickness=10 * PLAYER_VIEW_SCALE
+        wall_thickness=60 * PLAYER_VIEW_SCALE
     ):
         # 전투 시작 시 플레이어 이동을 막는 얇은 충돌 벽 생성
         thin = wall_thickness

@@ -39,7 +39,6 @@ class MeleeController:
         return True
 
     def _unit_from_mouse(self):
-        import pygame, math
         mx, my = pygame.mouse.get_pos()
         dx = mx - config.player_rect.centerx
         dy = my - config.player_rect.centery
@@ -50,7 +49,6 @@ class MeleeController:
 
     def _hit_test(self, enemies, blood_effects):
         # 가장 가까운 한 명만 피격.
-        import math
         (px, py) = self.get_player_world_pos()
         (fx, fy), aim = self._unit_from_mouse()
         half = math.radians(self.ARC_DEG / 2)
@@ -111,7 +109,6 @@ class MeleeController:
     def update(self, enemies, blood_effects):
         if not self.active:
             return
-        import pygame
         t = (pygame.time.get_ticks() - self._start_ms) / self.DURATION
         if (not self._hit_done) and t >= self.HIT_MOMENT:
             self._hit_done = True
@@ -123,7 +120,6 @@ class MeleeController:
         # 칼 스프라이트를 플레이어 중심에서 마우스 방향으로 전진->복귀.
         if not self.active:
             return
-        import pygame, math
         (px, py) = self.get_player_world_pos()
         (_, _), ang = self._unit_from_mouse()
         now = pygame.time.get_ticks()

@@ -1,5 +1,4 @@
 import os
-import pygame
 
 # 플레이어 시야 스케일 (1.0 = 기본 시야)
 PLAYER_VIEW_SCALE = 0.9
@@ -14,7 +13,7 @@ GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
 GAME_STATE_ENDING_STORY = 4
 GAME_STATE_ENDING_CREDITS = 5
-game_state = 1
+game_state = 0
 intro_shown = False
 
 # 배경 크기
@@ -102,7 +101,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 12, 3: 38, 4: 33, 5: 17}
     },
 }
-CURRENT_STAGE = "1-3"
+CURRENT_STAGE = "2-3"
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,

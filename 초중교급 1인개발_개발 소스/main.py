@@ -1,7 +1,6 @@
 import pygame
 import math
 import random
-import math
 from config import *
 import config
 import os
@@ -9,6 +8,13 @@ import sys
 import time
 import ctypes
 from asset_manager import load_images, load_weapon_assets
+from collider import Collider
+from obstacle_manager import ObstacleManager
+from ai import ENEMY_CLASSES
+from weapon import WEAPON_CLASSES, MeleeController
+import world
+from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
+from dialogue_manager import DialogueManager
 from sound_manager import (
     load_sounds, bgm_set_combat, bgm_update,
     play_bgm_dialogue, play_bgm_ending_credit, play_bgm_boss, play_bgm_main
@@ -27,14 +33,11 @@ from entities import (
     update_shock_particles,
     draw_shock_particles,
 )
-from collider import Collider
-from obstacle_manager import ObstacleManager
-from ai import ENEMY_CLASSES
-from weapon import WEAPON_CLASSES, MeleeController
-from ui import draw_weapon_detail_ui, handle_tab_click, draw_status_tab, weapon_stats, draw_combat_banner, draw_enemy_counter, draw_shock_overlay, draw_weapon_gallery_modal, draw_weapon_detail_modal, draw_enemy_gallery_modal, draw_enemy_detail_modal
-import world
-from maps import MAPS, BOSS_MAPS, S1_FIGHT_MAPS, S2_FIGHT_MAPS, S3_FIGHT_MAPS
-from dialogue_manager import DialogueManager
+from ui import (
+    draw_weapon_detail_ui, handle_tab_click, draw_status_tab, draw_enemy_counter, draw_shock_overlay,
+    draw_weapon_gallery_modal, draw_weapon_detail_modal, draw_enemy_gallery_modal, draw_enemy_detail_modal,
+    draw_lowhp_overlay, draw_lowhp_crosshair_hint, draw_alert_banner, draw_combat_banner
+)
 from text_data import (
     merchant1_dialogue,
     merchant2_dialogue,
@@ -81,7 +84,7 @@ world.MAX_F_ROOMS = stage_settings["max_f_rooms"]
 grid = world.generate_map()
 grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
 world.initialize_room_states(grid)
-world.print_grid(grid)
+# 디버그 - world.print_grid(grid)
 
 pygame.init()
 pygame.font.init()
@@ -242,8 +245,7 @@ def _wrap_img_load(*a, **k):
         img_cb(_img_done / max(1, _img_total), "이미지 불러오는 중…",
                f"{name} ({_img_done}/{max(1,_img_total)})")
     if name:
-        pass #나중에 삭제
-        # print(f"[LOAD][IMAGE] {name} ({_img_done}/{max(1,_img_total)})") 디버그 - 나중에 풀기
+        print(f"[LOAD][IMAGE] {name} ({_img_done}/{max(1,_img_total)})")
     return surf
 
 _orig_sound_ctor = pygame.mixer.Sound
@@ -260,8 +262,7 @@ def _wrap_sound_ctor(*a, **k):
         snd_cb(_snd_done / max(1, _snd_total), "사운드 불러오는 중…",
                f"{name} ({_snd_done}/{max(1,_snd_total)})")
     if name:
-        pass #나중에 삭제
-        #print(f"[LOAD][SOUND] {name} ({_snd_done}/{max(1,_snd_total)})") #디버그 - 나중에 풀기
+        print(f"[LOAD][SOUND] {name} ({_snd_done}/{max(1,_snd_total)})")
     return s
 
 # 0% 첫 화면
@@ -357,7 +358,7 @@ def _wrap_img_load_weapons(path, *args, **kwargs):
                 _front_seen[0] += 1
                 _wep_front[0] = _front_seen[0] / float(max(1, _front_total))
                 _wep_emit(f"{bn} ({_front_seen[0]}/{max(1,_front_total)})")
-                # print(f"[LOAD][WEAPON] Front {bn} ({_front_seen[0]}/{max(1,_front_total)})") 디버그 - 나중에 풀기
+                print(f"[LOAD][WEAPON] Front {bn} ({_front_seen[0]}/{max(1,_front_total)})")
                 try:
                     pygame.event.pump()
                     pygame.display.flip()
@@ -374,7 +375,7 @@ def _wep_progress(index: int, name: str, total: int):
     # 실제 로딩 호출(콜백 지원하면 같이 넘기되, 래핑은 유지해서 '진짜 로딩 중'에도 표시됨)
     _wep_meta[0] = index / float(max(1, total))
     _wep_emit(f"{name} ({index}/{total})")
-    # print(f"[LOAD][WEAPON] Meta {name} ({index}/{total})") 디버그 - 나중에 풀기
+    print(f"[LOAD][WEAPON] Meta {name} ({index}/{total})")
 
 try:
     if supports_cb and sig is not None:
@@ -496,6 +497,8 @@ next_room_enter_sound = "room_move"
 defer_combat_banner = {"pending": False, "entry_pos": (0, 0)}
 combat_banner_defer_dist_px = 0
 enemy_counter_fx = {"state": None, "t": 0.0, "slide_in": 300, "fade_out": 300}
+lowhp_banner_fx = {"active": False, "t": 0.0, "duration": 1200, "shown": False}
+prev_hp_ratio = 1.0
 
 TITLE_FONT  = pygame.font.Font(BOLD_FONT_PATH, 64)
 BUTTON_FONT = pygame.font.Font(BOLD_FONT_PATH, 28)
@@ -528,6 +531,51 @@ _ending_credits = {
     "thanks_index": -1,
     "lock_scroll": False
 }
+
+def reveal_acquire_with_shop_rule(cx, cy):
+    # - 무기/드론방: 맨해튼 ≤ 2면 공개
+    # - 상점방(획득 타입==3): 'F방을 경유한 2칸 경로'가 있을 때만 공개
+    #   (현재 방 → 인접 F → 목표 상점방) 형태의 길이 2 경로가 존재해야 함
+    try:
+        from world import WIDTH, HEIGHT, room_states, neighbors, manhattan
+        global grid, room_acquire_type
+        for ty in range(HEIGHT):
+            for tx in range(WIDTH):
+                if grid[ty][tx] != 'A':
+                    continue
+                if room_states[ty][tx] != 7:  # 이미 발견/클리어면 건너뜀
+                    continue
+                dist = manhattan((cx, cy), (tx, ty))
+                if dist > 2:
+                    continue
+                rkey = (tx, ty)
+                acq = room_acquire_type.get(rkey, None)
+                # 타입을 아직 안 뽑았으면 기본 공개(=무기/드론 쪽과 동일 처리)
+                if acq is None:
+                    room_states[ty][tx] = 8
+                    continue
+                if acq != 3:
+                    # 무기/드론방: 기존 규칙 유지(≤2면 공개)
+                    room_states[ty][tx] = 8
+                else:
+                    # 상점방: 'F 경유 2칸' 경로가 있을 때만 공개
+                    if dist != 2:
+                        continue
+                    ok = False
+                    for nx, ny in neighbors(cx, cy):
+                        if grid[ny][nx] != 'F':
+                            continue
+                        # 인접 F의 이웃 중 목표가 있으면 OK
+                        for nnx, nny in neighbors(nx, ny):
+                            if (nnx, nny) == (tx, ty):
+                                ok = True
+                                break
+                        if ok:
+                            break
+                    if ok:
+                        room_states[ty][tx] = 8
+    except Exception as e:
+        pass
 
 def _sync_mouse_grab_to_visibility():
     # 마우스 보임 상태에 따라 grab 상태를 자동 동기화
@@ -773,8 +821,7 @@ def init_new_game():
     global grid, current_room_pos, visited_f_rooms, room_portals, current_portal, portal_spawn_at_ms
     global player_hp_max, player_hp, last_hp_visual, ammo_gauge_max, ammo_gauge, last_ammo_visual
     global bullets, scattered_bullets, enemies, field_weapons, room_field_weapons, next_room_enter_sound
-    global room_shop_items, room_drone_rooms, room_acquire_type, room_entry_dir_cache
-    import config, world
+    global room_shop_items, room_drone_rooms, room_acquire_type, room_entry_dir_cache, boss_support_drop_next_ms
 
     # 진행상황 초기화
     config.intro_shown = False
@@ -783,6 +830,7 @@ def init_new_game():
     room_portals = {}
     current_portal = None
     portal_spawn_at_ms = None
+    boss_support_drop_next_ms = None
     bullets[:] = []
     scattered_bullets[:] = []
     enemies[:] = []
@@ -808,7 +856,7 @@ def init_new_game():
     grid = world.generate_map()
     grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
     world.initialize_room_states(grid)
-    world.print_grid(grid)
+    # 디버그 - world.print_grid(grid)
 
     # 시작 방 좌표 복원
     s_pos = None
@@ -819,6 +867,7 @@ def init_new_game():
         if s_pos: break
     current_room_pos = list(s_pos)
     world.reveal_neighbors(s_pos[0], s_pos[1], grid)
+    reveal_acquire_with_shop_rule(s_pos[0], s_pos[1])
 
     # 플레이어 수치 초기화
     player_hp_max = 200
@@ -929,6 +978,7 @@ for y, row in enumerate(grid):
         break
 current_room_pos = list(s_pos)
 world.reveal_neighbors(s_pos[0], s_pos[1], grid)
+reveal_acquire_with_shop_rule(s_pos[0], s_pos[1])
 
 north_hole_open = False
 south_hole_open = False
@@ -1068,7 +1118,7 @@ running = True
 
 player_radius = int(30 * PLAYER_VIEW_SCALE)
 
-player_hp_max = 200000 # 디버그 - 원래는 200
+player_hp_max = 2000000 # 디버그 - 원래는 200
 player_hp = player_hp_max
 last_hp_visual = player_hp * 1.0
 
@@ -1083,6 +1133,8 @@ last_ammo_visual = ammo_gauge * 1.0
 
 current_boss = None
 last_boss_hp_visual = 0
+BOSS_SUPPORT_DROP_INTERVAL_MS = 10000
+boss_support_drop_next_ms = None
 
 damage_flash_alpha = 0
 damage_flash_fade_speed = 5
@@ -1585,7 +1637,7 @@ def _quantize_dir_to_8(dx: float, dy: float):
     return (qx / n, qy / n) if n else (0.0, 0.0)
 
 def damage_player(amount):
-    # 디버그 - 무적
+    # 디버그 - 무적이려면 아래 주석 풀기
     # return
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
@@ -1632,6 +1684,16 @@ def trigger_player_death():
         p["vx"] *= 1.5
         p["vy"] *= 1.5
     config.blood_effects.append(blood)
+    # 모든 효과음을 즉시 정지하고(루프 포함), 이후 재생도 막음
+    try:
+        from sound_manager import panic_mute_all_sfx, stop_bgm
+        panic_mute_all_sfx(fade_ms=150)
+        try:
+            stop_bgm(fade_ms=400)
+        except Exception:
+            pass
+    except Exception:
+        pass
     gameover_sfx_played = False
     from sound_manager import cut_bgm
     cut_bgm()
@@ -1682,6 +1744,8 @@ def advance_to_next_stage():
     global room_field_weapons, room_shop_items, room_drone_rooms
     global room_acquire_type, room_entry_dir_cache
     global field_weapons, shop_items
+    global player_hp_max, player_hp, last_hp_visual
+    global ammo_gauge_max, ammo_gauge, last_ammo_visual
     room_portals.clear()
     current_portal = None; portal_spawn_at_ms = None
 
@@ -1710,6 +1774,20 @@ def advance_to_next_stage():
         return
 
     next_stage = stage_order[idx + 1]
+    try:
+        prev_hp_max = max(1, int(player_hp_max))
+        prev_hp     = max(0, int(player_hp))
+        hp_ratio    = prev_hp / prev_hp_max
+
+        player_hp_max   = int(player_hp_max) + 10
+        ammo_gauge_max  = int(ammo_gauge_max) + 20
+
+        player_hp = min(player_hp_max, int(round(player_hp_max * hp_ratio)))
+        last_hp_visual    = float(player_hp)
+        last_ammo_visual  = float(ammo_gauge)
+    except Exception:
+        pass
+
     config.CURRENT_STAGE = next_stage
     from sound_manager import play_bgm_for_stage
     play_bgm_for_stage(next_stage)
@@ -1727,7 +1805,7 @@ def advance_to_next_stage():
     grid = world.generate_map()
     world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
     world.initialize_room_states(grid)
-    world.print_grid(grid)
+    # 디버그 - world.print_grid(grid)
 
     for y, row in enumerate(grid):
         for x, cell in enumerate(row):
@@ -1897,13 +1975,14 @@ def change_room(direction):
 
     if new_room_type == 'A':
         if room_key not in room_acquire_type:
-            room_acquire_type[room_key] = random.randint(4, 4)  # 2: 무기방, 3: 상점방, 4: 드론방 디버그 - 활성화 상태
+            room_acquire_type[room_key] = random.randint(2, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
         acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
         config.combat_enabled = False
 
         world.reveal_neighbors(new_x, new_y, grid)
+        reveal_acquire_with_shop_rule(new_x, new_y)
 
         room_key = (new_x, new_y)
 
@@ -2929,6 +3008,15 @@ def trigger_combat_start():
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "in"
     enemy_counter_fx["t"] = 0.0
+    # 보스전이면 10초 후 첫 드랍 예약
+    global boss_support_drop_next_ms
+    try:
+        if (current_boss is not None) and getattr(current_boss, "alive", True):
+            boss_support_drop_next_ms = pygame.time.get_ticks() + BOSS_SUPPORT_DROP_INTERVAL_MS
+        else:
+            boss_support_drop_next_ms = None
+    except Exception:
+        boss_support_drop_next_ms = None
 
 def trigger_combat_end():
     # 배너: 종료, 라벨: 페이드 아웃
@@ -2938,6 +3026,9 @@ def trigger_combat_end():
     combat_banner_fx["t"] = 0.0
     enemy_counter_fx["state"] = "out"
     enemy_counter_fx["t"] = 0.0
+    # 보스 지원 드랍 타이머 해제
+    global boss_support_drop_next_ms
+    boss_support_drop_next_ms = None
     for npc in npcs:
         tname = type(npc).__name__
         if tname == "SoldierNPC":
@@ -2967,6 +3058,18 @@ def trigger_stage_banner(text):
     stage_banner_fx["t"] = 0.0
 
 def draw_combat_indicators(screen, delta_ms, minimap_rect=None):
+    # 저체력 배너
+    if lowhp_banner_fx["active"]:
+        lowhp_banner_fx["t"] += delta_ms
+        t = lowhp_banner_fx["t"]
+        dur = lowhp_banner_fx["duration"]
+        progress = min(1.0, max(0.0, t / dur))
+        draw_alert_banner(screen, "치명적 상태! 체력 회복이 시급합니다!", progress)
+        if t >= dur:
+            lowhp_banner_fx["active"] = False
+            lowhp_banner_fx["t"] = 0.0
+            lowhp_banner_fx["shown"] = True
+
     # 상단 배너 업데이트/그리기
     if combat_banner_fx["mode"] is not None:
         combat_banner_fx["t"] += delta_ms
@@ -3816,7 +3919,7 @@ while running:
     weapon = weapons[current_weapon_index]
     current_weapon_instance = weapon
     
-    #디버그 - 적 안움직이게 하려면 아래 주석
+    # 디버그 - 적 안움직이게 하려면 아래 주석
     player_pos = get_player_world_position()
     if not player_dead:
         if not boss_intro_active:
@@ -3993,6 +4096,13 @@ while running:
     kvx = getattr(config, "knockback_impulse_x", 0.0)
     kvy = getattr(config, "knockback_impulse_y", 0.0)
     if kvx or kvy:
+        # 한 프레임에 적용될 넉백 성분의 최대 이동량 제한 → 터널링/벽 통과 방지
+        MAX_KNOCKBACK_STEP = 18.0 * PLAYER_VIEW_SCALE
+        klen = math.hypot(kvx, kvy)
+        if klen > MAX_KNOCKBACK_STEP:
+            scale = MAX_KNOCKBACK_STEP / max(klen, 1e-6)
+            kvx *= scale
+            kvy *= scale
         world_vx += kvx
         world_vy += kvy
         config.knockback_impulse_x *= getattr(config, "KNOCKBACK_DECAY", 0.88)
@@ -4029,6 +4139,7 @@ while running:
                 print("[DEBUG] Combat START!")
 
             world.reveal_neighbors(current_room_pos[0], current_room_pos[1], grid)
+            reveal_acquire_with_shop_rule(current_room_pos[0], current_room_pos[1])
 
             combat_walls_info.clear()
 
@@ -4123,6 +4234,35 @@ while running:
 
     # 대쉬 중 플레이어가 적에 걸려 끊기는 것을 방지하기 위해 이번 프레임에 '밀어낸' 적을 중복 처리하지 않도록 id로 기록
     enemies_pushed_this_frame = set()
+
+    try:
+        if (config.combat_state
+            and (current_boss is not None)
+            and getattr(current_boss, "alive", False)
+            and (boss_support_drop_next_ms is not None)
+            and (current_time >= boss_support_drop_next_ms)
+            and (not player_dead)):
+
+            from entities import DroppedItem
+            px, py = get_player_world_position()
+            get_player_pos = get_player_world_position
+            HEALTH_COLOR = (181, 255, 146)
+            AMMO_COLOR   = (255, 191, 193)
+
+            # 체력 오브 2개
+            for _ in range(2):
+                config.dropped_items.append(
+                    DroppedItem(px, py, images["health_up"], "health", 10, get_player_pos, color=HEALTH_COLOR)
+                )
+            # 탄약 오브 2개
+            for _ in range(2):
+                config.dropped_items.append(
+                    DroppedItem(px, py, images["ammo_gauge_up"], "ammo", 20, get_player_pos, color=AMMO_COLOR)
+                )
+
+            boss_support_drop_next_ms += BOSS_SUPPORT_DROP_INTERVAL_MS
+    except Exception:
+        pass
 
     for obs in obstacles_to_check:
         # 플레이어-장애물 충돌 처리
@@ -4272,11 +4412,28 @@ while running:
     half_screen_width = SCREEN_WIDTH // 2
     half_screen_height = SCREEN_HEIGHT // 2
 
-    world_x = max(-half_screen_width - expansion,
-                min(effective_bg_width - half_screen_width + expansion, world_x))
+    # 넉백 활성/전투 중에는 맵 밖으로 카메라가 나가 보이지 않도록 여유치 제거
+    knockback_active = (abs(getattr(config, "knockback_impulse_x", 0.0)) +
+                        abs(getattr(config, "knockback_impulse_y", 0.0))) > 0.01
+    expansion_player = 0 if (config.combat_state or knockback_active) else expansion
 
-    world_y = max(-half_screen_height - expansion,
-                min(effective_bg_height - half_screen_height + expansion, world_y))
+    world_x = max(-half_screen_width - expansion_player,
+                  min(effective_bg_width - half_screen_width + expansion_player, world_x))
+    world_y = max(-half_screen_height - expansion_player,
+                  min(effective_bg_height - half_screen_height + expansion_player, world_y))
+
+    if (config.combat_state or knockback_active):
+        player_cx = world_x + player_rect.centerx
+        player_cy = world_y + player_rect.centery
+        if (player_cx < 0 or player_cx > effective_bg_width or
+            player_cy < 0 or player_cy > effective_bg_height):
+            world_x = max(-half_screen_width,
+                          min(effective_bg_width - half_screen_width, world_x))
+            world_y = max(-half_screen_height,
+                          min(effective_bg_height - half_screen_height, world_y))
+            # 바깥으로 튀어나가려던 넉백은 즉시 제거
+            config.knockback_impulse_x = 0.0
+            config.knockback_impulse_y = 0.0
 
     mouse_x, mouse_y = pygame.mouse.get_pos()
     dx = mouse_x - player_rect.centerx
@@ -5145,6 +5302,29 @@ while running:
         hp_bar_size = (400, 20)
         last_hp_visual = draw_hp_bar_remodeled(screen, player_hp, player_hp_max, hp_bar_pos, hp_bar_size, last_hp_visual)
 
+        try:
+            hp_ratio_now = player_hp / max(1, player_hp_max)
+        except Exception:
+            hp_ratio_now = 1.0
+        # 최초 25% 진입시 배너 트리거
+        if (not lowhp_banner_fx["shown"]) and (not lowhp_banner_fx["active"]):
+            if hp_ratio_now <= 0.25 and prev_hp_ratio > 0.25:
+                lowhp_banner_fx["active"] = True
+                lowhp_banner_fx["t"] = 0.0
+        prev_hp_ratio = hp_ratio_now
+
+        if lowhp_banner_fx["shown"] and hp_ratio_now >= 0.40:
+            lowhp_banner_fx["shown"] = False
+
+        # 플레이 중 & UI/대화 아님일 때만 화면 효과 출력
+        t_sec = pygame.time.get_ticks() / 1000.0
+        if (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING
+            and not pause_menu_active and not paused and not dialogue_manager.active):
+            # 붉은 비네트 펄스
+            draw_lowhp_overlay(screen, hp_ratio_now, t_sec)
+            # 조준점 경고 링/느낌표
+            draw_lowhp_crosshair_hint(screen, hp_ratio_now, t_sec, pos=None)
+
     if (getattr(config, "game_state", 1) == config.GAME_STATE_PLAYING
         and not pause_menu_active
         and not paused
@@ -5276,6 +5456,8 @@ while running:
                 gameover_sfx_played = False
                 from sound_manager import play_bgm_for_stage
                 import config as _cfg
+                from sound_manager import sfx_set_muted
+                sfx_set_muted(False)
                 if not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
                     play_bgm_for_stage(config.CURRENT_STAGE)
             elif _exit_requested:
@@ -5286,6 +5468,8 @@ while running:
                 config.game_state = config.GAME_STATE_MENU
                 swipe_curtain_transition(screen, old_surface, _draw_menu, direction="down", duration=0.5)
                 set_cursor_visible_and_grab(True)
+                from sound_manager import sfx_set_muted
+                sfx_set_muted(False)
                 _retry_requested = False
                 _exit_requested  = False
                 _go_hover = -1

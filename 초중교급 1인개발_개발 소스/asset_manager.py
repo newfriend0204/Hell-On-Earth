@@ -331,13 +331,13 @@ def load_images():
     doctorNF_img = pygame.image.load(path_image("Image", "character", "DoctorNF.png")).convert_alpha()
     doctorNF_img = pygame.transform.smoothscale(doctorNF_img, (90, 90))
 
-    soldier1_img = pygame.image.load(path_image("Image", "character", "Soilder1.png")).convert_alpha()
+    soldier1_img = pygame.image.load(path_image("Image", "character", "Soldier1.png")).convert_alpha()
     soldier1_img = pygame.transform.smoothscale(soldier1_img, (90, 90))
 
-    soldier2_img = pygame.image.load(path_image("Image", "character", "Soilder2.png")).convert_alpha()
+    soldier2_img = pygame.image.load(path_image("Image", "character", "Soldier2.png")).convert_alpha()
     soldier2_img = pygame.transform.smoothscale(soldier2_img, (90, 90))
 
-    soldier3_img = pygame.image.load(path_image("Image", "character", "Soilder3.png")).convert_alpha()
+    soldier3_img = pygame.image.load(path_image("Image", "character", "Soldier3.png")).convert_alpha()
     soldier3_img = pygame.transform.smoothscale(soldier3_img, (90, 90))
 
     scientist1_img = pygame.image.load(path_image("Image", "character", "Scientist1.png")).convert_alpha()

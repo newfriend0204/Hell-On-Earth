@@ -3,7 +3,7 @@ import math
 import random
 from config import *
 import config
-from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile
+from entities import ScatteredBullet, Bullet, ParticleBlood, DroppedItem, ShieldEffect, ExplosionEffectPersistent, HomingMissile, Fireball, GrenadeProjectile
 
 ENEMY_CLASSES = []
 
@@ -130,7 +130,6 @@ class AIBase(metaclass=EnemyMeta):
         if self.kill_callback:
             self.kill_callback()
 
-        import config
         config.player_score += getattr(self, "rank", 1)
 
         config.score_gain_texts.append({
@@ -1415,7 +1414,6 @@ class Enemy6(AIBase):
             angle = base_angle + offset
             vx = math.cos(angle)
             vy = math.sin(angle)
-            from entities import Fireball
             fb = Fireball(
                 x=self.world_x,
                 y=self.world_y,
@@ -1575,7 +1573,6 @@ class Enemy7(AIBase):
         angle = math.atan2(py - self.world_y, px - self.world_x)
         vx = math.cos(angle)
         vy = math.sin(angle)
-        from entities import Fireball
         fb = Fireball(
             x=self.world_x,
             y=self.world_y,
@@ -1707,7 +1704,6 @@ class Enemy8(AIBase):
             self.aware_of_player = True
 
     def shoot(self, target_x, target_y):
-        from entities import GrenadeProjectile
         angle = math.atan2(target_y - self.world_y, target_x - self.world_x)
         vx = math.cos(angle)
         vy = math.sin(angle)
@@ -7039,7 +7035,7 @@ class Enemy28(AIBase):
     PISTOL_SPEED      = 10 * PLAYER_VIEW_SCALE
 
     DRONE_MAX          = 2
-    DRONE_SPEED        = 6 * PLAYER_VIEW_SCALE
+    DRONE_SPEED        = 4 * PLAYER_VIEW_SCALE
     DRONE_DAMAGE       = 40
     DRONE_TRIGGER_DIST = 60
     DRONE_RADIUS       = int(55 * PLAYER_VIEW_SCALE)
@@ -10038,7 +10034,7 @@ class Enemy36(AIBase):
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.95
     RADIUS = int(22 * PLAYER_VIEW_SCALE)
 
-    SCARE_RADIUS     = int(400 * PLAYER_VIEW_SCALE)
+    SCARE_RADIUS     = int(250 * PLAYER_VIEW_SCALE)
     KEEP_MIN         = int(160 * PLAYER_VIEW_SCALE)
     KEEP_MAX         = int(380 * PLAYER_VIEW_SCALE)
     NEAR_DISTANCE    = KEEP_MIN
@@ -10744,7 +10740,6 @@ class Enemy38(AIBase):
                 mx, my = self._muzzle_world()
                 tx = mx + math.cos(self.aim_angle) * 2000
                 ty = my + math.sin(self.aim_angle) * 2000
-                from entities import Bullet
                 b = Bullet(mx, my, tx, ty, 0, self.bullet_image,
                            speed=self.BULLET_SPEED, max_distance=self.RANGE, damage=0)
                 b.owner = self
@@ -10884,7 +10879,6 @@ class Enemy38(AIBase):
             mx, my = self._muzzle_world()
             tx = mx + math.cos(self.aim_angle) * 2000
             ty = my + math.sin(self.aim_angle) * 2000
-            from entities import Bullet
             b = Bullet(mx, my, tx, ty, spread, self.bullet_image,
                        speed=self.SMG_BULLET_SPEED, max_distance=self.SMG_RANGE, damage=self.SMG_DAMAGE)
             b.owner = self
@@ -12042,7 +12036,6 @@ class Enemy42(AIBase):
 
     def _fire(self):
         # 유탄 1발 발사 + 사운드 + 무즐 플래시
-        from entities import GrenadeProjectile
         ang = self.fixed_aim_angle if self.fixed_aim_angle is not None else self.direction_angle
         mx, my = self._muzzle_world()
         vx, vy = math.cos(ang), math.sin(ang)
@@ -14565,7 +14558,6 @@ class Boss4(AIBase):
                 my = self.world_y + math.sin(ang) * 30
                 tx = mx + math.cos(ang) * 2000
                 ty = my + math.sin(ang) * 2000
-                from entities import Bullet
                 b = Bullet(mx, my, tx, ty, 0, self.enemy_bullet_img,
                            speed=self.SMG_BULLET_SPEED,
                            max_distance=self.SMG_RANGE,
@@ -15356,7 +15348,6 @@ class Boss6(AIBase):
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
                  damage_player_fn=None, kill_callback=None, rank=rank):
-        import pygame
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
                          radius=self.RADIUS, push_strength=0.18, alert_duration=0,
@@ -15482,7 +15473,6 @@ class Boss6(AIBase):
         return m
 
     def _schedule_summons(self, count, low_r, high_r):
-        import pygame
         slots = max(0, (self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE)
                        - (self._alive_minions() + len(self._pending_summons)))
         if slots <= 0: return
@@ -15499,7 +15489,6 @@ class Boss6(AIBase):
             self._fx_rings.append((sx, sy, now, self.SUMMON_CAST_MS))
 
     def _process_pending_summons(self):
-        import pygame
         now = pygame.time.get_ticks()
         rest = []
         for s in self._pending_summons:
@@ -15673,7 +15662,6 @@ class Boss6(AIBase):
 
     # 상태 전이
     def _enter(self, state, pattern=None, tele_data=None):
-        import pygame
         self._state = state
         if pattern is not None:
             self._pattern = pattern
@@ -15689,13 +15677,11 @@ class Boss6(AIBase):
             self._next_pattern_ready_at = now + int((base + extra) * scale)
 
     def _ready_new_pattern(self):
-        import pygame
         # IDLE 상태이면서, 계산된 '다음 패턴 허용 시각'에 도달해야 시작
         return (self._state == "IDLE") and (pygame.time.get_ticks() >= self._next_pattern_ready_at)
 
     # 발동
     def _fire_pattern(self):
-        import pygame
         now = pygame.time.get_ticks()
         t = self._tele_data
         if not t:
@@ -15808,7 +15794,6 @@ class Boss6(AIBase):
 
     # 업데이트
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
-        import pygame
         if not self.alive: return
 
         px, py = self._player_center(player_rect, world_x, world_y)
@@ -15971,13 +15956,11 @@ class Boss6(AIBase):
         return pts
 
     def _draw_polyline(self, surf, pts, color, width):
-        import pygame
         if len(pts) < 2: return
         for i in range(len(pts)-1):
             pygame.draw.line(surf, color, pts[i], pts[i+1], max(1, int(width)))
 
     def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms):
-        import pygame
         now = pygame.time.get_ticks()
         tsec = now * 0.001
         jitter = min(self.BEAM_JITTER_MAX, base_w * 0.45)
@@ -16006,7 +15989,6 @@ class Boss6(AIBase):
 
     # 드로우
     def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        import pygame
         if not self.alive and self.hp <= 0: return
 
         W, H = surface.get_width(), surface.get_height()
@@ -16295,7 +16277,6 @@ class Boss7(AIBase):
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
                  damage_player_fn=None, kill_callback=None, rank=rank):
-        import pygame
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
                          radius=self.RADIUS, push_strength=0.0, alert_duration=0,
@@ -16365,12 +16346,10 @@ class Boss7(AIBase):
         return (world_x + player_rect.centerx, world_y + player_rect.centery)
 
     def _max_ray_len(self):
-        import math
         return math.hypot(self.map_width, self.map_height) + 200
 
     @staticmethod
     def _dist_point_to_segment(px, py, x1, y1, x2, y2):
-        import math
         vx, vy = x2 - x1, y2 - y1
         wx, wy = px - x1, py - y1
         c1 = vx * wx + vy * wy
@@ -16383,7 +16362,6 @@ class Boss7(AIBase):
 
     # 해저드 GC/정리
     def _gc_hazards(self, now=None):
-        import pygame
         now = now or pygame.time.get_ticks()
         new = []
         for hz in self._hazards:
@@ -16411,7 +16389,6 @@ class Boss7(AIBase):
 
     def _clear_heavy_hazards(self):
         # 새 무거운 패턴 전: 기존 레이저/링/대형 직사각형을 페이드아웃.
-        import pygame
         now = pygame.time.get_ticks()
         for hz in self._hazards:
             k = hz["kind"]
@@ -16437,7 +16414,6 @@ class Boss7(AIBase):
             return rgba
 
     def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
-        import math
         dx, dy = x2 - x1, y2 - y1
         L = max(1.0, math.hypot(dx, dy))
         nx, ny = dx / L, dy / L
@@ -16456,12 +16432,10 @@ class Boss7(AIBase):
         return pts
 
     def _draw_polyline(self, surf, pts, color, width):
-        import pygame
         for i in range(len(pts)-1):
             pygame.draw.line(surf, color, pts[i], pts[i+1], width)
 
     def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms, alpha=1.0):
-        import pygame, math
         now = pygame.time.get_ticks()
         tsec = now * 0.001
         jitter = min(self.BEAM_JITTER_MAX, base_w * 0.45)
@@ -16480,7 +16454,6 @@ class Boss7(AIBase):
         self._draw_polyline(lay, pts, col_core,  core_w)
 
     def _draw_arc_beam(self, lay, cx, cy, r, a0, a1, base_w, born_ms, alpha=1.0):
-        import math
         seg_ang = max(math.radians(6), 2.0 / max(1.0, r))
         ang = a0
         while True:
@@ -16499,7 +16472,6 @@ class Boss7(AIBase):
         return 1.0 - (1.0 - x) * (1.0 - x)
 
     def _draw_rect_impact(self, lay, rx, ry, rw, rh, start_ms, expire_ms, now):
-        import pygame, math
         life = max(1, expire_ms - start_ms)
         t = max(0.0, min(1.0, (now - start_ms) / float(life)))
         # 바닥 채움 + 펄스
@@ -16570,7 +16542,6 @@ class Boss7(AIBase):
 
     # 상태 전환
     def _enter(self, state, pattern=None, tele_data=None):
-        import pygame
         self._state = state
         if pattern is not None:
             self._pattern = pattern
@@ -16585,13 +16556,11 @@ class Boss7(AIBase):
             self._next_pattern_ready_at = now + int((base + extra) * scale)
 
     def _ready_new_pattern(self):
-        import pygame
         ready_at = getattr(self, "_next_pattern_ready_at", 0)
         return (self._state == "IDLE") and (pygame.time.get_ticks() >= ready_at)
 
     # 패턴 빌더
     def _build_x_sweep(self):
-        import math, random
         return {"type":"ROTOR","spokes":4,"width":self.BEAM_WIDTH_M,
                 "spin_ms":5000,"ang_spd":math.radians(40),
                 "cx":self.world_x,"cy":self.world_y,"tele_ms":700,
@@ -16605,14 +16574,12 @@ class Boss7(AIBase):
         return {"type":"RING","count":count,"tele_ms":self.RING_TEL_MS}
 
     def _build_sweep8(self):
-        import math, random
         return {"type":"ROTOR","spokes":8,"width":self.BEAM_WIDTH_S,
                 "spin_ms":5400,"ang_spd":math.radians(55),
                 "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
                 "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
 
     def _build_cuts(self):
-        import math, random
         angs = []
         base = random.uniform(0, 2*math.pi)
         for _ in range(random.randint(3,4)):
@@ -16624,7 +16591,6 @@ class Boss7(AIBase):
                 "width":self.BEAM_WIDTH_S, "persist":6000, "tele_ms":800}
 
     def _build_cata(self):
-        import math, random
         return {"type":"CATA","fan_deg":24, "fan_ms":1800, "tele_ms":1800,
                 "ang_spd":math.radians(18), "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
 
@@ -16635,7 +16601,6 @@ class Boss7(AIBase):
         return {"type":"RIPPLE","count":count,"gap":gap_ms,"big":bool(big),"tele_ms":600}
 
     def _build_cross(self, slow_deg=25):
-        import math, random
         return {"type":"CROSS","spokes":4,"width":self.BEAM_WIDTH_M,
                 "spin_ms":4600,"ang_spd":math.radians(slow_deg),
                 "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
@@ -16645,14 +16610,12 @@ class Boss7(AIBase):
         return {"type":"TRIDENT5","weak":bool(weak),"tele_ms":700}
 
     def _build_zz_rotor(self, spokes=6, ang_spd_deg=65, zig_ms=500):
-        import math, random
         return {"type":"ZZ_ROTOR","spokes":spokes,"width":self.BEAM_WIDTH_S,
                 "spin_ms":5200,"ang_spd":math.radians(ang_spd_deg),"zig_ms":int(zig_ms),
                 "cx":self.world_x,"cy":self.world_y,"tele_ms":650,
                 "ang0":random.uniform(0, 2*math.pi), "lock_ms":300}
 
     def _build_bars(self, lines=3, angle_deg=None, persist=1800, width=None):
-        import math, random
         if angle_deg is None:
             angle_deg = random.uniform(0, 180)
         if width is None:
@@ -16669,7 +16632,6 @@ class Boss7(AIBase):
 
     # 발사
     def _fire_pattern(self):
-        import pygame, math, random
         now = pygame.time.get_ticks()
         t = self._tele_data
         if not t: self._enter("RECOVER"); return
@@ -16891,7 +16853,6 @@ class Boss7(AIBase):
 
     # 업데이트
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
-        import pygame, math
         if not self.alive: return
 
         px, py = self._player_center(player_rect, world_x, world_y)
@@ -17008,7 +16969,6 @@ class Boss7(AIBase):
 
         # 패턴 스케줄링
         if self._ready_new_pattern():
-            import random
             phase = (3 if self.hp <= self.max_hp*self.PHASE3_AT_FRAC
                         else 2 if self.hp <= self.max_hp*self.PHASE2_AT_FRAC
                         else 1)
@@ -17066,7 +17026,6 @@ class Boss7(AIBase):
 
     # 드로우
     def draw(self, surface, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        import pygame, math
         if not self.alive and self.hp <= 0: return
         W, H = surface.get_width(), surface.get_height()
         sx = self.world_x - world_x
@@ -17227,7 +17186,6 @@ class Boss7(AIBase):
                     cur_ang = hz["ang0"] + sign * hz["ang_spd"] * ((now - t0 - lock_ms)/1000.0)
                 cx = hz["cx"] - world_x; cy = hz["cy"] - world_y
                 for i in range(hz["spokes"]):
-                    import math
                     ang = cur_ang + (2*math.pi/float(hz["spokes"])) * i
                     x2 = cx + math.cos(ang)*hz["r"]
                     y2 = cy + math.sin(ang)*hz["r"]
@@ -17311,7 +17269,6 @@ class Boss7(AIBase):
             return []
 
     def _choose_minion_class(self, low_rank, high_rank):
-        import random
         candidates = []
         for cls in self._iter_enemy_classes():
             try:
@@ -17350,7 +17307,6 @@ class Boss7(AIBase):
         return m
 
     def _schedule_summons(self, count, low_r, high_r):
-        import pygame, random, math
         slots = max(0, (self.MINION_CAP_ENRAGE if self.enraged else self.MINION_CAP_BASE)
                        - (self._alive_minions() + len(self._pending_summons)))
         if slots <= 0: return
@@ -17366,14 +17322,13 @@ class Boss7(AIBase):
             self._play_sound("spawn_charge", 0.5)
 
     def _process_pending_summons(self):
-        import pygame
         now = pygame.time.get_ticks()
         rest = []
         for s in self._pending_summons:
             if now - s["t0"] >= self.SUMMON_CAST_MS:
                 self._spawn_minion_at(s["x"], s["y"], s["low"], s["high"])
                 self._play_sound("spawn_enemy", 0.9)
-                self._play_sound("spawn_burst", 0.9)
+                self._play_sound("spawn_charge", 0.9)
                 self._fx_rings.append({"x": s["x"], "y": s["y"], "t0": now, "dur": self.SPAWN_RING_MS})
             else:
                 rest.append(s)

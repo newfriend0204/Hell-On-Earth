@@ -3,7 +3,7 @@ START_MAP = {
 
     ],
     "enemy_infos": [
-        {"x": 200.0, "y": 200.0, "enemy_type": "enemy45"},
+        # {"x": 200.0, "y": 200.0, "enemy_type": "enemy44"},
     ],
     "npc_infos": [
         {"x": 100, "y": 100, "npc_type": "doctorNF_npc"},
@@ -15,7 +15,7 @@ START_MAP = {
         {"x": 100, "y": 100, "npc_type": "soldier3_npc"},
         {"x": 100, "y": 100, "npc_type": "drone_npc"},
     ],
-    "crop_rect": {"x_ratio": 1, "y_ratio": 1}
+    "crop_rect": {"x_ratio": 0.5, "y_ratio": 0.5}
 }
 END_MAP = {
     "obstacles": [
@@ -94,18 +94,31 @@ BOSS_MAP_8 = {
 
     ],
     "enemy_infos": [
-        {"x": 1960.0, "y": 1200.0, "enemy_type": "enemy3"},
-        {"x": 1780.0, "y": 1511.77, "enemy_type": "enemy14"},
-        {"x": 1420.0, "y": 1511.77, "enemy_type": "enemy17"},
-        {"x": 1240.0, "y": 1200.0, "enemy_type": "enemy3"},
-        {"x": 1420.0, "y": 888.23, "enemy_type": "enemy14"},
-        {"x": 1780.0, "y": 888.23, "enemy_type": "enemy3"},
-        {"x": 2260.0, "y": 1200.0, "enemy_type": "enemy9"},
-        {"x": 1930.0, "y": 1771.58, "enemy_type": "enemy24"},
-        {"x": 1270.0, "y": 1771.58, "enemy_type": "enemy14"},
-        {"x": 940.0, "y": 1200.0, "enemy_type": "enemy9"},
-        {"x": 1270.0, "y": 628.42, "enemy_type": "enemy14"},
-        {"x": 1930.0, "y": 628.42, "enemy_type": "enemy9"},
+        {"x": 2020.0, "y": 1200.0, "enemy_type": "enemy27"},
+        {"x": 1963.73, "y": 1410.0, "enemy_type": "enemy29"},
+        {"x": 1810.0, "y": 1563.73, "enemy_type": "enemy30"},
+        {"x": 1600.0, "y": 1620.0, "enemy_type": "enemy3"},
+        {"x": 1390.0, "y": 1563.73, "enemy_type": "enemy17"},
+        {"x": 1236.27, "y": 1410.0, "enemy_type": "enemy9"},
+        {"x": 1180.0, "y": 1200.0, "enemy_type": "enemy14"},
+        {"x": 1236.27, "y": 990.0, "enemy_type": "enemy24"},
+        {"x": 1390.0, "y": 836.27, "enemy_type": "enemy39"},
+        {"x": 1600.0, "y": 780.0, "enemy_type": "enemy40"},
+        {"x": 1810.0, "y": 836.27, "enemy_type": "enemy35"},
+        {"x": 1963.73, "y": 990.0, "enemy_type": "enemy36"},
+
+        {"x": 2392.06, "y": 1412.23, "enemy_type": "enemy22"},
+        {"x": 2179.83, "y": 1779.83, "enemy_type": "enemy27"},
+        {"x": 1812.23, "y": 1992.06, "enemy_type": "enemy29"},
+        {"x": 1600.0, "y": 2060.0, "enemy_type": "enemy30"},
+        {"x": 1387.77, "y": 1992.06, "enemy_type": "enemy3"},
+        {"x": 1020.17, "y": 1779.83, "enemy_type": "enemy17"},
+        {"x": 807.94, "y": 1412.23, "enemy_type": "enemy9"},
+        {"x": 740.0, "y": 1200.0, "enemy_type": "enemy14"},
+        {"x": 807.94, "y": 987.77, "enemy_type": "enemy24"},
+        {"x": 1020.17, "y": 620.17, "enemy_type": "enemy39"},
+        {"x": 1387.77, "y": 407.94, "enemy_type": "enemy40"},
+        {"x": 1600.0, "y": 340.0, "enemy_type": "enemy35"},
     ],
     "crop_rect": {"x_ratio": 2, "y_ratio": 2}
 }
@@ -114,24 +127,22 @@ BOSS_MAP_9 = {
 
     ],
     "enemy_infos": [
-        {"x": 1920.0, "y": 1200.0, "enemy_type": "enemy27"},
-        {"x": 1826.27, "y": 1426.27, "enemy_type": "enemy17"},
-        {"x": 1600.0, "y": 1520.0, "enemy_type": "enemy27"},
-        {"x": 1373.73, "y": 1426.27, "enemy_type": "enemy24"},
-        {"x": 1280.0, "y": 1200.0, "enemy_type": "enemy17"},
-        {"x": 1373.73, "y": 973.73, "enemy_type": "enemy3"},
-        {"x": 1600.0, "y": 880.0, "enemy_type": "enemy14"},
-        {"x": 1826.27, "y": 973.73, "enemy_type": "enemy3"},
-        {"x": 2240.0, "y": 1200.0, "enemy_type": "enemy9"},
-        {"x": 2052.55, "y": 1652.55, "enemy_type": "enemy11"},
-        {"x": 1600.0, "y": 1840.0, "enemy_type": "enemy24"},
-        {"x": 1147.45, "y": 1652.55, "enemy_type": "enemy14"},
-        {"x": 960.0, "y": 1200.0, "enemy_type": "enemy9"},
-        {"x": 1147.45, "y": 747.45, "enemy_type": "enemy11"},
-        {"x": 1600.0, "y": 560.0, "enemy_type": "enemy24"},
-        {"x": 2052.55, "y": 747.45, "enemy_type": "enemy14"},
-        {"x": 2015.69, "y": 1440.0, "enemy_type": "enemy27"},
-        {"x": 1184.31, "y": 960.0, "enemy_type": "enemy24"},
+        {"x": 2463.39, "y": 1291.21, "enemy_type": "enemy21"},
+        {"x": 2262.94, "y": 1739.39, "enemy_type": "enemy25"},
+        {"x": 1840.0, "y": 2060.0, "enemy_type": "enemy44"},
+        {"x": 1357.06, "y": 2060.0, "enemy_type": "enemy13"},
+        {"x": 934.12, "y": 1739.39, "enemy_type": "enemy20"},
+        {"x": 733.67, "y": 1291.21, "enemy_type": "enemy6"},
+        {"x": 806.61, "y": 908.79, "enemy_type": "enemy15"},
+        {"x": 1142.94, "y": 620.61, "enemy_type": "enemy32"},
+        {"x": 1600.0, "y": 540.0, "enemy_type": "enemy39"},
+        {"x": 2057.06, "y": 620.61, "enemy_type": "enemy40"},
+        {"x": 2393.39, "y": 908.79, "enemy_type": "enemy21"},
+        {"x": 2463.39, "y": 1108.79, "enemy_type": "enemy25"},
+        {"x": 2262.94, "y": 660.61, "enemy_type": "enemy44"},
+        {"x": 1840.0, "y": 340.0, "enemy_type": "enemy13"},
+        {"x": 1357.06, "y": 340.0, "enemy_type": "enemy20"},
+        {"x": 934.12, "y": 660.61, "enemy_type": "enemy32"},
     ],
     "crop_rect": {"x_ratio": 2, "y_ratio": 2}
 }
