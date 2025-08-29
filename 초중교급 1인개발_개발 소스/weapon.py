@@ -7,15 +7,14 @@ import os
 
 class MeleeController:
     # V키로 발동하는 근접 공격. 총기와 별도(현재 무기 유지).
-    DAMAGE = 20
+    DAMAGE = 40
     ARC_DEG = 30
     RANGE = int(100 * config.PLAYER_VIEW_SCALE)
-    DURATION = 220
+    DURATION = 200
     HIT_MOMENT = 0.45
     OUT_OFFSET = 42
 
     def __init__(self, images, sounds, get_player_world_pos_fn):
-        import pygame
         self.images = images
         self.sounds = sounds
         self.get_player_world_pos = get_player_world_pos_fn
@@ -76,13 +75,16 @@ class MeleeController:
             return
 
         was_alive = getattr(nearest, "alive", False)
-        if hasattr(nearest, "hit"):
-            nearest.hit(self.DAMAGE, blood_effects, force=True)
-        else:
-            hp = getattr(nearest, "hp", 20)
-            setattr(nearest, "hp", max(0, hp - self.DAMAGE))
-            if getattr(nearest, "hp", 0) <= 0:
-                setattr(nearest, "alive", False)
+        try:
+            if hasattr(nearest, "hit"):
+                nearest.hit(self.DAMAGE, blood_effects, force=True)
+            else:
+                hp = getattr(nearest, "hp", 20)
+                setattr(nearest, "hp", max(0, hp - self.DAMAGE))
+                if getattr(nearest, "hp", 0) <= 0:
+                    setattr(nearest, "alive", False)
+        except Exception:
+            pass
 
         try:
             if hasattr(nearest, "spawn_dropped_items"):
@@ -107,14 +109,17 @@ class MeleeController:
                     pass
 
     def update(self, enemies, blood_effects):
-        if not self.active:
-            return
-        t = (pygame.time.get_ticks() - self._start_ms) / self.DURATION
-        if (not self._hit_done) and t >= self.HIT_MOMENT:
-            self._hit_done = True
-            self._hit_test(enemies, blood_effects)
-        if t >= 1.0:
-            self.active = False
+        try:
+            if not self.active:
+                return
+            t = (pygame.time.get_ticks() - self._start_ms) / self.DURATION
+            if (not self._hit_done) and t >= self.HIT_MOMENT:
+                self._hit_done = True
+                self._hit_test(enemies, blood_effects)
+            if t >= 1.0:
+                self.active = False
+        except Exception:
+            pass
 
     def draw(self, screen, world_offset_xy):
         # 칼 스프라이트를 플레이어 중심에서 마우스 방향으로 전진->복귀.
@@ -1358,21 +1363,25 @@ class Gun9(WeaponBase):
 
 class Gun10(WeaponBase):
     TIER = 2
-    LEFT_AMMO_COST = 5
-    RIGHT_AMMO_COST = 6
-    LEFT_FIRE_DELAY = 120
-    RIGHT_FIRE_DELAY = 100
-    LEFT_DAMAGE = 16
-    RIGHT_DAMAGE = 20
-    LEFT_SPREAD = 12
-    RIGHT_SPREAD = 8
-    RANGE = 1800
-    SPEED = 11 * config.PLAYER_VIEW_SCALE
+
+    LEFT_AMMO_COST   = 6
+    LEFT_FIRE_DELAY  = 120
+    LEFT_DAMAGE      = 13
+    LEFT_SPREAD      = 12
+    RANGE            = 1600
+    SPEED            = 12 * config.PLAYER_VIEW_SCALE
+
+    PULSE_EVERY      = 6
+    PULSE_RADIUS     = int(90 * config.PLAYER_VIEW_SCALE)
+    PULSE_THICKNESS  = max(4, int(10 * config.PLAYER_VIEW_SCALE))
+    PULSE_DAMAGE     = 8
+    PULSE_LIFETIME   = 200
+    PULSE_KNOCK_DIST = int(30 * config.PLAYER_VIEW_SCALE)
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun10(
-            name="Mx4 Storm",
+            name="리플 펄스 PDW",
             front_image=weapon_assets["gun10"]["front"],
             topdown_image=weapon_assets["gun10"]["topdown"],
             uses_bullets=True,
@@ -1380,9 +1389,9 @@ class Gun10(WeaponBase):
             uses_cartridges=True,
             cartridge_images=weapon_assets["gun10"]["cartridges"],
             can_left_click=True,
-            can_right_click=True,
+            can_right_click=False,
             left_click_ammo_cost=Gun10.LEFT_AMMO_COST,
-            right_click_ammo_cost=Gun10.RIGHT_AMMO_COST,
+            right_click_ammo_cost=0,
             tier=Gun10.TIER,
             sounds_dict={
                 "fire": sounds["gun10_fire"],
@@ -1396,53 +1405,41 @@ class Gun10(WeaponBase):
     def __init__(self, name, front_image, topdown_image, **kwargs):
         super().__init__(name, front_image, topdown_image, **kwargs)
         self.fire_delay = Gun10.LEFT_FIRE_DELAY
-        self.right_fire_delay = Gun10.RIGHT_FIRE_DELAY
-        self.last_right_click_time = 0
-        self.recoil_strength = 5
-        self.speed_penalty = 0.05
+        self.recoil_strength = 3
+        self.speed_penalty = 0.08
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
-        self.shake_strength = 10
-        self.ads_mode = False
+        self.shake_strength = 9
 
+        self._shot_counter = 0
+        self._bullet_image = self._make_bullet_surface()
+        self._pulse_watch = []
+
+    # 입력 처리(좌클릭 기본 처리 + 펄스 워처 확인)
     def on_update(self, mouse_left_down, mouse_right_down):
-        now = pygame.time.get_ticks()
+        # 기본 좌클릭 처리(탄 발사/쿨다운/탄약 검증 등)
+        super().on_update(mouse_left_down, mouse_right_down)
+        # 펄스 탄 감시 → 소멸하면 파동 발생
+        self._check_pulse_watch()
 
-        # 우클릭 시 ADS 모드 진입, 좌클릭 시 기본 모드
-        if mouse_right_down:
-            self.ads_mode = True
-            self.fire_delay = Gun10.RIGHT_FIRE_DELAY
-            self.recoil_strength = 6
-            self.speed_penalty = 0.50
-            self.shake_strength = 12
-        else:
-            self.ads_mode = False
-            self.fire_delay = Gun10.LEFT_FIRE_DELAY
-            self.recoil_strength = 5
-            self.speed_penalty = 0.05
-            self.shake_strength = 10
-
-        # 발사 처리
-        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            if self.get_ammo_gauge() >= (self.right_click_ammo_cost if self.ads_mode else self.left_click_ammo_cost):
-                if self.ads_mode:
-                    self.on_right_click()
-                else:
-                    self.on_left_click()
-                self.last_shot_time = now
-
+    # 사격
     def on_left_click(self):
-        # 기본 모드 사격
-        self._fire_bullet(self.LEFT_DAMAGE, self.LEFT_SPREAD, self.left_click_ammo_cost)
+        # 탄환 1발 발사
+        is_pulse_round = (self._shot_counter + 1) % self.PULSE_EVERY == 0
+        bullet = self._fire_bullet(self.LEFT_DAMAGE, self.LEFT_SPREAD, self.left_click_ammo_cost)
+        self._shot_counter = (self._shot_counter + 1) % self.PULSE_EVERY
 
-    def on_right_click(self):
-        # ADS 모드 사격
-        self._fire_bullet(self.RIGHT_DAMAGE, self.RIGHT_SPREAD, self.right_click_ammo_cost)
+        # 6번째 탄이면 펄스 워처에 등록(탄이 소멸하는 순간 파동을 생성)
+        if is_pulse_round and bullet is not None:
+            self._pulse_watch.append({"b": bullet, "done": False})
 
     def _fire_bullet(self, damage, spread_deg, ammo_cost):
         if self.get_ammo_gauge() < ammo_cost:
-            return
+            return None
         self.reduce_ammo(ammo_cost)
-        self.sounds["fire"].play()
+        try:
+            self.sounds["fire"].play()
+        except Exception:
+            pass
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         px, py = self.get_player_world_position()
@@ -1451,12 +1448,13 @@ class Gun10(WeaponBase):
         dy = mouse_y - config.player_rect.centery
         angle = math.atan2(dy, dx)
         spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
-        angle += spread
+        final_angle = angle + spread
+        vx = math.cos(final_angle)
+        vy = math.sin(final_angle)
 
-        vx = math.cos(angle)
-        vy = math.sin(angle)
         offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
         offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
+
         bullet_x = px + offset_x
         bullet_y = py + offset_y
 
@@ -1465,21 +1463,140 @@ class Gun10(WeaponBase):
             bullet_y,
             bullet_x + vx * self.RANGE,
             bullet_y + vy * self.RANGE,
-            spread_angle_degrees=spread_deg,
-            bullet_image=self.bullet_images[0],
+            spread_angle_degrees=0,
+            bullet_image=self._bullet_image,
             speed=self.SPEED,
-            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
+            max_distance=self.RANGE,
             damage=damage
         )
-        bullet.trail_enabled = self.bullet_has_trail
+        bullet.trail_enabled = False
         config.bullets.append(bullet)
 
+        # 탄피 배출은 기존 자산 사용
         if self.uses_cartridges and self.cartridge_images:
-            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            eject_angle = final_angle + math.radians(90 + random.uniform(-15, 15))
             vx_c = math.cos(eject_angle) * 1.2
             vy_c = math.sin(eject_angle) * 1.2
             scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
             config.scattered_bullets.append(scatter)
+
+        return bullet
+
+    # 펄스 탄 워처: 탄환이 소멸(to_remove=True)하면 그 위치에서 파동 방출
+    def _check_pulse_watch(self):
+        if not self._pulse_watch:
+            return
+        remain = []
+        for item in self._pulse_watch:
+            b = item.get("b")
+            done = item.get("done", False)
+            if not b:
+                continue
+            if not done and getattr(b, "to_remove", False):
+                cx, cy = getattr(b, "world_x", None), getattr(b, "world_y", None)
+                if cx is not None and cy is not None:
+                    config.effects.append(
+                        self._PulseRingKnock(
+                            cx=cx, cy=cy,
+                            radius=self.PULSE_RADIUS,
+                            thickness=self.PULSE_THICKNESS,
+                            damage=self.PULSE_DAMAGE,
+                            life_ms=self.PULSE_LIFETIME,
+                            knock_dist=self.PULSE_KNOCK_DIST
+                        )
+                    )
+                item["done"] = True
+            # 완료된 항목은 버리고, 아직 미완료면 유지(혹시 다음 프레임에서 소멸)
+            if not item["done"]:
+                remain.append(item)
+        self._pulse_watch = remain
+
+    # 파동(원형 링) - 적 피해 + 밀치기
+    class _PulseRingKnock:
+        # 얇은 원형 링
+        def __init__(self, cx, cy, radius, thickness, damage, life_ms, knock_dist):
+            self.cx, self.cy = int(cx), int(cy)
+            self.radius = int(radius)
+            self.thickness = int(thickness)
+            self.damage = int(damage)
+            self.life_ms = int(life_ms)
+            self.knock_dist = int(knock_dist)
+            self.birth = pygame.time.get_ticks()
+            self._hit_ids = set()
+            self.finished = False
+
+        def _apply_damage_and_knock(self):
+            enemies = getattr(config, "all_enemies", [])
+            if not enemies:
+                return
+            for e in enemies:
+                if not getattr(e, "alive", False):
+                    continue
+                ex, ey = getattr(e, "world_x", None), getattr(e, "world_y", None)
+                if ex is None or ey is None:
+                    continue
+                dist = math.hypot(ex - self.cx, ey - self.cy)
+                band = self.thickness * 0.5 + getattr(e, "radius", 16)
+                # 링 밴드와 교차하면 1회 처리
+                if abs(dist - self.radius) <= band and id(e) not in self._hit_ids:
+                    # 피해
+                    try:
+                        e.hit(self.damage, config.blood_effects)
+                    except Exception:
+                        pass
+                    # 넉백(적을 링 중심에서 바깥쪽으로 밀기)
+                    try:
+                        nx = (ex - self.cx) / (dist or 1.0)
+                        ny = (ey - self.cy) / (dist or 1.0)
+                        e.world_x += nx * self.knock_dist
+                        e.world_y += ny * self.knock_dist
+                        # 약간의 위치 튐 완화: 목표점도 함께 보정(있는 경우)
+                        if hasattr(e, "goal_pos") and isinstance(e.goal_pos, tuple):
+                            gx, gy = e.goal_pos
+                            e.goal_pos = (gx + nx * self.knock_dist * 0.5, gy + ny * self.knock_dist * 0.5)
+                    except Exception:
+                        pass
+                    self._hit_ids.add(id(e))
+
+        def update(self):
+            now = pygame.time.get_ticks()
+            t = (now - self.birth) / float(self.life_ms)
+            if t >= 1.0:
+                self.finished = True
+                return
+            # 수명 중 매 프레임 교차 체크(적당한 정확도 + 1회만 적용 보장)
+            self._apply_damage_and_knock()
+
+        def draw(self, screen, world_x, world_y):
+            now = pygame.time.get_ticks()
+            t = (now - self.birth) / float(self.life_ms)
+            if t >= 1.0:
+                return
+            alpha = max(0, int(230 * (1.0 - t)))
+            r = self.radius
+            th = max(1, self.thickness)
+            surf = pygame.Surface((r * 2 + th + 4, r * 2 + th + 4), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (180, 230, 255, alpha), (r + 2, r + 2), r, width=th)
+            screen.blit(surf, (self.cx - r - 2 - world_x, self.cy - r - 2 - world_y))
+
+    # 탄 이미지(프로시저럴)
+    def _make_bullet_surface(self):
+        # 작은 캡슐형(라운드 탄): 길이 18px, 높이 6px 기준(스케일 반영).
+        scale = config.PLAYER_VIEW_SCALE
+        length = max(12, int(18 * scale))
+        height = max(4, int(6 * scale))
+        surf = pygame.Surface((length, height), pygame.SRCALPHA)
+
+        # 본체(라운드 캡슐)
+        pygame.draw.rect(surf, (255, 255, 255, 235), (height // 2, 0, length - height, height), border_radius=height // 2)
+        pygame.draw.circle(surf, (255, 255, 255, 235), (height // 2, height // 2), height // 2)
+        pygame.draw.circle(surf, (255, 255, 255, 235), (length - height // 2, height // 2), height // 2)
+
+        # 하이라이트
+        hl = pygame.Surface((length, height), pygame.SRCALPHA)
+        pygame.draw.rect(hl, (255, 255, 255, 80), (height // 2, 1, length - height, max(1, height // 3)), border_radius=height // 2)
+        surf.blit(hl, (0, 0))
+        return surf
 
 class Gun11(WeaponBase):
     TIER = 2
@@ -1582,7 +1699,7 @@ class Gun11(WeaponBase):
 class Gun12(WeaponBase):
     TIER = 2
     AMMO_COST = 8
-    DAMAGE = 70
+    DAMAGE = 55
     FIRE_DELAY = 200
     SPREAD_DEGREES = 6
     RANGE = 2000
@@ -1670,31 +1787,32 @@ class Gun12(WeaponBase):
 
 class Gun13(WeaponBase):
     TIER = 1
-    LEFT_AMMO_COST = 4
-    RIGHT_AMMO_COST = 5
-    LEFT_FIRE_DELAY = 170
-    RIGHT_FIRE_DELAY = 150
-    LEFT_DAMAGE = 18
-    RIGHT_DAMAGE = 22
-    LEFT_SPREAD = 10
-    RIGHT_SPREAD = 8
-    RANGE = 1800
-    SPEED = 11 * config.PLAYER_VIEW_SCALE
+
+    AMMO_COST   = 7
+    FIRE_DELAY  = 120 
+    DAMAGE_A    = 8
+    DAMAGE_B    = 8
+    SPREAD_A    = 4.0
+    SPREAD_B    = 7.0
+    RANGE       = 1700
+    SPEED       = 12 * config.PLAYER_VIEW_SCALE
+
+    BARREL_OFFSET = int(14 * config.PLAYER_VIEW_SCALE)
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun13(
-            name="MPX",
+            name="듀얼라인 서브건",
             front_image=weapon_assets["gun13"]["front"],
             topdown_image=weapon_assets["gun13"]["topdown"],
             uses_bullets=True,
             bullet_images=weapon_assets["gun13"]["bullets"],
-            uses_cartridges=True,
-            cartridge_images=weapon_assets["gun13"]["cartridges"],
+            uses_cartridges=False,
+            cartridge_images=[],
             can_left_click=True,
-            can_right_click=True,
-            left_click_ammo_cost=Gun13.LEFT_AMMO_COST,
-            right_click_ammo_cost=Gun13.RIGHT_AMMO_COST,
+            can_right_click=False,
+            left_click_ammo_cost=Gun13.AMMO_COST,
+            right_click_ammo_cost=0,
             tier=Gun13.TIER,
             sounds_dict={
                 "fire": sounds["gun13_fire"],
@@ -1707,109 +1825,93 @@ class Gun13(WeaponBase):
 
     def __init__(self, name, front_image, topdown_image, **kwargs):
         super().__init__(name, front_image, topdown_image, **kwargs)
-        self.fire_delay = Gun13.LEFT_FIRE_DELAY
-        self.right_fire_delay = Gun13.RIGHT_FIRE_DELAY
-        self.last_right_click_time = 0
-        self.recoil_strength = 10
-        self.speed_penalty = 0.05  # 기본 장착 시
+        self.fire_delay = Gun13.FIRE_DELAY
+        self.recoil_strength = 5
+        self.speed_penalty = 0.05
         self.distance_from_center = config.PLAYER_VIEW_SCALE * 48
-        self.shake_strength = 9
-        self.ads_mode = False
+        self.shake_strength = 8
 
-    def on_update(self, mouse_left_down, mouse_right_down):
-        now = pygame.time.get_ticks()
-
-        # 우클릭 시 ADS 모드 진입, 좌클릭 시 기본 모드
-        if mouse_right_down:
-            self.ads_mode = True
-            self.fire_delay = Gun13.RIGHT_FIRE_DELAY
-            self.recoil_strength = 10
-            self.speed_penalty = 0.12
-            self.shake_strength = 10
-        else:
-            self.ads_mode = False
-            self.fire_delay = Gun13.LEFT_FIRE_DELAY
-            self.recoil_strength = 8
-            self.speed_penalty = 0.05
-            self.shake_strength = 9
-
-        # 발사 처리
-        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            if self.get_ammo_gauge() >= (self.right_click_ammo_cost if self.ads_mode else self.left_click_ammo_cost):
-                if self.ads_mode:
-                    self.on_right_click()
-                else:
-                    self.on_left_click()
-                self.last_shot_time = now
-
+    # 좌클릭: 평행 2발 동시 발사
     def on_left_click(self):
-        # 기본 모드 사격
-        self._fire_bullet(self.LEFT_DAMAGE, self.LEFT_SPREAD, self.left_click_ammo_cost)
-
-    def on_right_click(self):
-        # ADS 모드 사격
-        self._fire_bullet(self.RIGHT_DAMAGE, self.RIGHT_SPREAD, self.right_click_ammo_cost)
-
-    def _fire_bullet(self, damage, spread_deg, ammo_cost):
-        if self.get_ammo_gauge() < ammo_cost:
+        if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
             return
-        self.reduce_ammo(ammo_cost)
-        self.sounds["fire"].play()
 
+        # 탄약 차감 & 사운드
+        self.reduce_ammo(self.left_click_ammo_cost)
+        try:
+            self.sounds["fire"].play()
+        except Exception:
+            pass
+
+        # 마우스 기준 조준각
         mouse_x, mouse_y = pygame.mouse.get_pos()
         px, py = self.get_player_world_position()
+        base_angle = math.atan2(mouse_y - config.player_rect.centery,
+                                mouse_x - config.player_rect.centerx)
 
-        dx = mouse_x - config.player_rect.centerx
-        dy = mouse_y - config.player_rect.centery
-        angle = math.atan2(dy, dx)
-        spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
-        angle += spread
+        # 진행방향 단위벡터 & 수직(왼쪽) 단위벡터
+        ux, uy = math.cos(base_angle), math.sin(base_angle)
+        pxv, pyv = -uy, ux
 
-        vx = math.cos(angle)
-        vy = math.sin(angle)
-        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
-        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
-        bullet_x = px + offset_x
-        bullet_y = py + offset_y
+        muzzle_forward = 30 * config.PLAYER_VIEW_SCALE
+        sx1 = px + ux * muzzle_forward + pxv * self.BARREL_OFFSET
+        sy1 = py + uy * muzzle_forward + pyv * self.BARREL_OFFSET
+        sx2 = px + ux * muzzle_forward - pxv * self.BARREL_OFFSET
+        sy2 = py + uy * muzzle_forward - pyv * self.BARREL_OFFSET
 
-        bullet = Bullet(
-            bullet_x,
-            bullet_y,
-            bullet_x + vx * self.RANGE,
-            bullet_y + vy * self.RANGE,
-            spread_angle_degrees=spread_deg,
+        # 탄 A: 개별 퍼짐 적용(좁음)
+        ang1 = base_angle + math.radians(random.uniform(-self.SPREAD_A/2, self.SPREAD_A/2))
+        vx1, vy1 = math.cos(ang1), math.sin(ang1)
+        bullet1 = Bullet(
+            sx1, sy1,
+            sx1 + vx1 * self.RANGE,
+            sy1 + vy1 * self.RANGE,
+            spread_angle_degrees=0,
             bullet_image=self.bullet_images[0],
             speed=self.SPEED,
-            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
-            damage=damage
+            max_distance=self.RANGE,
+            damage=self.DAMAGE_A
         )
-        bullet.trail_enabled = self.bullet_has_trail
-        config.bullets.append(bullet)
+        bullet1.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet1)
 
-        if self.uses_cartridges and self.cartridge_images:
-            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
-            vx_c = math.cos(eject_angle) * 1.2
-            vy_c = math.sin(eject_angle) * 1.2
-            scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
-            config.scattered_bullets.append(scatter)
+        # 탄 B: 개별 퍼짐 적용(넓음)
+        ang2 = base_angle + math.radians(random.uniform(-self.SPREAD_B/2, self.SPREAD_B/2))
+        vx2, vy2 = math.cos(ang2), math.sin(ang2)
+        bullet2 = Bullet(
+            sx2, sy2,
+            sx2 + vx2 * self.RANGE,
+            sy2 + vy2 * self.RANGE,
+            spread_angle_degrees=0,
+            bullet_image=self.bullet_images[0],
+            speed=self.SPEED,
+            max_distance=self.RANGE,
+            damage=self.DAMAGE_B
+        )
+        bullet2.trail_enabled = self.bullet_has_trail
+        config.bullets.append(bullet2)
 
 class Gun14(WeaponBase):
     TIER = 2
-    LEFT_AMMO_COST = 4
-    RIGHT_AMMO_COST = 5
-    LEFT_FIRE_DELAY = 140
-    RIGHT_FIRE_DELAY = 120
-    LEFT_DAMAGE = 20
-    RIGHT_DAMAGE = 24
-    LEFT_SPREAD = 9
-    RIGHT_SPREAD = 8
-    RANGE = 1850
-    SPEED = 11 * config.PLAYER_VIEW_SCALE
+
+    AMMO_COST      = 7
+    FIRE_DELAY     = 120
+    DAMAGE_BASE    = 18
+    SPREAD_BASE    = 10.0
+    SPEED          = 12 * config.PLAYER_VIEW_SCALE
+    RANGE          = 1700
+
+    COOLSHOT_IDLE_MS   = 500
+    COOLSHOT_ROUNDS    = 10
+    COOLSHOT_DMG_BONUS = 6
+    COOLSHOT_SPREAD_D  = -9.0
+
+    COOL_EFX_LIFE_MS   = 220
 
     @staticmethod
     def create_instance(weapon_assets, sounds, ammo_gauge, consume_ammo, get_player_world_position):
         return Gun14(
-            name="MP5",
+            name="쿨샷 캐리어",
             front_image=weapon_assets["gun14"]["front"],
             topdown_image=weapon_assets["gun14"]["topdown"],
             uses_bullets=True,
@@ -1817,9 +1919,9 @@ class Gun14(WeaponBase):
             uses_cartridges=True,
             cartridge_images=weapon_assets["gun14"]["cartridges"],
             can_left_click=True,
-            can_right_click=True,
-            left_click_ammo_cost=Gun14.LEFT_AMMO_COST,
-            right_click_ammo_cost=Gun14.RIGHT_AMMO_COST,
+            can_right_click=False,
+            left_click_ammo_cost=Gun14.AMMO_COST,
+            right_click_ammo_cost=0,
             tier=Gun14.TIER,
             sounds_dict={
                 "fire": sounds["gun14_fire"],
@@ -1832,54 +1934,50 @@ class Gun14(WeaponBase):
 
     def __init__(self, name, front_image, topdown_image, **kwargs):
         super().__init__(name, front_image, topdown_image, **kwargs)
-        self.fire_delay = Gun14.LEFT_FIRE_DELAY
-        self.right_fire_delay = Gun14.RIGHT_FIRE_DELAY
-        self.last_right_click_time = 0
-        self.recoil_strength = 10
-        self.speed_penalty = 0.06  # 기본 장착 시
-        self.distance_from_center = config.PLAYER_VIEW_SCALE * 48
-        self.shake_strength = 10
-        self.ads_mode = False
+        self.fire_delay = Gun14.FIRE_DELAY
+        self.recoil_strength = 4
+        self.speed_penalty = 0.08
+        self.distance_from_center = config.PLAYER_VIEW_SCALE * 50
+        self.shake_strength = 9
 
-    def on_update(self, mouse_left_down, mouse_right_down):
-        now = pygame.time.get_ticks()
+        self._coolshot_left = 0
 
-        # 우클릭 시 ADS 모드 진입, 좌클릭 시 기본 모드
-        if mouse_right_down:
-            self.ads_mode = True
-            self.fire_delay = Gun14.RIGHT_FIRE_DELAY
-            self.recoil_strength = 8
-            self.speed_penalty = 0.14
-            self.shake_strength = 11
-        else:
-            self.ads_mode = False
-            self.fire_delay = Gun14.LEFT_FIRE_DELAY
-            self.recoil_strength = 10
-            self.speed_penalty = 0.06
-            self.shake_strength = 10
-
-        # 발사 처리
-        if mouse_left_down and now - self.last_shot_time >= self.fire_delay:
-            if self.get_ammo_gauge() >= (self.right_click_ammo_cost if self.ads_mode else self.left_click_ammo_cost):
-                if self.ads_mode:
-                    self.on_right_click()
-                else:
-                    self.on_left_click()
-                self.last_shot_time = now
-
+    # 좌클릭
     def on_left_click(self):
-        # 기본 모드 사격
-        self._fire_bullet(self.LEFT_DAMAGE, self.LEFT_SPREAD, self.left_click_ammo_cost)
+        if not self.can_left_click or self.get_ammo_gauge() < self.left_click_ammo_cost:
+            return
 
-    def on_right_click(self):
-        # ADS 모드 사격
-        self._fire_bullet(self.RIGHT_DAMAGE, self.RIGHT_SPREAD, self.right_click_ammo_cost)
+        now = pygame.time.get_ticks()
+        # 마지막 사격 이후 충분히 쉬었으면 쿨샷 발동(이번 탄부터 적용)
+        if now - self.last_shot_time >= self.COOLSHOT_IDLE_MS:
+            self._coolshot_left = self.COOLSHOT_ROUNDS
 
+        is_coolshot = self._coolshot_left > 0
+
+        dmg    = self.DAMAGE_BASE + (self.COOLSHOT_DMG_BONUS if is_coolshot else 0)
+        spread = self.SPREAD_BASE + (self.COOLSHOT_SPREAD_D if is_coolshot else 0)
+
+        bullet, muzzle = self._fire_bullet(dmg, spread, self.left_click_ammo_cost)
+
+        # 버프 탄 시각 이펙트
+        if is_coolshot and bullet is not None and muzzle is not None:
+            mx, my = muzzle
+            config.effects.append(self._CoolshotSpark(mx, my, life_ms=self.COOL_EFX_LIFE_MS))
+
+        # 버프 탄 소모
+        if is_coolshot:
+            self._coolshot_left -= 1
+
+    # 실제 발사
     def _fire_bullet(self, damage, spread_deg, ammo_cost):
         if self.get_ammo_gauge() < ammo_cost:
-            return
+            return None, None
+
         self.reduce_ammo(ammo_cost)
-        self.sounds["fire"].play()
+        try:
+            self.sounds["fire"].play()
+        except Exception:
+            pass
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         px, py = self.get_player_world_position()
@@ -1887,36 +1985,71 @@ class Gun14(WeaponBase):
         dx = mouse_x - config.player_rect.centerx
         dy = mouse_y - config.player_rect.centery
         angle = math.atan2(dy, dx)
-        spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
-        angle += spread
 
-        vx = math.cos(angle)
-        vy = math.sin(angle)
-        offset_x = vx * 30 * config.PLAYER_VIEW_SCALE
-        offset_y = vy * 30 * config.PLAYER_VIEW_SCALE
-        bullet_x = px + offset_x
-        bullet_y = py + offset_y
+        spread = math.radians(random.uniform(-spread_deg / 2, spread_deg / 2))
+        final_angle = angle + spread
+        vx = math.cos(final_angle)
+        vy = math.sin(final_angle)
+
+        muzzle_forward = 30 * config.PLAYER_VIEW_SCALE
+        bx = px + vx * muzzle_forward
+        by = py + vy * muzzle_forward
 
         bullet = Bullet(
-            bullet_x,
-            bullet_y,
-            bullet_x + vx * self.RANGE,
-            bullet_y + vy * self.RANGE,
-            spread_angle_degrees=spread_deg,
+            bx, by,
+            bx + vx * self.RANGE,
+            by + vy * self.RANGE,
+            spread_angle_degrees=0,
             bullet_image=self.bullet_images[0],
             speed=self.SPEED,
-            max_distance=self.RANGE * config.PLAYER_VIEW_SCALE,
+            max_distance=self.RANGE,
             damage=damage
         )
         bullet.trail_enabled = self.bullet_has_trail
         config.bullets.append(bullet)
 
+        # 탄피 배출
         if self.uses_cartridges and self.cartridge_images:
-            eject_angle = angle + math.radians(90 + random.uniform(-15, 15))
+            eject_angle = final_angle + math.radians(90 + random.uniform(-15, 15))
             vx_c = math.cos(eject_angle) * 1.2
             vy_c = math.sin(eject_angle) * 1.2
             scatter = ScatteredBullet(px, py, vx_c, vy_c, self.cartridge_images[0])
             config.scattered_bullets.append(scatter)
+
+        return bullet, (bx, by)
+
+    # 쿨샷 시각 이펙트(짧은 푸른 스파크)
+    class _CoolshotSpark:
+        def __init__(self, x, y, life_ms=220):
+            self.x, self.y = x, y
+            self.birth = pygame.time.get_ticks()
+            self.life_ms = life_ms
+            self.finished = False
+            # 랜덤 방사 스파크
+            self._dirs = []
+            n = 8
+            for _ in range(n):
+                ang = random.uniform(0, math.tau)
+                spd = random.uniform(2.0, 4.0) * config.PLAYER_VIEW_SCALE
+                self._dirs.append((math.cos(ang) * spd, math.sin(ang) * spd))
+
+        def update(self):
+            now = pygame.time.get_ticks()
+            if now - self.birth >= self.life_ms:
+                self.finished = True
+
+        def draw(self, screen, world_x, world_y):
+            now = pygame.time.get_ticks()
+            t = (now - self.birth) / float(self.life_ms)
+            if t >= 1.0:
+                return
+            alpha = max(0, int(220 * (1.0 - t)))
+            cx = int(self.x - world_x)
+            cy = int(self.y - world_y)
+            for vx, vy in self._dirs:
+                ex = int(cx + vx * t * 6)
+                ey = int(cy + vy * t * 6)
+                pygame.draw.line(screen, (150, 220, 255, alpha), (cx, cy), (ex, ey), 2)
 
 class Gun15(WeaponBase):
     TIER = 5
@@ -2716,9 +2849,9 @@ class Gun21(WeaponBase):
 class Gun22(WeaponBase):
     TIER = 4
     AMMO_COST = 20
-    DAMAGE = 200
+    DAMAGE = 225
     SPREAD = 0
-    FIRE_DELAY = 1750
+    FIRE_DELAY = 1250
     RANGE = 3000
     SPEED = 18 * config.PLAYER_VIEW_SCALE
 

@@ -44,7 +44,7 @@ def load_images():
     gun10_img = pygame.image.load(path_image("Image", "Gun", "Gun10Player.png")).convert_alpha()
     gun10_img = pygame.transform.smoothscale(gun10_img, (50, int(gun10_img.get_height() * (50 / gun10_img.get_width()))))
 
-    gun11_img = pygame.image.load(path_image("Image", "Gun", "Gun10Player.png")).convert_alpha()
+    gun11_img = pygame.image.load(path_image("Image", "Gun", "Gun11Player.png")).convert_alpha()
     gun11_img = pygame.transform.smoothscale(gun11_img, (50, int(gun11_img.get_height() * (50 / gun11_img.get_width()))))
 
     gun12_img = pygame.image.load(path_image("Image", "Gun", "Gun12Player.png")).convert_alpha()

@@ -82,13 +82,13 @@ weapon_stats = {
         "usage": "좌클릭\n연사\n\n우클릭\n기압탄 발사"
     },
     "gun10": {
-        "name": "Mx4 Storm",
-        "power": "좌: 16 / 우: 20",
-        "spread": "좌: 12 / 우: 8",
-        "cost": "좌: 5 / 우: 6",
+        "name": "리플 펄스 PDW",
+        "power": "13",
+        "spread": "12",
+        "cost": "6",
         "rank": "2",
-        "desc": "GIS에서 사용하는 가벼운 무게와 빠른 연사력을 가진 기관단총입니다. 우클릭 시 정밀 사격(ADS) 모드로 전환되어 탄퍼짐과 반동이 줄어듭니다.",
-        "usage": "좌클릭\n기본 연사 사격\n\n우클릭\n정밀 사격(ADS) 모드 전환"
+        "desc": "연사력이 빠르지만 탄퍼짐이 큰 PDW입니다. 6발마다 적을 소량 밀쳐내는 특수 탄환을 발사합니다.",
+        "usage": "좌클릭\n기본 연사 사격\n\n"
     },
     "gun11": {
         "name": "SPAS-15",
@@ -109,22 +109,22 @@ weapon_stats = {
         "usage": "좌클릭\n단발 사격\n(한 번에 큰 피해)"
     },
     "gun13": {
-        "name": "MPX",
-        "power": "좌: 18 / 우: 22",
-        "spread": "좌: 10 / 우: 8",
-        "cost": "좌: 4 / 우: 5",
+        "name": "듀얼라인 서브건",
+        "power": "8",
+        "spread": "4~7",
+        "cost": "7",
         "rank": "1",
-        "desc": "NF 군인들이 자주 쓰는 경량 SMG로, 연사력과 휴대성이 뛰어납니다. 우클릭 시 정밀 사격(ADS) 모드로 더욱 정확하게 공격할 수 있습니다.",
-        "usage": "좌클릭\n연사\n\n우클릭\n정밀 사격(ADS) 모드"
+        "desc": "NF 군인들이 자주 쓰는 경량 SMG로, 동시에 두 발을 발사 할 수 있습니다.",
+        "usage": "좌클릭\n두 발 동시 연사\n\n"
     },
     "gun14": {
-        "name": "MP5",
-        "power": "좌: 20 / 우: 24",
-        "spread": "좌: 9 / 우: 8",
-        "cost": "좌: 4 / 우: 5",
+        "name": "쿨샷 캐리어",
+        "power": "18 (쿨샷일시 +9)",
+        "spread": "10 (쿨샷일시 -9)",
+        "cost": "7",
         "rank": "2",
-        "desc": "NF 코퍼레이션의 전통적인 기관단총입니다. ADS 모드에서는 반동이 줄고 명중률이 올라갑니다.",
-        "usage": "좌클릭\n연사\n\n우클릭\n정밀 사격(ADS) 모드"
+        "desc": "0.5초동안 발사를 중지하면 다음 탄환 10발이 \"쿨샷\"으로 바뀝니다. 이 탄환은 피해와 탄소모가 적습니다. 즉, 끊어서 쏘는 것이 중요합니다.",
+        "usage": "좌클릭\n연사"
     },
     "gun15": {
         "name": "플라즈마 라이플",
@@ -566,9 +566,9 @@ ENEMY_BOOK = {
                 'pattern': '중거리 유지. 주기적으로 자폭 드론을 소환(소환 중에는 제자리 대기). 근접 시 권총으로 사격하며 후퇴',
                 'tips': '드론 경고음이 들리면 대쉬로 즉시 피하기. 본체는 근접 사격이 강하므로 중거리에서 드론을 먼저 정리.'},
 
-    'enemy29': {'name': '고통의 우상',  'rank': '3',
-                'pattern': '고정형 토템. 만약 가까이 다가가면 레이저를 계속 발사하므로, 거리를 멀리 유지하고 처리하면 쉬움.',
-                'tips': '최대한 사거리 밖으로 빠져나간 후 사격하면 매우 손쉽게 처리 가능.'},
+    'enemy29': {'name': '해결 궁수',  'rank': '3',
+                'pattern': '장거리에서 2개의 화살을 부채꼴 방향으로 발사함.',
+                'tips': '화살이 꽤 빠르므르 조심할 것.'},
 
     'enemy30': {'name': '혈액 분출자',  'rank': '3',
                 'pattern': '만약 가까이 다가오면 부채꼴로 대기 모션을 취한 후 도트 피해를 입힘. 그 후, 끝쪽으로 혈액 분사 웅덩이를 남김.',
@@ -1011,7 +1011,7 @@ drone_dialogue = [
         ],
         "effect": {"type": "preview", "target": {"type": "hp_max_up", "amount": 20}},
         "effect_messages": {
-            "prompt": "체력 최대치 +{gained}. 비용: {cost} 악의 정수. 진행하시겠습니까?"
+            "prompt": "체력 최대치가 {gained}만큼 늘어나는 대신 비용은 {cost}만큼 필요합니다. 진행하시겠습니까?"
         },
         "next": None
     },
@@ -1022,9 +1022,9 @@ drone_dialogue = [
             {"text": "예", "next": 4},
             {"text": "아니오", "next": 0}
         ],
-        "effect": {"type": "preview", "target": {"type": "ammo_max_up", "amount": 20}},
+        "effect": {"type": "preview", "target": {"type": "ammo_max_up", "amount": 40}},
         "effect_messages": {
-            "prompt": "탄약 게이지 최대치 +{gained}. 비용: {cost} 악의 정수. 진행하시겠습니까?"
+            "prompt": "탄약 게이지 최대치가 {gained}만큼 늘어나는 대신 비용은 {cost}만큼 필요합니다. 진행하시겠습니까?"
         },
         "next": None
     },
@@ -1034,7 +1034,7 @@ drone_dialogue = [
         "choices": None,
         "effect": {"type": "hp_max_up", "amount": 20},
         "effect_messages": {
-            "success": "업그레이드 완료. 체력 최대치가 +{gained}만큼 증가했습니다. (-{cost})",
+            "success": "업그레이드 완료. 체력 최대치가 {gained}만큼 증가했습니다. (-{cost})",
             "insufficient": "악의 정수가 부족합니다. 추가 확보 후 재시도하십시오."
         },
         "next": 0
@@ -1043,9 +1043,9 @@ drone_dialogue = [
     {
         "speaker": "드론",
         "choices": None,
-        "effect": {"type": "ammo_max_up", "amount": 20},
+        "effect": {"type": "ammo_max_up", "amount": 40},
         "effect_messages": {
-            "success": "업그레이드 완료. 탄약 게이지 최대치가 +{gained}만큼 증가했습니다. (-{cost})",
+            "success": "업그레이드 완료. 탄약 게이지 최대치가 {gained}만큼 증가했습니다. (-{cost})",
             "insufficient": "악의 정수가 부족합니다. 추가 확보 후 재시도하십시오."
         },
         "next": 0

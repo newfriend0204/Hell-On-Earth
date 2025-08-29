@@ -16,7 +16,7 @@ class EnemyMeta(type):
 class AIBase(metaclass=EnemyMeta):
     def __init__(
         self, world_x, world_y, images, sounds, map_width, map_height,
-        speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.18, alert_duration=1000,
+        speed=3.0, near_threshold=150, far_threshold=500, radius=30, push_strength=0.20, alert_duration=1000,
         damage_player_fn=None, rank=1
     ):
         # 기본 AI 속성 초기화
@@ -147,10 +147,10 @@ class AIBase(metaclass=EnemyMeta):
         AMMO_COLOR = (255, 191, 193)
         HEALTH_COLOR = (181, 255, 146)
         for _ in range(health_count):
-            item = DroppedItem(self.world_x, self.world_y, config.images["health_up"], "health", 10, get_player_pos, color=HEALTH_COLOR)
+            item = DroppedItem(self.world_x, self.world_y, config.images["health_up"], "health", 15, get_player_pos, color=HEALTH_COLOR)
             config.dropped_items.append(item)
         for _ in range(ammo_count):
-            item = DroppedItem(self.world_x, self.world_y, config.images["ammo_gauge_up"], "ammo", 20, get_player_pos, color=AMMO_COLOR)
+            item = DroppedItem(self.world_x, self.world_y, config.images["ammo_gauge_up"], "ammo", 25, get_player_pos, color=AMMO_COLOR)
             config.dropped_items.append(item)
 
     def update(self, dt, world_x, world_y, player_rect, enemies=[]):
@@ -368,7 +368,7 @@ class Enemy1(AIBase):
             near_threshold=150,
             far_threshold=500,
             radius=30,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -503,7 +503,7 @@ class Enemy2(AIBase):
             near_threshold=200,
             far_threshold=700,
             radius=30,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -706,7 +706,7 @@ class Enemy3(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=39,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=1000,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -913,7 +913,7 @@ class Enemy4(AIBase):
             near_threshold=0,
             far_threshold=self.FAR_THRESHOLD,
             radius=30 * 1.2,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.MIN_ATTACK_PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1161,7 +1161,7 @@ class Enemy5(AIBase):
             near_threshold=150,
             far_threshold=500,
             radius=30,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1316,7 +1316,7 @@ class Enemy5(AIBase):
 
 class Enemy6(AIBase):
     rank = 7
-    HP_MAX = 700
+    HP_MAX = 600
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.85
 
     FIREBALL_DAMAGE = 35
@@ -1349,7 +1349,7 @@ class Enemy6(AIBase):
             near_threshold=200,
             far_threshold=900,
             radius=55,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=800,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1514,7 +1514,7 @@ class Enemy7(AIBase):
             near_threshold=0,
             far_threshold=9999,
             radius=40,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=500,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1640,7 +1640,7 @@ class Enemy8(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=30 * PLAYER_VIEW_SCALE,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.PREPARE_TIME,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1768,7 +1768,7 @@ class Enemy9(AIBase):
             near_threshold=0,
             far_threshold=self.RANGED_RANGE,
             radius=30 * PLAYER_VIEW_SCALE,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=500,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -1844,313 +1844,339 @@ class Enemy9(AIBase):
 class Enemy10(AIBase):
     rank = 6
 
-    DETECT_MIN = 0
-    DETECT_MAX = 1000 * PLAYER_VIEW_SCALE
-    LASER_TRACK_TIME = 1500
-    FIRE_DURATION = 1750
-    OVERHEAT_TIME = 2500
-    FIRE_INTERVAL = 75
-    ROT_SPEED_TRACK = math.radians(100)
-    ROT_SPEED_FIRE = math.radians(80)
-    BULLET_SPEED = 10 * PLAYER_VIEW_SCALE
-    BULLET_RANGE = 700 * PLAYER_VIEW_SCALE
-    BULLET_DAMAGE = 7
-    LASER_THICKNESS = 6
-    LASER_COLOR = (255, 0, 0)
+    RADIUS = int(28 * PLAYER_VIEW_SCALE)
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.95
+    KEEP_MIN = int(360 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(560 * PLAYER_VIEW_SCALE)
+    ATTACK_RANGE = int(900 * PLAYER_VIEW_SCALE)
 
-    DEATH_EXPL_RADIUS = 180 * PLAYER_VIEW_SCALE
-    DEATH_EXPL_DMG_MAX = 35
-    DEATH_EXPL_DMG_MIN = 12
+    THROW_COOLDOWN_MS = 2500
+    AIM_LOCK_MS = 450
+
+    GRENADE_SPEED = 9
+    DEPLOY_DELAY_MS = 700
+
+    NET_RADIUS = 160
+    NET_DURATION_MS = 3500
+    NET_FADEIN_MS = 240
+    NET_FADEOUT_MS = 260
+    NET_GRID_STEP = 28
+    DOT_TICK_MS = 250
+    DOT_DPS = 20
+
+    SHOCK_SLOW_MS = 300
+    SHOCK_SLOW_FACTOR = 0.60
+
+    class _Grenade:
+        def __init__(self, x, y, vx, vy, speed, deploy_delay_ms):
+            self.x = x
+            self.y = y
+            self.vx = vx * speed * PLAYER_VIEW_SCALE
+            self.vy = vy * speed * PLAYER_VIEW_SCALE
+            self.t0 = pygame.time.get_ticks()
+            self.deploy_delay_ms = deploy_delay_ms
+            self.alive = True
+
+        def update(self):
+            if not self.alive:
+                return False
+            self.x += self.vx
+            self.y += self.vy
+            if pygame.time.get_ticks() - self.t0 >= self.deploy_delay_ms:
+                self.alive = False
+                return True  # 전개 신호
+            return False
+
+        def draw(self, screen, world_x, world_y):
+            if not self.alive:
+                return
+            # 간단한 전기 구체(폭탄) 비주얼
+            r = int(8 * PLAYER_VIEW_SCALE)
+            cx = int(self.x - world_x)
+            cy = int(self.y - world_y)
+            pygame.draw.circle(screen, (90, 160, 255), (cx, cy), r)
+            pygame.draw.circle(screen, (255, 255, 255), (cx, cy), r, 2)
+
+    class _Net:
+        # 전개된 전기 그물 장판(애니메이션/도트/그물 격자 렌더 포함)
+        def __init__(self, x, y, base_surface, radius_px, duration_ms, fadein_ms, fadeout_ms,
+                     tick_ms, dps, sounds, damage_player_fn, slow_ms, slow_factor):
+            self.x = x
+            self.y = y
+            self.base = base_surface  # 클리핑된 '완성 그물' 표면(정사이즈)
+            self.radius_px = radius_px
+            self.duration_ms = duration_ms
+            self.fadein_ms = fadein_ms
+            self.fadeout_ms = fadeout_ms
+            self.tick_ms = tick_ms
+            self.dps = dps
+            self.sounds = sounds or {}
+            self.damage_player_fn = damage_player_fn
+            self.slow_ms = slow_ms
+            self.slow_factor = slow_factor
+
+            self.t0 = pygame.time.get_ticks()
+            self.last_tick = 0
+            self.finished = False
+
+            # 전개 사운드
+            snd = self.sounds.get("shock_burst")
+            if snd:
+                try:
+                    snd.play()
+                except Exception:
+                    pass
+
+        def _lifecycle(self, now):
+            elapsed = now - self.t0
+            remain = self.duration_ms - elapsed
+            # 스케일(펼침): 0.2 → 1.0 (ease-out 느낌)
+            if elapsed < self.fadein_ms:
+                t = elapsed / max(1, self.fadein_ms)
+                scale = 0.2 + 0.8 * (1 - (1 - t) * (1 - t))
+            else:
+                scale = 1.0
+            # 알파(소멸)
+            alpha_mul = 1.0
+            if remain <= self.fadeout_ms:
+                t = max(0, remain) / max(1, self.fadeout_ms)
+                alpha_mul = t
+            return scale, alpha_mul, elapsed, remain
+
+        def update(self, world_x, world_y, player_rect):
+            if self.finished:
+                return
+            now = pygame.time.get_ticks()
+            scale, _, elapsed, _ = self._lifecycle(now)
+            if elapsed >= self.duration_ms:
+                self.finished = True
+                return
+
+            # 플레이어 감전 DOT + 느려짐
+            px = world_x + player_rect.centerx
+            py = world_y + player_rect.centery
+            r = self.radius_px * scale
+            if (px - self.x) ** 2 + (py - self.y) ** 2 <= r * r:
+                if now - self.last_tick >= self.tick_ms:
+                    self.last_tick = now
+                    dmg = max(1, int(self.dps * (self.tick_ms / 1000.0)))
+                    try:
+                        if self.damage_player_fn:
+                            self.damage_player_fn(dmg)
+                        elif hasattr(config, "damage_player"):
+                            config.damage_player(dmg)
+                    except Exception:
+                        pass
+                    # 느려짐 효과
+                    try:
+                        config.slow_until_ms = max(getattr(config, "slow_until_ms", 0), now + self.slow_ms)
+                        config.move_slow_factor = self.slow_factor
+                    except Exception:
+                        pass
+
+        def draw(self, screen, world_x, world_y):
+            if self.finished:
+                return
+            now = pygame.time.get_ticks()
+            scale, alpha_mul, _, _ = self._lifecycle(now)
+
+            # 스케일 적용
+            size_full = self.base.get_size()
+            w = max(2, int(size_full[0] * scale))
+            h = max(2, int(size_full[1] * scale))
+            surf = pygame.transform.smoothscale(self.base, (w, h))
+
+            # 알파 곱(전체)
+            a = int(255 * max(0.0, min(1.0, alpha_mul)))
+            surf.set_alpha(a)
+
+            rect = surf.get_rect(center=(int(self.x - world_x), int(self.y - world_y)))
+            screen.blit(surf, rect)
+
+            # 유지 중 약한 펄스 링(가벼운 모션 추가)
+            if alpha_mul > 0.05:
+                pulse_r = int((self.radius_px * scale) * (0.75 + 0.05 * math.sin(now * 0.02)))
+                pygame.draw.circle(screen, (180, 230, 255, 40), (rect.centerx, rect.centery), pulse_r, width=2)
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None, rank=rank):
+                 damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
-            speed=0.0,
-            near_threshold=0,
-            far_threshold=self.DETECT_MAX,
-            radius=30,
-            push_strength=0.18,
-            alert_duration=800,
+            speed=self.BASE_SPEED,
+            near_threshold=self.KEEP_MIN,
+            far_threshold=self.KEEP_MAX,
+            radius=self.RADIUS,
+            push_strength=0.20,
+            alert_duration=self.AIM_LOCK_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
         )
-
-        self.image_original = images.get("enemy10", images["enemy2"])
-        self.gun_image_original = images.get("gun5", None)
-
-        self.bullet_image = images["enemy_bullet"]
-        self.explosion_image = images["explosion1"]
-
-        self.fire_sound      = sounds["gun5_fire"]
-        self.preheat_sound   = sounds["gun5_preheat"]
-        self.overheat_sound  = sounds["gun5_overheat"]
-        self.alert_sound     = sounds["drone_warning"]
-        self.explosion_sound = sounds["gun6_explosion"]
-
-        self.state = "IDLE"
-        self.state_started_at = pygame.time.get_ticks()
-        self.last_update_time = self.state_started_at
-        self.last_fire_time = 0
-        self.show_alert = False
-
-        self.direction_angle = 0.0
-        self.current_distance = 36 * PLAYER_VIEW_SCALE
-        self.muzzle_extra    = 12 * PLAYER_VIEW_SCALE
-
-        self.laser_endpoint_world = None
-        self._alert_channel = None
-
-        self.smokes = []
-        self._last_smoke_time = 0
-
+        self.image_original = images.get("enemy10", images.get("enemy2"))
+        self.snd_throw = sounds.get("whirl")
+        self.snd_burst = sounds.get("shock_burst")
         self.kill_callback = kill_callback
-        self.hp = 350
 
-    def hit(self, damage, blood_effects, force=False):
-        if not force:
-            damage = int(round(damage * 0.8))
-        super().hit(damage, [], force=force) # 기계이므로 피가 안튀김
+        self.hp = 420
+        self.state = "idle"  # idle / aim
+        self.state_until = 0
+        self.next_ready_at = pygame.time.get_ticks() + random.randint(400, 900)
+        self.aim_angle_locked = 0.0
+        self.direction_angle = random.uniform(0, 2 * math.pi)
 
-    def _muzzle_world_pos(self):
-        mx = self.world_x + math.cos(self.direction_angle) * (self.current_distance + self.muzzle_extra)
-        my = self.world_y + math.sin(self.direction_angle) * (self.current_distance + self.muzzle_extra)
-        return mx, my
+        self._grenades = []
+        self._nets = []
 
-    @staticmethod
-    def _angle_lerp(current, target, max_delta):
-        diff = (target - current + math.pi) % (2 * math.pi) - math.pi
-        if abs(diff) <= max_delta:
-            return target
-        return current + (max_delta if diff > 0 else -max_delta)
-
-    def _compute_laser_endpoint(self, player_world_pos):
-        start = self._muzzle_world_pos()
-        angle = self.direction_angle
-        step = 8 * PLAYER_VIEW_SCALE
-        max_dist = self.BULLET_RANGE
-
-        px, py = player_world_pos
-        last_pt = start
-
-        def hit_player(pt):
-            return (pt[0]-px)**2 + (pt[1]-py)**2 <= (25*PLAYER_VIEW_SCALE)**2
-
-        def collides(pt):
-            if not hasattr(config, "obstacle_manager") or config.obstacle_manager is None:
-                return False
-            ox, oy = pt
-            r_small = 2 * PLAYER_VIEW_SCALE
-            for obs in (config.obstacle_manager.static_obstacles + config.obstacle_manager.combat_obstacles):
-                for c in getattr(obs, "colliders", []):
-                    if getattr(c, "bullet_passable", False):
-                        continue
-                    cx = obs.world_x + getattr(c, "center", (0,0))[0]
-                    cy = obs.world_y + getattr(c, "center", (0,0))[1]
-                    shape = getattr(c, "shape", None)
-                    if shape == "circle":
-                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), c.size):
-                            return True
-                    elif shape == "ellipse":
-                        try: rx, ry = c.size
-                        except: continue
-                        if self.check_ellipse_circle_collision((ox,oy), r_small, (cx,cy), rx, ry):
-                            return True
-                    elif shape == "rectangle":
-                        try: w, h = c.size
-                        except: continue
-                        coll_r = ((w/2)**2 + (h/2)**2) ** 0.5
-                        if self.check_collision_circle((ox,oy), r_small, (cx,cy), coll_r):
-                            return True
-            return False
-
-        dist = 0.0
-        while dist <= max_dist:
-            pt = (start[0] + math.cos(angle) * dist,
-                  start[1] + math.sin(angle) * dist)
-            if hit_player(pt):
-                return pt
-            if collides(pt):
-                return last_pt
-            last_pt = pt
-            dist += step
-        return last_pt
-
-    def _spawn_smoke(self, count=1):
-        mx, my = self._muzzle_world_pos()
-        for _ in range(count):
-            a = self.direction_angle + math.pi + random.uniform(-0.6, 0.6)
-            spd = random.uniform(0.5, 1.5) * PLAYER_VIEW_SCALE
-            self.smokes.append({
-                "x": mx, "y": my,
-                "vx": math.cos(a)*spd, "vy": math.sin(a)*spd - 0.2*PLAYER_VIEW_SCALE,
-                "r": random.uniform(5, 10) * PLAYER_VIEW_SCALE,
-                "alpha": 180,
-                "decay": random.uniform(2.0, 3.5),
-            })
-
-    def _update_smokes(self, dt_ms):
-        alive = []
-        for s in self.smokes:
-            s["x"] += s["vx"]
-            s["y"] += s["vy"]
-            s["r"] *= 1.01
-            s["alpha"] -= s["decay"]
-            if s["alpha"] > 5:
-                alive.append(s)
-        self.smokes = alive
-
-    def _fire_once(self):
-        mx, my = self._muzzle_world_pos()
-        px = mx + math.cos(self.direction_angle) * self.BULLET_RANGE
-        py = my + math.sin(self.direction_angle) * self.BULLET_RANGE
-        bullet = Bullet(
-            mx, my, px, py,
-            spread_angle_degrees=3,
-            bullet_image=self.bullet_image,
-            speed=self.BULLET_SPEED,
-            max_distance=self.BULLET_RANGE,
-            damage=self.BULLET_DAMAGE
+        self._net_base_surface = self._build_net_surface(
+            radius_px=int(self.NET_RADIUS * PLAYER_VIEW_SCALE),
+            step_px=max(16, int(self.NET_GRID_STEP * PLAYER_VIEW_SCALE))
         )
-        bullet.trail_enabled = False
-        bullet.owner = self
-        config.global_enemy_bullets.append(bullet)
 
+    # 유틸: 그물 표면 생성(원 마스크 클리핑으로 격자가 원 밖으로 안 나가게)
+    def _build_net_surface(self, radius_px, step_px):
+        size = radius_px * 2 + 4
+        center = (size // 2, size // 2)
+
+        # 격자 라인만 그린 표면(불투명) → 마스크 추출용
+        grid = pygame.Surface((size, size), pygame.SRCALPHA)
+        line_col_opaque = (255, 255, 255, 255)
+        for x in range(center[0] - radius_px, center[0] + radius_px + 1, step_px):
+            pygame.draw.line(grid, line_col_opaque, (x, center[1] - radius_px), (x, center[1] + radius_px), 2)
+        for y in range(center[1] - radius_px, center[1] + radius_px + 1, step_px):
+            pygame.draw.line(grid, line_col_opaque, (center[0] - radius_px, y), (center[0] + radius_px, y), 2)
+
+        # 원 마스크
+        circle = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(circle, (255, 255, 255, 255), center, radius_px)
+
+        # 격자 마스크 ∧ 원 마스크(교집합) → 격자가 원 밖으로 안 나가도록
+        mask_grid = pygame.mask.from_surface(grid)
+        mask_circle = pygame.mask.from_surface(circle)
+        mask_final = mask_grid.overlap_mask(mask_circle, (0, 0))
+
+        # 베이스(부드러운 바탕 + 테두리) 위에, 마스크된 격자 색으로 출력
+        base = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(base, (60, 140, 255, 40), center, radius_px)
+        pygame.draw.circle(base, (120, 200, 255, 80), center, radius_px, width=2)
+
+        grid_color = (120, 200, 255, 110)
+        clipped_grid = mask_final.to_surface(setcolor=grid_color, unsetcolor=(0, 0, 0, 0))
+        base.blit(clipped_grid, (0, 0))
+
+        # 약한 보조 링
+        pygame.draw.circle(base, (180, 230, 255, 30), center, int(radius_px * 0.75), width=2)
+
+        return base
+
+    # 공격
+    def _throw_net(self):
+        # 사운드
+        if self.snd_throw:
+            try:
+                self.snd_throw.play()
+            except Exception:
+                pass
+
+        ang = self.aim_angle_locked
+        mx = self.world_x + math.cos(ang) * (self.RADIUS + 10)
+        my = self.world_y + math.sin(ang) * (self.RADIUS + 10)
+        vx, vy = math.cos(ang), math.sin(ang)
+        self._grenades.append(self._Grenade(mx, my, vx, vy, self.GRENADE_SPEED, self.DEPLOY_DELAY_MS))
+
+    # 틱 업데이트(목표/이동 + 투사체/장판 관리)
     def update_goal(self, world_x, world_y, player_rect, enemies):
         now = pygame.time.get_ticks()
-        dt = now - getattr(self, "last_update_time", now)
-        self.last_update_time = now
-
-        player_world_pos = (world_x + player_rect.centerx, world_y + player_rect.centery)
-        dx = player_world_pos[0] - self.world_x
-        dy = player_world_pos[1] - self.world_y
+        px = world_x + player_rect.centerx
+        py = world_y + player_rect.centery
+        dx, dy = px - self.world_x, py - self.world_y
         dist = math.hypot(dx, dy)
-        target_angle = math.atan2(dy, dx)
+        face = math.atan2(dy, dx) if (dx or dy) else self.direction_angle
+        self.direction_angle = face
 
-        if self.state == "IDLE":
-            self.show_alert = False
-            self.laser_endpoint_world = None
-            if dist <= self.DETECT_MAX:
-                self.state = "TRACKING"
-                self.state_started_at = now
-                self.show_alert = True
-                try: self.preheat_sound.play()
-                except: pass
-                try:
-                    if self._alert_channel is None or not self._alert_channel.get_busy():
-                        ch = pygame.mixer.find_channel()
-                        if ch:
-                            ch.play(self.alert_sound)
-                            self._alert_channel = ch
-                except: pass
+        # 링 유지 이동
+        desired = (self.KEEP_MIN + self.KEEP_MAX) * 0.5
+        away = math.atan2(self.world_y - py, self.world_x - px)
+        ox = math.cos(now * 0.0018) * 10 * PLAYER_VIEW_SCALE
+        oy = math.sin(now * 0.0016) * 10 * PLAYER_VIEW_SCALE
+        if dist < self.KEEP_MIN:
+            self.goal_pos = (px + math.cos(away) * desired + ox, py + math.sin(away) * desired + oy)
+        elif dist > self.KEEP_MAX:
+            self.goal_pos = (px - math.cos(away) * desired + ox, py - math.sin(away) * desired + oy)
+        else:
+            self.goal_pos = (self.world_x + ox * 0.2, self.world_y + oy * 0.2)
 
-        if self.state == "TRACKING":
-            max_delta = self.ROT_SPEED_TRACK * (dt / 1000.0)
-            self.direction_angle = self._angle_lerp(self.direction_angle, target_angle, max_delta)
-            self.laser_endpoint_world = self._compute_laser_endpoint(player_world_pos)
+        # 상태 전이(공격)
+        if self.state == "idle":
+            if dist <= self.ATTACK_RANGE and now >= self.next_ready_at:
+                self.state = "aim"
+                self.state_until = now + self.AIM_LOCK_MS
+                self.aim_angle_locked = face
+        elif self.state == "aim":
+            if now >= self.state_until:
+                self._throw_net()
+                self.state = "idle"
+                self.next_ready_at = now + self.THROW_COOLDOWN_MS + random.randint(200, 450)
 
-            if not (dist <= self.DETECT_MAX):
-                self.state = "IDLE"
-                self.show_alert = False
-                if self._alert_channel and self._alert_channel.get_busy():
-                    self._alert_channel.stop()
-                self.laser_endpoint_world = None
+        # 투사체 업데이트(전개 시 그물 생성)
+        new_grenades = []
+        for g in self._grenades:
+            deployed = g.update()
+            if deployed:
+                self._nets.append(
+                    self._Net(
+                        x=g.x, y=g.y,
+                        base_surface=self._net_base_surface,
+                        radius_px=int(self.NET_RADIUS * PLAYER_VIEW_SCALE),
+                        duration_ms=self.NET_DURATION_MS,
+                        fadein_ms=self.NET_FADEIN_MS,
+                        fadeout_ms=self.NET_FADEOUT_MS,
+                        tick_ms=self.DOT_TICK_MS,
+                        dps=self.DOT_DPS,
+                        sounds={"shock_burst": self.snd_burst},
+                        damage_player_fn=self.damage_player,
+                        slow_ms=self.SHOCK_SLOW_MS,
+                        slow_factor=self.SHOCK_SLOW_FACTOR
+                    )
+                )
+            else:
+                new_grenades.append(g)
+        self._grenades = new_grenades
 
-            elif now - self.state_started_at >= self.LASER_TRACK_TIME:
-                self.state = "FIRING"
-                self.state_started_at = now
-                self.last_fire_time = now
-                self.show_alert = False
-                if self._alert_channel and self._alert_channel.get_busy():
-                    self._alert_channel.stop()
+        # 그물 업데이트/청소
+        new_nets = []
+        for n in self._nets:
+            n.update(world_x, world_y, player_rect)
+            if not n.finished:
+                new_nets.append(n)
+        self._nets = new_nets
 
-        elif self.state == "FIRING":
-            max_delta = self.ROT_SPEED_FIRE * (dt / 1000.0)
-            self.direction_angle = self._angle_lerp(self.direction_angle, target_angle, max_delta)
-
-            while now - self.last_fire_time >= self.FIRE_INTERVAL:
-                self.last_fire_time += self.FIRE_INTERVAL
-                self._fire_once()
-                try: self.fire_sound.play()
-                except: pass
-
-            if now - self.state_started_at >= self.FIRE_DURATION:
-                self.state = "OVERHEAT"
-                self.state_started_at = now
-                self.laser_endpoint_world = None
-                try: self.overheat_sound.play()
-                except: pass
-                self._spawn_smoke(count=4)
-
-        elif self.state == "OVERHEAT":
-            self._update_smokes(dt)
-            if now - self._last_smoke_time >= 120:
-                self._last_smoke_time = now
-                self._spawn_smoke(count=1)
-            if now - self.state_started_at >= self.OVERHEAT_TIME:
-                self.state = "IDLE"
-                self.smokes.clear()
-                self.laser_endpoint_world = None
-
+    # 렌더
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        # 그물(장판) → 그물탄 → 본체 순서로 그려 시각적 이해도↑
+        for n in self._nets:
+            n.draw(screen, world_x, world_y)
+        for g in self._grenades:
+            g.draw(screen, world_x, world_y)
+
+        # 본체
+        sx = int(self.world_x - world_x + shake_offset_x)
+        sy = int(self.world_y - world_y + shake_offset_y)
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+            rect = body.get_rect(center=(sx, sy))
+            self.rect = rect
+            screen.blit(body, rect)
+
+    # 사망
+    def die(self, blood_effects):
         if not self.alive:
             return
-        screen_x = self.world_x - world_x + shake_offset_x
-        screen_y = self.world_y - world_y + shake_offset_y
-
-        base_rect = self.image_original.get_rect(center=(screen_x, screen_y))
-        screen.blit(self.image_original, base_rect)
-
-        if self.gun_image_original is not None:
-            barrel = pygame.transform.rotate(self.gun_image_original, -math.degrees(self.direction_angle) - 90)
-            bx = self.world_x + math.cos(self.direction_angle) * self.current_distance
-            by = self.world_y + math.sin(self.direction_angle) * self.current_distance
-            barrel_rect = barrel.get_rect(center=(bx - world_x + shake_offset_x, by - world_y + shake_offset_y))
-            screen.blit(barrel, barrel_rect)
-
-        if self.state == "TRACKING" and self.laser_endpoint_world is not None:
-            mx, my = self._muzzle_world_pos()
-            sx = int(mx - world_x + shake_offset_x)
-            sy = int(my - world_y + shake_offset_y)
-            ex = int(self.laser_endpoint_world[0] - world_x + shake_offset_x)
-            ey = int(self.laser_endpoint_world[1] - world_y + shake_offset_y)
-            pygame.draw.line(screen, self.LASER_COLOR, (sx, sy), (ex, ey), self.LASER_THICKNESS)
-
-        self.draw_alert(screen, screen_x, screen_y)
-
-        if self.state == "OVERHEAT" and self.smokes:
-            for s in self.smokes:
-                r = max(1, int(s["r"]))
-                surf = pygame.Surface((r*2+2, r*2+2), pygame.SRCALPHA)
-                pygame.draw.circle(surf, (80,80,80, int(max(0, min(255, s["alpha"])))), (r+1, r+1), r)
-                screen.blit(surf, (s["x"] - r - world_x + shake_offset_x, s["y"] - r - world_y + shake_offset_y))
-
-    def die(self, blood_effects):
-        if self._already_dropped:
-            return
-
-        if self._alert_channel and self._alert_channel.get_busy():
-            self._alert_channel.stop()
-
-        try: self.explosion_sound.play()
-        except: pass
-        config.effects.append(ExplosionEffectPersistent(self.world_x, self.world_y, self.explosion_image))
-
-        if hasattr(config, "player_rect"):
-            px = config.world_x + config.player_rect.centerx
-            py = config.world_y + config.player_rect.centery
-            dist = math.hypot(px - self.world_x, py - self.world_y)
-            if dist <= self.DEATH_EXPL_RADIUS and hasattr(config, "damage_player"):
-                factor = max(0.0, min(1.0, 1.0 - dist / self.DEATH_EXPL_RADIUS))
-                dmg = int(round(self.DEATH_EXPL_DMG_MIN + (self.DEATH_EXPL_DMG_MAX - self.DEATH_EXPL_DMG_MIN) * factor))
-                config.damage_player(dmg)
-
+        super().die(blood_effects)
         self.spawn_dropped_items(5, 5)
-        super().die([])
-
-    def stop_sounds_on_remove(self):
-        if self._alert_channel and self._alert_channel.get_busy():
-            self._alert_channel.stop()
 
 class Enemy11(AIBase):
     rank = 5
@@ -2171,7 +2197,7 @@ class Enemy11(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=int(30 * PLAYER_VIEW_SCALE),
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.PREPARE_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2375,7 +2401,7 @@ class Enemy12(AIBase):
             near_threshold=self.SHOT_DISTANCE,
             far_threshold=800,
             radius=32,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2582,7 +2608,7 @@ class Enemy12(AIBase):
 class Enemy13(AIBase):
     rank = 9
 
-    MAX_HP = 750
+    MAX_HP = 610
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.6
 
     FRONT_ARC_DEG = 120
@@ -2614,7 +2640,7 @@ class Enemy13(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=36,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -2906,7 +2932,7 @@ class Enemy14(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=30,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -3191,7 +3217,7 @@ class Enemy15(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=int(28 * PLAYER_VIEW_SCALE),
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -3437,7 +3463,7 @@ class Enemy16(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank
@@ -3964,7 +3990,7 @@ class Enemy18(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank
@@ -4252,7 +4278,7 @@ class Enemy18(AIBase):
 class Enemy19(AIBase):
     rank = 8
 
-    MAX_HP = 650
+    MAX_HP = 620
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
     RADIUS = int(32 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -4666,7 +4692,7 @@ class Enemy19(AIBase):
 class Enemy20(AIBase):
     rank = 9
 
-    MAX_HP = 700
+    MAX_HP = 640
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
     RADIUS = int(36 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -4954,7 +4980,7 @@ class Enemy20(AIBase):
 class Enemy21(AIBase):
     rank = 8
 
-    HP = 700
+    HP = 640
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.90
     RADIUS = int(34 * PLAYER_VIEW_SCALE)
     PUSH_STRENGTH = 0.0
@@ -5743,7 +5769,7 @@ class Enemy24(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.18,
+            radius=self.RADIUS, push_strength=0.20,
             alert_duration=self.P1_WINDUP_MS, damage_player_fn=damage_player_fn, rank=rank
         )
         self.image_original = images.get("enemy24", images.get("enemy10"))
@@ -7051,7 +7077,7 @@ class Enemy28(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=int(30 * PLAYER_VIEW_SCALE),
-            push_strength=0.12,
+            push_strength=0.20,
             alert_duration=self.DRONE_SUMMON_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -7253,389 +7279,182 @@ class Enemy28(AIBase):
 
 class Enemy29(AIBase):
     rank = 3
-    HP = 320
-    BASE_SPEED = 0.0
-    RADIUS = int(30 * PLAYER_VIEW_SCALE)
 
-    AIM_MS       = 1000
-    CHANNEL_MS   = 3000
-    REST_MS      = 2000
-    TICK_MS      = 300
-    TICK_DAMAGE  = 6
-    AIM_LOS_GRACE_MS = 200
+    HP = 300
+    RADIUS = int(28 * PLAYER_VIEW_SCALE)
+    BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.95
 
-    LOS_SAMPLES       = 24
-    LOS_SAMPLE_RADIUS = int(6 * PLAYER_VIEW_SCALE)
+    KEEP_MIN = int(420 * PLAYER_VIEW_SCALE)
+    KEEP_MAX = int(620 * PLAYER_VIEW_SCALE)
+    ATTACK_RANGE = int(900 * PLAYER_VIEW_SCALE)
 
-    TRACK_DEG_PER_S  = 120
-    BEAM_RANGE       = int(500 * PLAYER_VIEW_SCALE)
-    BEAM_HIT_RADIUS  = int(18 * PLAYER_VIEW_SCALE)
+    TELEGRAPH_MS = 800
+    COOLDOWN_MS  = 1100
+    FAN_HALF_DEG = 12.0
+    ARROW_SPEED  = 28
+    ARROW_RANGE  = int(900 * PLAYER_VIEW_SCALE)
+    ARROW_DAMAGE = 16
 
-    BEAM_BASE_W   = max(8, int(10 * PLAYER_VIEW_SCALE))
-    BEAM_SEG_LEN  = 24
-    BEAM_JITTER   = 2.5
-    BEAM_PULSE_MS = 700
-    COL_CORE      = (255, 255, 255, 255)
-    COL_GLOW      = (255, 60, 60, 210)
-    COL_OUTER     = (255, 30, 30, 120)
+    TELEGRAPH_LINE_W = 6
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
-                 damage_player_fn=None, kill_callback=None, rank=rank):
+                 damage_player_fn=None, kill_callback=None, is_position_blocked_fn=None, rank=rank):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED,
-            near_threshold=0, far_threshold=0, radius=self.RADIUS, push_strength=0.0,
-            alert_duration=self.AIM_MS,
-            damage_player_fn=damage_player_fn, rank=rank
+            near_threshold=self.KEEP_MIN,
+            far_threshold=self.KEEP_MAX,
+            radius=self.RADIUS,
+            push_strength=0.20,
+            alert_duration=self.TELEGRAPH_MS,
+            damage_player_fn=damage_player_fn,
+            rank=rank,
         )
-        self.hp = self.HP
-        self.max_hp = self.HP
-
         self.image_original = images.get("enemy29", None)
+        self.snd_fire = sounds.get("whirl", None)
+        self.kill_callback = kill_callback
 
-        self.snd_lock  = sounds.get("laser_lock")
-        self.snd_loop  = sounds.get("laser_channel_loop")
-        self._loop_playing = False
+        self.hp = self.HP
+        self.state = "idle"  # idle | telegraph
+        self.state_until = 0
+        self.next_ready_at = pygame.time.get_ticks() + random.randint(600, 1200)
 
-        self.state = "idle"                 # idle → aim → channel → rest
-        self.aim_until = 0
-        self.channel_until = 0
-        self.rest_until = 0
-        self.next_tick_ms = 0
-        self._los_lost_since = None
+        self.aim_angle_locked = 0.0
+        self.direction_angle = random.uniform(0, 2 * math.pi)
 
-        self.beam_angle = 0.0
-        self._last_update_ms = pygame.time.get_ticks()
+        self.arrow_image = self._make_arrow_surface()
 
-        self._beam_born_ms = pygame.time.get_ticks()
-        self.beam_angle = 0.0
-        self._angle_initialized = False
+    # 유틸
+    def _make_arrow_surface(self):
+        # 카툰 느낌의 화살 이미지를 동적으로 생성
+        scale = PLAYER_VIEW_SCALE
+        length = int(44 * scale)
+        height = int(9 * scale)
+        shaft_h = max(3, int(3 * scale))
+        surf = pygame.Surface((length, height), pygame.SRCALPHA)
+        cx, cy = 0, height // 2
 
-    # 사운드 유틸
-    def _start_loop(self):
-        # 채널 루프 시작
-        if self.snd_loop and not self._loop_playing:
-            try:
-                self.snd_loop.play(-1)
-                self._loop_playing = True
-            except Exception:
-                self._loop_playing = False
+        # 샤프트
+        pygame.draw.rect(surf, (230, 230, 230), (int(8*scale), cy - shaft_h//2, int(26*scale), shaft_h))
+        # 헤드(삼각)
+        head = [
+            (int(34*scale), cy - int(5*scale)),
+            (length-1,      cy),
+            (int(34*scale), cy + int(5*scale)),
+        ]
+        pygame.draw.polygon(surf, (255, 245, 245), head)
+        # 깃털
+        feather_l = [
+            (int(4*scale), cy),
+            (int(9*scale), cy - int(4*scale)),
+            (int(9*scale), cy + int(4*scale)),
+        ]
+        pygame.draw.polygon(surf, (200, 200, 255), feather_l)
+        # 심플한 외곽선(살짝 어둡게)
+        pygame.draw.line(surf, (90, 90, 90, 180), (int(8*scale), cy - shaft_h//2), (int(34*scale), cy - shaft_h//2), 1)
+        pygame.draw.line(surf, (90, 90, 90, 180), (int(8*scale), cy + shaft_h//2), (int(34*scale), cy + shaft_h//2), 1)
+        return surf
 
-    def _stop_loop(self):
-        # 루프 안전 정지
-        if self.snd_loop and self._loop_playing:
-            try:
-                self.snd_loop.stop()
-            except Exception:
-                pass
-        self._loop_playing = False
-
-    def _stop_lock(self):
-        # 조준 사운드 강제 정지(채널/휴식/유휴/사망 등에서 호출)
-        if self.snd_lock:
-            try:
-                self.snd_lock.stop()
-            except Exception:
-                pass
-
-    # 내부 유틸: LoS/빔/기하
-    def _has_los_to_player(self, px, py):
-        # 토템 중심→플레이어 중심 선분을 균등 샘플링하며 장애물 충돌(원)로 차단 여부 확인
-        om = getattr(config, "obstacle_manager", None)
-        if om is None:
-            return True
-        x1, y1 = self.world_x, self.world_y
-        dx, dy = (px - x1), (py - y1)
-        steps = max(2, int(self.LOS_SAMPLES))
-        for i in range(1, steps):
-            tx = x1 + dx * (i / steps)
-            ty = y1 + dy * (i / steps)
-            if om.check_collision_circle((tx, ty), self.LOS_SAMPLE_RADIUS):
-                return False
-        return True
-
-    def _update_beam_angle(self, px, py, now_ms):
-        # 빔을 플레이어 쪽으로 '제한된 각속도'로만 회전
-        dt_ms = max(1, now_ms - self._last_update_ms)
-        self._last_update_ms = now_ms
-
-        desired = math.atan2(py - self.world_y, px - self.world_x)
-
-        # 각도 차이를 [-pi, pi] 범위로 정규화
-        diff = (desired - self.beam_angle + math.pi) % (2 * math.pi) - math.pi
-
-        # 프레임당 회전 한계(라디안)
-        max_step = math.radians(self.TRACK_DEG_PER_S) * (dt_ms / 1000.0)
-
-        # 허용 범위 내로만 보정
-        if diff > max_step:
-            self.beam_angle += max_step
-        elif diff < -max_step:
-            self.beam_angle -= max_step
-        else:
-            self.beam_angle = desired
-
-    def _beam_end_world(self, angle, px, py):
-        # 빔 길이: 플레이어까지 거리 또는 고정 최대치 중 작은 값
-        dist = math.hypot(px - self.world_x, py - self.world_y)
-        length = min(max(100, dist + 40), self.BEAM_RANGE)
-        ex = self.world_x + math.cos(angle) * length
-        ey = self.world_y + math.sin(angle) * length
-        return ex, ey
-
-    def _dist_point_to_segment(self, x, y, x1, y1, x2, y2):
-        # 점(x,y)과 선분(x1,y1)-(x2,y2) 사이 최소거리
-        vx, vy = x2 - x1, y2 - y1
-        wx, wy = x - x1, y - y1
-        seg_len2 = vx * vx + vy * vy
-        if seg_len2 <= 1e-6:
-            return math.hypot(x - x1, y - y1)
-        t = max(0.0, min(1.0, (wx * vx + wy * vy) / seg_len2))
-        px = x1 + t * vx
-        py = y1 + t * vy
-        return math.hypot(x - px, y - py)
-
-    def _player_hit_by_beam(self, px, py, angle):
-        # 빔 선분과 플레이어 중심의 최소거리로 판정
-        ex, ey = self._beam_end_world(angle, px, py)
-        d = self._dist_point_to_segment(px, py, self.world_x, self.world_y, ex, ey)
-        return d <= self.BEAM_HIT_RADIUS
-
-    # 빔 드로잉(폴리라인 레이어)
-    def _beam_points(self, x1, y1, x2, y2, jitter_amp, seg_len, tsec, seed=0.0):
-        # 레이저 폴리라인 포인트 생성: 일정 간격 분절 + 노멀 방향 지글로 유기적 떨림
-        dx, dy = x2 - x1, y2 - y1
-        dist = max(1.0, math.hypot(dx, dy))
-        nx, ny = (-dy / dist, dx / dist)  # 선분에 수직인 단위벡터
-        nseg = max(2, int(dist / seg_len))
-        pts = []
-        for i in range(nseg + 1):
-            t = i / nseg
-            bx = x1 + dx * t
-            by = y1 + dy * t
-            # 시간 기반 지글(가벼운 사인 노이즈)
-            wiggle = math.sin((t * 10.0 + seed) + tsec * 8.0) * jitter_amp
-            pts.append((bx + nx * wiggle, by + ny * wiggle))
-        return pts
-
-    def _draw_polyline(self, surf, pts, color, width):
-        if len(pts) >= 2:
-            pygame.draw.lines(surf, color, False, pts, width)
-
-    def _draw_beam_layered(self, lay, x1, y1, x2, y2, base_w, born_ms, alpha=1.0):
-        # 레이저 3중선(outer/glow/core) + 펄스(살아있는 느낌)
-        now = pygame.time.get_ticks()
-        tsec = (now - born_ms) * 0.001
-        jitter = self.BEAM_JITTER
-        pts = self._beam_points(x1, y1, x2, y2, jitter_amp=jitter, seg_len=self.BEAM_SEG_LEN, tsec=tsec, seed=(born_ms % 997)*0.001)
-        pulse = 0.5 + 0.5 * math.sin((now - born_ms) * (2 * math.pi / max(60, self.BEAM_PULSE_MS)))
-        core_w  = max(1, int(base_w * (0.55 + 0.15 * pulse)))
-        glow_w  = max(core_w + 2, int(base_w * 1.15))
-        outer_w = max(glow_w + 2, int(base_w * 1.7))
-        # 알파 스케일 적용
-        col_core  = (self.COL_CORE[0],  self.COL_CORE[1],  self.COL_CORE[2],  int(self.COL_CORE[3]  * alpha))
-        col_glow  = (self.COL_GLOW[0],  self.COL_GLOW[1],  self.COL_GLOW[2],  int(self.COL_GLOW[3]  * alpha))
-        col_outer = (self.COL_OUTER[0], self.COL_OUTER[1], self.COL_OUTER[2], int(self.COL_OUTER[3] * alpha))
-        self._draw_polyline(lay, pts, col_outer, outer_w)
-        self._draw_polyline(lay, pts, col_glow,  glow_w)
-        self._draw_polyline(lay, pts, col_core,  core_w)
-
-    def _draw_totem_body(self, screen, sx, sy):
-        # 본체 이미지가 있으면 사용, 없으면 원형 토템 드로잉(외곽/문양)
-        if self.image_original:
-            img = pygame.transform.smoothscale(
-                self.image_original,
-                (int(self.image_original.get_width() * PLAYER_VIEW_SCALE),
-                 int(self.image_original.get_height() * PLAYER_VIEW_SCALE))
-            )
-            rect = img.get_rect(center=(sx, sy))
-            screen.blit(img, rect)
-        else:
-            # 원형 본체
-            base_r = int(34 * PLAYER_VIEW_SCALE)
-            pygame.draw.circle(screen, (40, 10, 10), (sx, sy), base_r)
-            pygame.draw.circle(screen, (220, 40, 40), (sx, sy), base_r, 3)
-            # 문양(십자/룬)
-            arm = int(18 * PLAYER_VIEW_SCALE)
-            pygame.draw.line(screen, (180, 60, 60), (sx - arm, sy), (sx + arm, sy), 3)
-            pygame.draw.line(screen, (180, 60, 60), (sx, sy - arm), (sx, sy + arm), 3)
-
-    def _draw_totem_eye(self, screen, sx, sy, intense=0.0):
-        # 토템 '눈' – 상태에 따라 밝기/크기 변화
-        r = max(3, int(4 + 4 * intense * PLAYER_VIEW_SCALE))
-        glow_r = r + int(5 * PLAYER_VIEW_SCALE)
-        # 글로우
-        glow = pygame.Surface((glow_r * 2 + 2, glow_r * 2 + 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (255, 60, 60, int(120 + 120 * intense)), (glow_r, glow_r), glow_r)
-        screen.blit(glow, glow.get_rect(center=(sx, sy)))
-        # 코어
-        pygame.draw.circle(screen, (255, 255, 255), (sx, sy), r)
-
-    def _draw_charge_ring(self, screen, sx, sy, phase=0.0):
-        # 채널 중 바닥 차지 링 – 맥동하는 얇은 링 2중
-        rr = int(40 * PLAYER_VIEW_SCALE)
-        rr2 = int(54 * PLAYER_VIEW_SCALE)
-        a = 120 + int(80 * (0.5 + 0.5 * math.sin(phase * 2 * math.pi)))
-        pygame.draw.circle(screen, (255, 60, 60, a), (sx, sy), rr, 2)
-        pygame.draw.circle(screen, (255, 30, 30, int(a * 0.75)), (sx, sy), rr2, 2)
-
-    def _draw_impact_spark(self, lay, x, y):
-        # 임팩트 스파크(간단한 방사형 라인) – 별도 이미지 없이 표현
-        rays = 8
-        max_r = int(12 * PLAYER_VIEW_SCALE)
-        col = (255, 200, 200, 220)
-        for i in range(rays):
-            ang = (2 * math.pi) * (i / rays)
-            x2 = x + math.cos(ang) * max_r
-            y2 = y + math.sin(ang) * max_r
-            pygame.draw.line(lay, col, (x, y), (x2, y2), 2)
-
-    # 상태 전이
-    def _enter_idle(self):
-        self.state = "idle"
-        self._stop_loop()
-        self._stop_lock()
-        self.show_alert = False
-
-    def _enter_aim(self):
-        self.state = "aim"
-        self.aim_until = pygame.time.get_ticks() + self.AIM_MS
-        self._los_lost_since = None
-        self.show_alert = True
-        # 조준 사운드(길지만, 채널 진입 시 즉시 정지하여 공격 중에 안 들리게 함)
-        if self.snd_lock:
-            try:
-                self.snd_lock.play()
-            except Exception:
-                pass
-
-    def _enter_channel(self):
-        self.state = "channel"
-        now = pygame.time.get_ticks()
-        self.channel_until = now + self.CHANNEL_MS
-        self.next_tick_ms = now + self.TICK_MS
-        self._beam_born_ms = now
-        self.show_alert = False
-        # 공격 시작: 조준 사운드 즉시 중단, 채널 루프 시작
-        self._stop_lock()
-        self._start_loop()
-
-    def _enter_rest(self):
-        self.state = "rest"
-        self.rest_until = pygame.time.get_ticks() + self.REST_MS
-        self._stop_loop()
-        self._stop_lock()
-        self.show_alert = False
+    def _muzzle_world(self, angle):
+        # 본체 앞쪽에서 살짝 앞으로 탄 출발
+        off = self.RADIUS + int(10 * PLAYER_VIEW_SCALE)
+        return (self.world_x + math.cos(angle) * off,
+                self.world_y + math.sin(angle) * off)
 
     # 메인 AI
     def update_goal(self, world_x, world_y, player_rect, enemies):
-        # 이동 목표는 사용하지 않음(고정 토템). 상태 전이/빔 회전/피해 처리만 수행.
+        now = pygame.time.get_ticks()
         px = world_x + player_rect.centerx
         py = world_y + player_rect.centery
-        now = pygame.time.get_ticks()
+        dx, dy = px - self.world_x, py - self.world_y
+        dist = math.hypot(dx, dy)
 
-        # 첫 프레임: 플레이어 방향으로 초기 각도 세팅(초기 튐 방지)
-        if not self._angle_initialized:
-            self.beam_angle = math.atan2(py - self.world_y, px - self.world_x)
-            self._angle_initialized = True
+        # 바라보는 각은 항상 플레이어 향하도록(활 이미지는 없지만, 시선 기준으로 화살 발사)
+        self.direction_angle = math.atan2(dy, dx) if (dx or dy) else self.direction_angle
 
-        # 빔 회전: 플레이어를 즉시 바라보지 않고 제한된 속도로만 보정
-        self._update_beam_angle(px, py, now)
+        # 이동(중거리 링 유지)
+        desired = (self.KEEP_MIN + self.KEEP_MAX) * 0.5
+        away = math.atan2(self.world_y - py, self.world_x - px)
+        ox = math.cos(now * 0.002) * 10 * PLAYER_VIEW_SCALE
+        oy = math.sin(now * 0.002) * 10 * PLAYER_VIEW_SCALE
+        if dist < self.KEEP_MIN:
+            tx, ty = px + math.cos(away) * desired + ox, py + math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        elif dist > self.KEEP_MAX:
+            tx, ty = px - math.cos(away) * desired + ox, py - math.sin(away) * desired + oy
+            self.goal_pos = (tx, ty)
+        else:
+            self.goal_pos = (self.world_x + ox * 0.2, self.world_y + oy * 0.2)
 
-        # LoS 판정(엄폐 시 차단)
-        los = self._has_los_to_player(px, py)
-
+        # 상태 전이
         if self.state == "idle":
-            # LoS 확보되면 조준 시작
-            if los:
-                self._enter_aim()
+            if dist <= self.ATTACK_RANGE and now >= self.next_ready_at:
+                self.state = "telegraph"
+                self.state_until = now + self.TELEGRAPH_MS
+                # 텔레그래프 시작 시 각도 고정
+                self.aim_angle_locked = self.direction_angle
+                self.show_alert = True
+        elif self.state == "telegraph":
+            if now >= self.state_until:
+                self._fire_arrows()
+                self.show_alert = False
+                self.state = "idle"
+                self.next_ready_at = now + self.COOLDOWN_MS + random.randint(200, 450)
 
-        elif self.state == "aim":
-            # 조준 중 LoS가 잠깐 끊겨도 AIM_LOS_GRACE_MS 동안은 유지
-            if not los:
-                if self._los_lost_since is None:
-                    self._los_lost_since = now
-                elif now - self._los_lost_since >= self.AIM_LOS_GRACE_MS:
-                    self._enter_idle()
-                    return
-            else:
-                self._los_lost_since = None
+    def _fire_arrows(self):
+        # 좌/우 각각 1발
+        for off_deg in (-self.FAN_HALF_DEG, +self.FAN_HALF_DEG):
+            ang = self.aim_angle_locked + math.radians(off_deg)
+            mx, my = self._muzzle_world(ang)
+            tx = mx + math.cos(ang) * 2000
+            ty = my + math.sin(ang) * 2000
+            b = Bullet(mx, my, tx, ty, 0.0, self.arrow_image,
+                       speed=self.ARROW_SPEED, max_distance=self.ARROW_RANGE, damage=self.ARROW_DAMAGE)
+            b.owner = self
+            b.trail_enabled = False
+            config.global_enemy_bullets.append(b)
+        if self.snd_fire:
+            try: self.snd_fire.play()
+            except: pass
 
-            if now >= self.aim_until and los:
-                self._enter_channel()
-
-        elif self.state == "channel":
-            # 채널 중 LoS가 끊기면 즉시 중단 → 휴식
-            if not los:
-                self._enter_rest()
-                return
-            # 주기적 틱 피해: 빔 선분이 실제로 플레이어를 스치고 있어야 함
-            if now >= self.next_tick_ms:
-                if self.damage_player and self._player_hit_by_beam(px, py, self.beam_angle):
-                    self.damage_player(self.TICK_DAMAGE)
-                self.next_tick_ms += self.TICK_MS
-            # 채널 종료
-            if now >= self.channel_until:
-                self._enter_rest()
-
-        elif self.state == "rest":
-            if now >= self.rest_until:
-                # LoS가 있으면 다시 조준, 없으면 유휴
-                self._enter_aim() if los else self._enter_idle()
-
-    # 사망/정리
-    def die(self, blood_effects):
-        # 루프/조준 사운드 잔류 방지 + 드랍
-        self._stop_loop()
-        self._stop_lock()
-        super().die(blood_effects)
-        self.spawn_dropped_items(3, 3)
-
-    # 렌더링
+    # 드로잉
     def draw(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
-        if not self.alive:
-            return
         sx = int(self.world_x - world_x + shake_offset_x)
         sy = int(self.world_y - world_y + shake_offset_y)
 
-        # 본체/경고아이콘
-        self.draw_alert(screen, sx, sy)
-        self._draw_totem_body(screen, sx, sy)
+        # 텔레그래프(2개 라인)
+        if self.state == "telegraph":
+            W, H = screen.get_width(), screen.get_height()
+            tel = pygame.Surface((W, H), pygame.SRCALPHA)
+            # 약간 깜빡이는 알파
+            now = pygame.time.get_ticks()
+            base_a = 80 + int(40 * (0.5 + 0.5 * math.sin(now * 0.01)))
+            col = (255, 60, 60, max(40, min(140, base_a)))
+            L = self.ARROW_RANGE
+            for off_deg in (-self.FAN_HALF_DEG, +self.FAN_HALF_DEG):
+                ang = self.aim_angle_locked + math.radians(off_deg)
+                x2 = sx + int(math.cos(ang) * L)
+                y2 = sy + int(math.sin(ang) * L)
+                pygame.draw.line(tel, col, (sx, sy), (x2, y2), self.TELEGRAPH_LINE_W)
+            screen.blit(tel, (0, 0))
 
-        # 플레이어 위치(월드좌표) 및 빔 끝점(월드→스크린)
-        px = config.world_x + config.player_rect.centerx
-        py = config.world_y + config.player_rect.centery
-        ex, ey = self._beam_end_world(self.beam_angle, px, py)
-        x1, y1 = sx, sy
-        x2, y2 = int(ex - world_x + shake_offset_x), int(ey - world_y + shake_offset_y)
+        # 본체
+        if self.image_original:
+            body = pygame.transform.smoothscale(
+                self.image_original,
+                (int(self.image_original.get_width()*PLAYER_VIEW_SCALE),
+                 int(self.image_original.get_height()*PLAYER_VIEW_SCALE))
+            )
+            body = pygame.transform.rotate(body, -math.degrees(self.direction_angle) + 90)
+            rect = body.get_rect(center=(sx, sy))
+            self.rect = rect
+            screen.blit(body, rect)
 
-        # 레이저 렌더(조준/채널)
-        if self.state in ("aim", "channel"):
-            # 투명 레이어에 그렸다가 합성(알파 포함)
-            lay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
-
-            if self.state == "aim":
-                # 얇은 조준선(알파 낮음)
-                self._draw_beam_layered(lay, x1, y1, x2, y2,
-                                        base_w=max(3, self.BEAM_BASE_W - 2),
-                                        born_ms=self._beam_born_ms, alpha=0.45)
-                # 눈 밝기 약간 상승
-                self._draw_totem_eye(screen, sx, sy, intense=0.4)
-            else:
-                # 굵은 채널 빔 + 임팩트 + 차지 링 + 강한 눈 발광
-                self._draw_beam_layered(lay, x1, y1, x2, y2,
-                                        base_w=self.BEAM_BASE_W,
-                                        born_ms=self._beam_born_ms, alpha=1.0)
-                self._draw_impact_spark(lay, x2, y2)
-                phase = (pygame.time.get_ticks() % self.BEAM_PULSE_MS) / self.BEAM_PULSE_MS
-                self._draw_charge_ring(screen, sx, sy, phase)
-                self._draw_totem_eye(screen, sx, sy, intense=1.0)
-
-            # 합성
-            screen.blit(lay, (0, 0))
-        else:
-            # 휴식/유휴 – 눈만 약하게
-            self._draw_totem_eye(screen, sx, sy, intense=0.15)
+    # 드롭
+    def die(self, blood_effects):
+        if not self.alive: return
+        super().die(blood_effects)
+        self.spawn_dropped_items(3, 4)
 
 class Enemy30(AIBase):
     rank = 3
@@ -7676,7 +7495,7 @@ class Enemy30(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -7982,7 +7801,7 @@ class Enemy30(AIBase):
 
 class Enemy31(AIBase):
     rank = 9
-    HP = 700
+    HP = 650
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.92
     RADIUS = int(32 * PLAYER_VIEW_SCALE)
 
@@ -8019,7 +7838,7 @@ class Enemy31(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.12,
+            push_strength=0.20,
             alert_duration=self.POINT_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -8352,7 +8171,7 @@ class Enemy31(AIBase):
 
 class Enemy32(AIBase):
     rank = 7
-    HP = 600
+    HP = 570
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.88
     RADIUS = int(30 * PLAYER_VIEW_SCALE)
 
@@ -8397,7 +8216,7 @@ class Enemy32(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.10,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -8695,7 +8514,7 @@ class Enemy32(AIBase):
 
 class Enemy33(AIBase):
     rank = 7
-    HP = 640
+    HP = 550
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.08
     RADIUS = int(30 * PLAYER_VIEW_SCALE)
 
@@ -8742,7 +8561,7 @@ class Enemy33(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -9225,7 +9044,7 @@ class Enemy34(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.14,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -9672,7 +9491,7 @@ class Enemy35(AIBase):
     PUSH_START_MAX     = int(380 * PLAYER_VIEW_SCALE)
 
     THORN_LIFETIME_MS = 2000
-    THORN_TICK_MS     = 25
+    THORN_TICK_MS     = 250
     THORN_TICK_DMG    = 3
     THORN_RADIUS      = int(28 * PLAYER_VIEW_SCALE)
     THORN_STEP_DIST   = int(30 * PLAYER_VIEW_SCALE)
@@ -9698,7 +9517,7 @@ class Enemy35(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.14,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -10061,7 +9880,7 @@ class Enemy36(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.10,
+            push_strength=0.20,
             alert_duration=self.CHARGE_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -10320,7 +10139,7 @@ class Enemy37(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -10585,7 +10404,7 @@ class Enemy37(AIBase):
 
 class Enemy38(AIBase):
     rank = 8
-    HP = 620
+    HP = 560
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.98
     RADIUS = int(28 * PLAYER_VIEW_SCALE)
 
@@ -10594,14 +10413,14 @@ class Enemy38(AIBase):
     NEAR_DISTANCE = int(480 * PLAYER_VIEW_SCALE)
     FAR_DISTANCE  = int(780 * PLAYER_VIEW_SCALE)
 
-    SMG_FIRE_INTERVAL_MS = 900
-    SMG_DAMAGE           = 15
+    SMG_FIRE_INTERVAL_MS = 1200
+    SMG_DAMAGE           = 13
     SMG_SPREAD_DEG       = 3.5
     SMG_SPREAD_MOVE_BONUS= 1.5
     SMG_RANGE            = int(1000 * PLAYER_VIEW_SCALE)
     SMG_BULLET_SPEED     = 14.0 * PLAYER_VIEW_SCALE
 
-    DECOY_SPAWN_COOLDOWN_MS = 8000
+    DECOY_SPAWN_COOLDOWN_MS = 10000
     DECOYS_PER_WAVE_MIN     = 2
     DECOYS_PER_WAVE_MAX     = 3
     DECOY_MAX_ACTIVE        = 6
@@ -10622,7 +10441,7 @@ class Enemy38(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.12,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -10647,7 +10466,7 @@ class Enemy38(AIBase):
 
     # 내부 클래스: 홀로그램 분신
     class HoloDecoy(AIBase):
-        rank = 0 # 스폰러가 참조하지 않도록 음수/비표준
+        rank = 0
         RADIUS = int(26 * PLAYER_VIEW_SCALE)
         HP = 1
         BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 1.06
@@ -10657,7 +10476,7 @@ class Enemy38(AIBase):
         NEAR_DISTANCE = 0
         FAR_DISTANCE  = int(640 * PLAYER_VIEW_SCALE)
 
-        FIRE_INTERVAL_MS = 900
+        FIRE_INTERVAL_MS = 1200
         RANGE            = int(900 * PLAYER_VIEW_SCALE)
         BULLET_SPEED     = 14.0 * PLAYER_VIEW_SCALE
 
@@ -10669,7 +10488,7 @@ class Enemy38(AIBase):
                 near_threshold=self.NEAR_DISTANCE,
                 far_threshold=self.FAR_DISTANCE,
                 radius=self.RADIUS,
-                push_strength=0.08,
+                push_strength=0.20,
                 alert_duration=0,
                 damage_player_fn=None,
                 rank=self.rank,
@@ -11005,7 +10824,7 @@ class Enemy39(AIBase):
             near_threshold=self.NEAR_DISTANCE,
             far_threshold=self.FAR_DISTANCE,
             radius=self.RADIUS,
-            push_strength=0.12,
+            push_strength=0.20,
             alert_duration=self.TELEGRAPH_MS,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -11663,7 +11482,7 @@ class Enemy41(AIBase):
             speed=self.BASE_SPEED,
             near_threshold=0, far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.10,
+            push_strength=0.20,
             alert_duration=600,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -11937,7 +11756,7 @@ class Enemy42(AIBase):
             speed=self.BASE_SPEED,
             near_threshold=0, far_threshold=0,
             radius=self.RADIUS,
-            push_strength=0.16,
+            push_strength=0.20,
             alert_duration=900,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -12203,7 +12022,7 @@ class Enemy43(AIBase):
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED,
             near_threshold=self.KEEP_MIN, far_threshold=self.FAR_DISTANCE,
-            radius=self.RADIUS, push_strength=0.16, alert_duration=1000,
+            radius=self.RADIUS, push_strength=0.20, alert_duration=1000,
             damage_player_fn=damage_player_fn,
             rank=rank,
         )
@@ -12431,20 +12250,20 @@ class Enemy44(AIBase):
     PRESSURE_DIST = int(420 * PLAYER_VIEW_SCALE)
     TRIGGER_DIST  = int(700 * PLAYER_VIEW_SCALE)
 
-    TELEGRAPH_MS    = 400
+    TELEGRAPH_MS    = 700
     DASH_MS         = 240
-    COOLDOWN_MS     = 1200
+    COOLDOWN_MS     = 2300
 
     DASH_RANGE        = int(480 * PLAYER_VIEW_SCALE)
     TELEGRAPH_LANE_W  = int(64  * PLAYER_VIEW_SCALE)
     PLAYER_HIT_R      = int(24  * PLAYER_VIEW_SCALE)
-    DASH_DAMAGE       = 35
+    DASH_DAMAGE       = 30
     DASH_KNOCK        = 250
 
     WAVE_RANGE    = int(2200 * PLAYER_VIEW_SCALE)
-    WAVE_SPEED    = int(6    * PLAYER_VIEW_SCALE)
+    WAVE_SPEED    = int(8    * PLAYER_VIEW_SCALE)
     WAVE_THICK    = int(40   * PLAYER_VIEW_SCALE)
-    WAVE_DAMAGE   = 10
+    WAVE_DAMAGE   = 7
     WAVE_KNOCK    = 100
 
     TEL_RECT_FILL = (255, 70, 70, 90)
@@ -12458,7 +12277,7 @@ class Enemy44(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.12, alert_duration=800,
+            radius=self.RADIUS, push_strength=0.20, alert_duration=800,
             damage_player_fn=damage_player_fn, rank=rank
         )
         self.hp = self.HP
@@ -12816,7 +12635,7 @@ class Enemy45(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.BASE_SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.12, alert_duration=900,
+            radius=self.RADIUS, push_strength=0.20, alert_duration=900,
             damage_player_fn=damage_player_fn, rank=rank
         )
         self.hp = self.HP
@@ -13136,7 +12955,7 @@ class Boss1(AIBase):
             near_threshold=0,
             far_threshold=0,
             radius=60,
-            push_strength=0.18,
+            push_strength=0.20,
             alert_duration=0,
             damage_player_fn=damage_player_fn,
             rank=rank,
@@ -13150,8 +12969,8 @@ class Boss1(AIBase):
         self.sound_gun1 = sounds["boss1_gun1_fire"]
         self.sound_gun2 = sounds["boss1_gun2_fire"]
 
-        self.hp = 1250
-        self.max_hp = 1250
+        self.hp = 1500
+        self.max_hp = 1500
         self.kill_callback = kill_callback
 
         self.half_phase_drop_done = False
@@ -13440,7 +13259,7 @@ class Boss1(AIBase):
 class Boss2(AIBase):
     rank=10
 
-    HP_MAX = 1500
+    HP_MAX = 1800
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.9
     ORB_DROP_MULTIPLIER = 1.33
     ORB_DROP_ON_HALF_HP_RATIO = 0.5
@@ -13462,7 +13281,7 @@ class Boss2(AIBase):
                  damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=300, far_threshold=700,
-                         radius=50, push_strength=0.18, alert_duration=0,
+                         radius=50, push_strength=0.20, alert_duration=0,
                          damage_player_fn=damage_player_fn,rank=rank,)
 
         self.hp = self.HP_MAX
@@ -13697,7 +13516,7 @@ class Boss2(AIBase):
 class Boss3(AIBase):
     rank = 10
 
-    HP_MAX = 2000
+    HP_MAX = 2300
     SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.8
     RADIUS = 50
 
@@ -14174,7 +13993,7 @@ class Boss3(AIBase):
 class Boss4(AIBase):
     rank = 10
 
-    HP_MAX = 2200
+    HP_MAX = 2500
     BASE_SPEED = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.75
     RADIUS = 46
 
@@ -14808,7 +14627,7 @@ class Boss5(AIBase):
         super().__init__(
             world_x, world_y, images, sounds, map_width, map_height,
             speed=self.SPEED, near_threshold=0, far_threshold=0,
-            radius=self.RADIUS, push_strength=0.18, alert_duration=0,
+            radius=self.RADIUS, push_strength=0.20, alert_duration=0,
             damage_player_fn=damage_player_fn, rank=rank
         )
         self.image_original = images["boss5"]
@@ -15241,7 +15060,7 @@ class Boss5(AIBase):
 class Boss6(AIBase):
     rank = 10
 
-    HP_MAX   = 3500
+    HP_MAX   = 3700
     SPEED    = NORMAL_MAX_SPEED * PLAYER_VIEW_SCALE * 0.72
     RADIUS   = int(48 * PLAYER_VIEW_SCALE)
     KEEP_MIN = int(260 * PLAYER_VIEW_SCALE)
@@ -15350,7 +15169,7 @@ class Boss6(AIBase):
                  damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
-                         radius=self.RADIUS, push_strength=0.18, alert_duration=0,
+                         radius=self.RADIUS, push_strength=0.20, alert_duration=0,
                          damage_player_fn=damage_player_fn, rank=rank)
 
         self.image_original = images["boss6"]
@@ -16188,9 +16007,8 @@ class Boss6(AIBase):
         super().die(blood_effects)
 
 class Boss7(AIBase):
-
     rank   = 10
-    HP_MAX = 4500
+    HP_MAX = 5000
     RADIUS = int(52 * PLAYER_VIEW_SCALE)
     SPEED  = 0.0
     ORIENT_OFFSET_DEG = 270
@@ -16279,7 +16097,7 @@ class Boss7(AIBase):
                  damage_player_fn=None, kill_callback=None, rank=rank):
         super().__init__(world_x, world_y, images, sounds, map_width, map_height,
                          speed=self.SPEED, near_threshold=0, far_threshold=0,
-                         radius=self.RADIUS, push_strength=0.0, alert_duration=0,
+                         radius=self.RADIUS, push_strength=0.20, alert_duration=0,
                          damage_player_fn=damage_player_fn, rank=rank)
         self.world_x = map_width  * 0.5
         self.world_y = map_height * 0.5

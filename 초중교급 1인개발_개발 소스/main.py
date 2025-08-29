@@ -84,7 +84,7 @@ world.MAX_F_ROOMS = stage_settings["max_f_rooms"]
 grid = world.generate_map()
 grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
 world.initialize_room_states(grid)
-# 디버그 - world.print_grid(grid)
+# 디버그(방 구조 출력) - world.print_grid(grid)
 
 pygame.init()
 pygame.font.init()
@@ -856,7 +856,7 @@ def init_new_game():
     grid = world.generate_map()
     grid = world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
     world.initialize_room_states(grid)
-    # 디버그 - world.print_grid(grid)
+    # 디버그(방 구조 출력) - world.print_grid(grid)
 
     # 시작 방 좌표 복원
     s_pos = None
@@ -870,10 +870,10 @@ def init_new_game():
     reveal_acquire_with_shop_rule(s_pos[0], s_pos[1])
 
     # 플레이어 수치 초기화
-    player_hp_max = 200
+    player_hp_max = 300
     player_hp     = player_hp_max
     last_hp_visual = float(player_hp)
-    ammo_gauge_max = 300
+    ammo_gauge_max = 400
     ammo_gauge     = ammo_gauge_max
     last_ammo_visual = float(ammo_gauge)
 
@@ -1118,7 +1118,7 @@ running = True
 
 player_radius = int(30 * PLAYER_VIEW_SCALE)
 
-player_hp_max = 2000000 # 디버그 - 원래는 200
+player_hp_max = 2000000 # 디버그(config.game_state == 1일시 발동) - 원래는 300
 player_hp = player_hp_max
 last_hp_visual = player_hp * 1.0
 
@@ -1127,7 +1127,7 @@ def consume_ammo(cost):
     ammo_gauge -= cost
 
 current_weapon_index = 0
-ammo_gauge_max = 40000 # 디버그 - 원래는 300
+ammo_gauge_max = 40000 # 디버그(config.game_state == 1일시 발동) - 원래는 400
 ammo_gauge = ammo_gauge_max 
 last_ammo_visual = ammo_gauge * 1.0
 
@@ -1637,7 +1637,7 @@ def _quantize_dir_to_8(dx: float, dy: float):
     return (qx / n, qy / n) if n else (0.0, 0.0)
 
 def damage_player(amount):
-    # 디버그 - 무적이려면 아래 주석 풀기
+    # 디버그 - 무적을 하고 싶다면 아래 주석 풀기
     # return
     # 플레이어 피해 처리
     global player_hp, damage_flash_alpha, shake_timer, shake_elapsed, shake_magnitude
@@ -1684,16 +1684,6 @@ def trigger_player_death():
         p["vx"] *= 1.5
         p["vy"] *= 1.5
     config.blood_effects.append(blood)
-    # 모든 효과음을 즉시 정지하고(루프 포함), 이후 재생도 막음
-    try:
-        from sound_manager import panic_mute_all_sfx, stop_bgm
-        panic_mute_all_sfx(fade_ms=150)
-        try:
-            stop_bgm(fade_ms=400)
-        except Exception:
-            pass
-    except Exception:
-        pass
     gameover_sfx_played = False
     from sound_manager import cut_bgm
     cut_bgm()
@@ -1779,8 +1769,8 @@ def advance_to_next_stage():
         prev_hp     = max(0, int(player_hp))
         hp_ratio    = prev_hp / prev_hp_max
 
-        player_hp_max   = int(player_hp_max) + 10
-        ammo_gauge_max  = int(ammo_gauge_max) + 20
+        player_hp_max   = int(player_hp_max) + 20
+        ammo_gauge_max  = int(ammo_gauge_max) + 40
 
         player_hp = min(player_hp_max, int(round(player_hp_max * hp_ratio)))
         last_hp_visual    = float(player_hp)
@@ -1805,7 +1795,7 @@ def advance_to_next_stage():
     grid = world.generate_map()
     world.place_acquire_rooms(grid, count=stage_settings["acquire_rooms"])
     world.initialize_room_states(grid)
-    # 디버그 - world.print_grid(grid)
+    # 디버그(방 구조 출력) - world.print_grid(grid)
 
     for y, row in enumerate(grid):
         for x, cell in enumerate(row):
@@ -1975,7 +1965,14 @@ def change_room(direction):
 
     if new_room_type == 'A':
         if room_key not in room_acquire_type:
-            room_acquire_type[room_key] = random.randint(2, 4)  # 2: 무기방, 3: 상점방, 4: 드론방
+            r = random.randint(1, 8)
+            if r in (1, 2):
+                room_acquire_type[room_key] = 2  # 무기방
+            elif r in (3, 4, 5):
+                room_acquire_type[room_key] = 3  # 상점방
+            else:
+                room_acquire_type[room_key] = 4  # 드론방
+
         acquire_index = room_acquire_type[room_key]
         CURRENT_MAP = MAPS[acquire_index]
         config.combat_state = False
@@ -3606,52 +3603,52 @@ while running:
             elif event.key == pygame.K_v:
                 # 무기 교체 중엔 근접 불허
                 melee.try_start(is_switching_weapon=changing_weapon)
-            elif event.key == pygame.K_q:
-                print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
-                cx, cy = current_room_pos
-                for enemy in enemies[:]:
-                    if enemy.alive:
-                        enemy.hit(9999, config.blood_effects)  # 디버그 - 강제로 사망시킴
-                        enemies.remove(enemy)
-                room_key = (cx, cy)
-
-                if grid[cy][cx] == 'E':
-                    room_portals[room_key] = True
-                    portal_spawn_at_ms = pygame.time.get_ticks() + 500
-                    print("[DEBUG] Boss room cleared via cheat. Portal will spawn in 0.5s.")
-
-                    try:
-                        from sound_manager import stop_bgm
-                        stop_bgm(fade_ms=700)
-                    except Exception:
-                        pass
-
-                    import config as _cfg
-                    _cfg.SUPPRESS_STAGE_BGM = True
-
-                if room_key in visited_f_rooms:
-                    visited_f_rooms[room_key]["cleared"] = True
-
-                world.update_room_state_after_combat(cy, cx)
-                try:
-                    from sound_manager import play_bgm_for_stage
-                    if not getattr(config, "SUPPRESS_STAGE_BGM", False):
-                        play_bgm_for_stage(config.CURRENT_STAGE, fade_ms=1200)
-                except Exception:
-                    pass
-
-                config.combat_state = False
-                config.combat_enabled = False
-                trigger_combat_end()
-
-                for wall in combat_walls:
-                    if wall in obstacle_manager.combat_obstacles:
-                        obstacle_manager.combat_obstacles.remove(wall)
-                combat_walls.clear()
-
-                for info in combat_walls_info:
-                    info["state"] = "hiding"
-                    info["target_pos"] = info["start_pos"]
+#             elif event.key == pygame.K_q: # 디버그 - 강제로 방을 클리어 상태로 만듦
+#                 print("[DEBUG] Q pressed: Killing all enemies instantly (dev cheat)")
+#                 cx, cy = current_room_pos
+#                 for enemy in enemies[:]:
+#                     if enemy.alive:
+#                         enemy.hit(9999, config.blood_effects)
+#                         enemies.remove(enemy)
+#                 room_key = (cx, cy)
+#
+#                 if grid[cy][cx] == 'E':
+#                     room_portals[room_key] = True
+#                     portal_spawn_at_ms = pygame.time.get_ticks() + 500
+#                     print("[DEBUG] Boss room cleared via cheat. Portal will spawn in 0.5s.")
+#
+#                     try:
+#                         from sound_manager import stop_bgm
+#                         stop_bgm(fade_ms=700)
+#                     except Exception:
+#                         pass
+#
+#                     import config as _cfg
+#                     _cfg.SUPPRESS_STAGE_BGM = True
+#
+#                 if room_key in visited_f_rooms:
+#                     visited_f_rooms[room_key]["cleared"] = True
+#
+#                 world.update_room_state_after_combat(cy, cx)
+#                 try:
+#                     from sound_manager import play_bgm_for_stage
+#                     if not getattr(config, "SUPPRESS_STAGE_BGM", False):
+#                         play_bgm_for_stage(config.CURRENT_STAGE, fade_ms=1200)
+#                 except Exception:
+#                     pass
+#
+#                 config.combat_state = False
+#                 config.combat_enabled = False
+#                 trigger_combat_end()
+#
+#                 for wall in combat_walls:
+#                     if wall in obstacle_manager.combat_obstacles:
+#                         obstacle_manager.combat_obstacles.remove(wall)
+#                 combat_walls.clear()
+#
+#                 for info in combat_walls_info:
+#                     info["state"] = "hiding"
+#                     info["target_pos"] = info["start_pos"]
         elif event.type == pygame.KEYUP:
             if player_dead or boss_intro_active:
                 continue
@@ -4249,15 +4246,15 @@ while running:
             HEALTH_COLOR = (181, 255, 146)
             AMMO_COLOR   = (255, 191, 193)
 
-            # 체력 오브 2개
-            for _ in range(2):
+            # 체력 오브 4개
+            for _ in range(4):
                 config.dropped_items.append(
-                    DroppedItem(px, py, images["health_up"], "health", 10, get_player_pos, color=HEALTH_COLOR)
+                    DroppedItem(px, py, images["health_up"], "health", 15, get_player_pos, color=HEALTH_COLOR)
                 )
-            # 탄약 오브 2개
-            for _ in range(2):
+            # 탄약 오브 4개
+            for _ in range(4):
                 config.dropped_items.append(
-                    DroppedItem(px, py, images["ammo_gauge_up"], "ammo", 20, get_player_pos, color=AMMO_COLOR)
+                    DroppedItem(px, py, images["ammo_gauge_up"], "ammo", 25, get_player_pos, color=AMMO_COLOR)
                 )
 
             boss_support_drop_next_ms += BOSS_SUPPORT_DROP_INTERVAL_MS
@@ -4806,7 +4803,8 @@ while running:
     obstacle_manager.draw_non_trees(screen, world_x - shake_offset_x, world_y - shake_offset_y)
 
     for enemy in enemies:
-        enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
+        if getattr(enemy, "alive", True):
+            enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
     for effect in config.effects:
         if hasattr(effect, "draw"):
@@ -5456,8 +5454,6 @@ while running:
                 gameover_sfx_played = False
                 from sound_manager import play_bgm_for_stage
                 import config as _cfg
-                from sound_manager import sfx_set_muted
-                sfx_set_muted(False)
                 if not getattr(_cfg, 'SUPPRESS_STAGE_BGM', False):
                     play_bgm_for_stage(config.CURRENT_STAGE)
             elif _exit_requested:
@@ -5468,8 +5464,6 @@ while running:
                 config.game_state = config.GAME_STATE_MENU
                 swipe_curtain_transition(screen, old_surface, _draw_menu, direction="down", duration=0.5)
                 set_cursor_visible_and_grab(True)
-                from sound_manager import sfx_set_muted
-                sfx_set_muted(False)
                 _retry_requested = False
                 _exit_requested  = False
                 _go_hover = -1
