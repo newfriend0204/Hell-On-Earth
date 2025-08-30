@@ -2753,7 +2753,7 @@ class Gun20(WeaponBase):
 class Gun21(WeaponBase):
     TIER = 3
     AMMO_COST = 12
-    DAMAGE = 80
+    DAMAGE = 95
     SPREAD = 2
     FIRE_DELAY = 550
     RANGE = 2200
@@ -2943,7 +2943,7 @@ class Gun22(WeaponBase):
 class Gun23(WeaponBase):
     TIER = 3
     AMMO_COST = 6
-    DAMAGE = 45
+    DAMAGE = 70
     SPREAD = 5
     FIRE_DELAY = 350
     RANGE = 1900

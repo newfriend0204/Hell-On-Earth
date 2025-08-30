@@ -509,7 +509,7 @@ MENU_BUTTONS = [
     {"id": "howto",   "label": "조작법"},
     {"id": "weapons", "label": "무기 도감"},
     {"id": "enemies", "label": "적 도감"},
-    {"id": "credits", "label": "참고사항"},
+    {"id": "credits", "label": "참고사항(꼭 읽기)"},
     {"id": "quit",    "label": "나가기"},
 ]
 _menu_scales = [1.0 for _ in MENU_BUTTONS]
@@ -805,9 +805,9 @@ HOWTO_LINES = [
 ]
 
 CREDITS_LINES = [
-    "참고사항", "",
+    "참고사항(꼭 읽기)", "",
     "",
-    "게임이 꺼지는 버그가 나타날 수 있음",
+    "가끔 맵에 끼는 버그가 있음. 대쉬로 빠져나오기 가능",
     "평균 플레이타임은 30분",
     "디버그 실행방법은 Asset/디버그실행방법.txt 읽기",
     "밸런스 엉망인거 저도 아니깐 알아서 사기무기 쓰세요",
@@ -3363,7 +3363,7 @@ while running:
                     if _menu_modal["name"] == "howto":
                         close_rect = _draw_menu_panel(screen, "조작법", HOWTO_LINES[2:])  # 제목 줄 제외
                     else:
-                        close_rect = _draw_menu_panel(screen, "참고사항", CREDITS_LINES[2:])
+                        close_rect = _draw_menu_panel(screen, "참고사항(꼭 읽기)", CREDITS_LINES[2:])
                     for e in events:
                         if e.type == pygame.KEYDOWN and e.key in (pygame.K_ESCAPE, pygame.K_SPACE, pygame.K_RETURN):
                             sounds["button_click"].play(); _menu_modal = None
@@ -4230,6 +4230,15 @@ while running:
     else:
         obstacles_to_check = obstacle_manager.static_obstacles
 
+    # 대쉬 중에는 일반 장애물(나무/바위 등)은 통과 가능.
+    # 단, 전투벽(combat_invisible_wall)과 맵 경계 invisible_wall은 계속 막힘.
+    if dash_active:
+        WALL_TAGS = ("combat_invisible_wall", "invisible_wall")
+        obstacles_to_check = [
+            obs for obs in obstacles_to_check
+            if getattr(obs, "image_filename", None) in WALL_TAGS
+        ]
+
     # 대쉬 중 플레이어가 적에 걸려 끊기는 것을 방지하기 위해 이번 프레임에 '밀어낸' 적을 중복 처리하지 않도록 id로 기록
     enemies_pushed_this_frame = set()
 
@@ -4805,7 +4814,18 @@ while running:
 
     for enemy in enemies:
         if getattr(enemy, "alive", True):
-            enemy.draw(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
+            enemy.draw(
+                screen,
+                world_x - shake_offset_x,
+                world_y - shake_offset_y,
+                shake_offset_x,
+                shake_offset_y,
+            )
+
+            if hasattr(enemy, "draw_hit_flash"):
+                enemy.draw_hit_flash(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
+            if hasattr(enemy, "draw_hp_bar"):
+                enemy.draw_hp_bar(screen, world_x - shake_offset_x, world_y - shake_offset_y, shake_offset_x, shake_offset_y)
 
     for effect in config.effects:
         if hasattr(effect, "draw"):
@@ -5182,6 +5202,12 @@ while running:
             blood.draw(screen, world_x, world_y)
         for enemy in enemies:
             enemy.draw(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+
+        for enemy in enemies:
+            if hasattr(enemy, "draw_hit_flash"):
+                enemy.draw_hit_flash(screen, world_x, world_y, shake_offset_x, shake_offset_y)
+            if hasattr(enemy, "draw_hp_bar"):
+                enemy.draw_hp_bar(screen, world_x, world_y, shake_offset_x, shake_offset_y)
 
         obstacle_manager.draw_trees(screen, world_x, world_y, player_center_world, enemies)
 

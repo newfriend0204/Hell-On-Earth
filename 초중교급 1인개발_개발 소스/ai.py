@@ -51,6 +51,15 @@ class AIBase(metaclass=EnemyMeta):
         self.move_delay = random.randint(600, 1200)
         self.stuck_count = 0
 
+        self._hit_flash_until_ms = 0
+        self._hit_flash_duration = 20
+        self._hpbar_visible_until_ms = 0
+        self._hpbar_fade_ms = 3000
+        self._hpbar_max_seen = None
+
+        if not hasattr(self, "direction_angle"):
+            self.direction_angle = 0.0
+
         self.aware_of_player = False
         self.shoot_delay_min = 1200
         self.shoot_delay_max = 1500
@@ -111,9 +120,83 @@ class AIBase(metaclass=EnemyMeta):
         # 피격 처리
         if not self.alive or (not config.combat_state and not force):
             return
+        prev_hp = self.hp
+        if self._hpbar_max_seen is None or self._hpbar_max_seen < prev_hp:
+            self._hpbar_max_seen = prev_hp
+        # 데미지 적용
         self.hp -= damage
+        now = pygame.time.get_ticks()
+        self._hit_flash_until_ms = max(self._hit_flash_until_ms, now + self._hit_flash_duration)
+        self._hpbar_visible_until_ms = now + self._hpbar_fade_ms
         if self.hp <= 0:
             self.die(blood_effects)
+
+    def draw_hit_flash(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        if pygame.time.get_ticks() >= self._hit_flash_until_ms:
+            return
+        base_img = getattr(self, "image_original", None)
+        if base_img is None:
+            return
+        # 화면 좌표
+        screen_x = self.world_x - world_x + shake_offset_x
+        screen_y = self.world_y - world_y + shake_offset_y
+        # 스케일 & 회전
+        scaled = pygame.transform.smoothscale(
+            base_img,
+            (int(base_img.get_width()*PLAYER_VIEW_SCALE), int(base_img.get_height()*PLAYER_VIEW_SCALE)),
+        )
+        angle_deg = -math.degrees(getattr(self, "direction_angle", 0.0)) + 90
+        rotated = pygame.transform.rotate(scaled, angle_deg)
+        rect = rotated.get_rect(center=(screen_x, screen_y))
+        # 마스크 → 흰 실루엣
+        mask = pygame.mask.from_surface(rotated)
+        white = mask.to_surface(setcolor=(255,255,255,0), unsetcolor=(0,0,0,0))
+        # 남은 시간 비율로 알파 보간
+        now = pygame.time.get_ticks()
+        remain = max(0, self._hit_flash_until_ms - now)
+        k = remain / float(self._hit_flash_duration or 1)
+        alpha = int(220 * (0.5 + 0.5 * k))
+        white.set_alpha(alpha)
+        try:
+            screen.blit(white, rect, special_flags=pygame.BLEND_RGB_ADD)
+        except:
+            screen.blit(white, rect)
+
+    def draw_hp_bar(self, screen, world_x, world_y, shake_offset_x=0, shake_offset_y=0):
+        if not self.alive:
+            return
+        now = pygame.time.get_ticks()
+        if now > self._hpbar_visible_until_ms:
+            return
+        # 최대 HP 추정(없다면 첫 피격 시 캡처). 없으면 표시 스킵
+        max_hp = self._hpbar_max_seen if self._hpbar_max_seen else getattr(self, "max_hp", None)
+        if not max_hp:
+            return
+        hp = max(0, min(self.hp, max_hp))
+        ratio = hp / float(max_hp)
+        # 화면 좌표
+        cx = self.world_x - world_x + shake_offset_x
+        cy = self.world_y - world_y + shake_offset_y
+        # 바 크기/위치
+        width  = max(40, int(64 * PLAYER_VIEW_SCALE))
+        height = max(5,  int(8  * PLAYER_VIEW_SCALE))
+        y_offset = int(self.radius + 18 * PLAYER_VIEW_SCALE) if hasattr(self, "radius") else int(36 * PLAYER_VIEW_SCALE)
+        x = int(cx - width // 2)
+        y = int(cy - y_offset)
+        # 알파 있는 서피스에 그린 뒤 블릿
+        surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.rect(surf, (0, 0, 0, 140), (0, 0, width, height), border_radius=3)        # 배경
+        pygame.draw.rect(surf, (255,255,255, 90), (0, 0, width, height), width=1, border_radius=3)  # 테두리
+        # 체력 색상: 녹→노→적
+        r = int(255 * (1.0 - ratio))
+        g = int(210 * ratio + 30 * (1.0 - ratio))
+        color = (r, g, 40, 220)
+        fill_w = max(0, int((width - 2) * ratio))
+        if fill_w > 0:
+            pygame.draw.rect(surf, color, (1, 1, fill_w, height - 2), border_radius=3)
+        screen.blit(surf, (x, y))
 
     def die(self, blood_effects):
         # 사망 처리
@@ -7068,6 +7151,7 @@ class Enemy28(AIBase):
     DRONE_WARNING_TIME = 500
     DRONE_SPAWN_CD     = 3500
     DRONE_SUMMON_MS    = 1000
+    DRONE_MAX_RANGE    = 200 * PLAYER_VIEW_SCALE
 
     def __init__(self, world_x, world_y, images, sounds, map_width, map_height,
                  damage_player_fn=None, kill_callback=None, rank=rank):
@@ -7117,6 +7201,9 @@ class Enemy28(AIBase):
             self.owner = owner
             self.x = spawn_x
             self.y = spawn_y
+            self.spawn_x = spawn_x
+            self.spawn_y = spawn_y
+            self.travelled = 0.0
             self.state = "chasing"
             self.warning_start = None
             self.angle = 0
@@ -7129,8 +7216,19 @@ class Enemy28(AIBase):
             self.angle = math.atan2(dy, dx)
             if self.state == "chasing":
                 if dist > 0:
+                    # 이동
+                    prev_x, prev_y = self.x, self.y
                     self.x += (dx / dist) * Enemy28.DRONE_SPEED
                     self.y += (dy / dist) * Enemy28.DRONE_SPEED
+                    # 누적 이동거리 갱신
+                    self.travelled += math.hypot(self.x - prev_x, self.y - prev_y)
+                    # 사거리 초과 시 즉시 폭발(경고 단계 생략)
+                    if math.hypot(self.x - self.spawn_x, self.y - self.spawn_y) >= Enemy28.DRONE_MAX_RANGE:
+                        self.explode()
+                        return
+                    if math.hypot(self.x - self.owner.world_x, self.y - self.owner.world_y) >= Enemy28.DRONE_MAX_RANGE:
+                        self.explode()
+                        return
                 if dist < Enemy28.DRONE_TRIGGER_DIST:
                     self.state = "warning"
                     self.warning_start = pygame.time.get_ticks()
@@ -9227,6 +9325,8 @@ class Enemy34(AIBase):
 
         def update(self):
             self.alive = bool(self.cloud and self.cloud.alive)
+            owner_alive = getattr(getattr(self.cloud, "owner", None), "alive", False)
+            self.alive = bool(self.cloud and self.cloud.alive and owner_alive)
 
         def draw(self, screen, world_x, world_y):
             if self.cloud and self.cloud.alive:
@@ -9427,12 +9527,30 @@ class Enemy34(AIBase):
 
     # 사망/정리
     def die(self, blood_effects):
+        # 진행 중인 연막탄/연막/이펙트 즉시 정리
+        if self._grenade:
+            try: self._grenade.alive = False
+            except: pass
         self._grenade = None
+        for sc in self._smokes:
+            try: sc.alive = False
+            except: pass
         self._smokes.clear()
         for eff in self._spawned_effects:
-            try: eff.alive = False
+            try:
+                eff.alive = False
+                eff.finished = True
             except: pass
+        # 혹시 남아있을 수 있는 전역 이펙트도 한 번 더 쓸어주기
+        try:
+            config.effects[:] = [
+                e for e in config.effects
+                if not (hasattr(e, "cloud") and getattr(getattr(e, "cloud", None), "owner", None) is self)
+            ]
+        except Exception:
+            pass
         self._spawned_effects.clear()
+        # 원래 사망 처리
         super().die(blood_effects)
         self.spawn_dropped_items(7, 7)
 
