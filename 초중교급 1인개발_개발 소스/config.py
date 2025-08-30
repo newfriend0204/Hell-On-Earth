@@ -13,7 +13,7 @@ GAME_STATE_HOWTO = 2
 GAME_STATE_CREDITS = 3
 GAME_STATE_ENDING_STORY = 4
 GAME_STATE_ENDING_CREDITS = 5
-game_state = 1
+game_state = 0 # 1로 교체시 디버그 한 값들 변경됨
 intro_shown = False
 
 # 배경 크기
@@ -101,7 +101,7 @@ STAGE_DATA = {
         "weapon_tier_weights": {1: 0, 2: 10, 3: 20, 4: 30, 5: 40}
     },
 }
-CURRENT_STAGE = "1-1"
+CURRENT_STAGE = "1-1" #config.game_state == 1일시 발동
 
 STAGE_PRICE_MULT = {
     "1-1": 1.00,
@@ -149,9 +149,9 @@ TIER_PRICES = {
 SHOP_TIER_WEIGHT_BIAS = {
     1: 0.1,
     2: 0.5,
-    3: 1.0,
+    3: 0.8,
     4: 2.5,
-    5: 3.0,
+    5: 4.0,
 }
 
 def get_shop_tier_weights(stage: str):

@@ -2,7 +2,6 @@ START_MAP = {
     "obstacles": [
     ],
     "enemy_infos": [
-        {"x": 200, "y": 200, "enemy_type": "enemy29"},
     ],
     "npc_infos": [
         {"x": 100, "y": 100, "npc_type": "doctorNF_npc"},

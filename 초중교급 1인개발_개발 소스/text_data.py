@@ -995,7 +995,7 @@ drone_dialogue = [
         "text": "새친 박사님께서 보내주신 AI 드론입니다. 무엇을 도와드릴까요?",
         "choices": [
             {"text": "체력 최대치 +20", "next": 1},
-            {"text": "탄약 게이지 최대치 +20", "next": 2},
+            {"text": "탄약 게이지 최대치 +40", "next": 2},
             {"text": "잡담", "next": 5},
             {"text": "나가기", "next": None}
         ],
